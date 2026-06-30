@@ -3,6 +3,4 @@ export { default as HomeHero } from './HomeHero';
 export { default as FeatureSection } from './FeatureSection';
 export { default as AboutSection } from './AboutSection';
 export { default as GlobalFooter } from './GlobalFooter';
-export { default as Button } from './Buttons';
-export { default as DataTable } from './DataTable';
-export { default as Dropdown } from './Dropdown';
+//# sourceMappingURL=index.js.map

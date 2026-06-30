@@ -1,0 +1,4 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+const FeatureSection = () => (_jsxs("section", { className: "features", id: "features", children: [_jsx("h2", { children: "Features" }), _jsxs("div", { className: "feature-grid", children: [_jsxs("article", { className: "feature-card", children: [_jsx("h3", { children: "Responsive Layout" }), _jsx("p", { children: "Flexible and mobile-first design structure ready for any screen size." })] }), _jsxs("article", { className: "feature-card", children: [_jsx("h3", { children: "React 19" }), _jsx("p", { children: "Modern React app using the latest stable React 19 APIs." })] }), _jsxs("article", { className: "feature-card", children: [_jsx("h3", { children: "Vanilla CSS" }), _jsx("p", { children: "Clean stylesheet with no CSS frameworks or preprocessors." })] })] })] }));
+export default FeatureSection;
+//# sourceMappingURL=FeatureSection.js.map

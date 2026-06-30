@@ -1,0 +1,4 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+const GlobalHeader = () => (_jsx("header", { className: "site-header", children: _jsxs("nav", { className: "nav-bar", children: [_jsx("a", { className: "brand", href: "#", children: "BrandName" }), _jsxs("ul", { className: "nav-links", children: [_jsx("li", { children: _jsx("a", { href: "#features", children: "Features" }) }), _jsx("li", { children: _jsx("a", { href: "#about", children: "About" }) }), _jsx("li", { children: _jsx("a", { href: "#contact", children: "Contact" }) })] }), _jsx("button", { className: "cta-button", children: "Get Started" })] }) }));
+export default GlobalHeader;
+//# sourceMappingURL=GlobalHeader.js.map

@@ -1,0 +1,4 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+const HomeHero = () => (_jsxs("section", { className: "hero", id: "home", children: [_jsxs("div", { className: "hero-copy", children: [_jsx("h1", { children: "React 19 Frontend Interface" }), _jsx("p", { children: "Built with Vite, TypeScript, and vanilla CSS for a lightweight frontend experience." }), _jsxs("div", { className: "hero-actions", children: [_jsx("a", { className: "primary-button", href: "#features", children: "Explore" }), _jsx("a", { className: "secondary-button", href: "#contact", children: "Contact" })] })] }), _jsx("div", { className: "hero-visual", children: _jsx("div", { className: "visual-card", children: "Interface preview" }) })] }));
+export default HomeHero;
+//# sourceMappingURL=HomeHero.js.map

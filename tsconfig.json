@@ -6,11 +6,13 @@
     "jsx": "react-jsx",
     "strict": true,
     "sourceMap": true,
+    "outDir": "build-ts",
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "isolatedModules": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", "build-ts"]
 }
