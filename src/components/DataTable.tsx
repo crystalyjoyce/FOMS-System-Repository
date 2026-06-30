@@ -6,6 +6,8 @@ import React, {
   useCallback,
   ReactNode,
 } from "react";
+import Button from "./Buttons";
+import Dropdown from "./Dropdown";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -116,65 +118,24 @@ interface ActionMenuProps<T> {
 }
 
 function ActionMenu<T>({ row, actions }: ActionMenuProps<T>) {
-  const [open, setOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const btnRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (
-        menuRef.current &&
-        !menuRef.current.contains(e.target as Node) &&
-        !btnRef.current?.contains(e.target as Node)
-      ) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
-
   const visible = actions.filter((a) => !a.hidden?.(row));
   if (visible.length === 0) return null;
 
+  const dropdownItems = visible.map((action, index) => ({
+    key: `${action.label}-${index}`,
+    label: action.label,
+    onClick: () => action.onClick(row),
+    variant: action.variant,
+  }));
+
   return (
     <div className="dt-action-wrap">
-      <button
-        ref={btnRef}
-        className="dt-dots-btn"
-        aria-label="Row actions"
-        aria-haspopup="true"
-        aria-expanded={open}
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen((p) => !p);
-        }}
-      >
-        <i className="ti ti-dots-vertical" aria-hidden="true" />
-      </button>
-
-      {open && (
-        <div ref={menuRef} className="dt-dropdown" role="menu">
-          {visible.map((action, i) => (
-            <button
-              key={i}
-              role="menuitem"
-              className={`dt-dropdown-item${action.variant === "danger" ? " dt-dropdown-item--danger" : ""}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpen(false);
-                action.onClick(row);
-              }}
-            >
-              {action.icon && (
-                <i className={`ti ${action.icon}`} aria-hidden="true" />
-              )}
-              {action.label}
-            </button>
-          ))}
-        </div>
-      )}
+      <Dropdown
+        items={dropdownItems}
+        align="right"
+        placement="bottom"
+        panelClassName="dt-dropdown-panel"
+      />
     </div>
   );
 }
@@ -395,14 +356,13 @@ export function DataTable<T>({
         {/* Right side: create buttons */}
         <div className="dt-toolbar-right">
           {createButtons.map((btn, i) => (
-            <button
+            <Button
               key={i}
-              className={`dt-btn ${btn.variant === "secondary" ? "dt-btn--secondary" : "dt-btn--primary"}`}
+              title={btn.label}
+              variant={btn.variant === "secondary" ? "secondary" : "primary"}
+              size="sm"
               onClick={btn.onClick}
-            >
-              {btn.icon && <i className={`ti ${btn.icon}`} aria-hidden="true" />}
-              {btn.label}
-            </button>
+            />
           ))}
         </div>
       </div>

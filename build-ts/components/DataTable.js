@@ -1,5 +1,7 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
-import { useState, useMemo, useRef, useEffect, useCallback, } from "react";
+import { useState, useMemo, useEffect, useCallback, } from "react";
+import Button from "./Buttons";
+import Dropdown from "./Dropdown";
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function getValue(row, key) {
     return row[key];
@@ -17,33 +19,16 @@ function matchesSearch(row, query, fields) {
     });
 }
 function ActionMenu({ row, actions }) {
-    const [open, setOpen] = useState(false);
-    const menuRef = useRef(null);
-    const btnRef = useRef(null);
-    useEffect(() => {
-        if (!open)
-            return;
-        const handler = (e) => {
-            if (menuRef.current &&
-                !menuRef.current.contains(e.target) &&
-                !btnRef.current?.contains(e.target)) {
-                setOpen(false);
-            }
-        };
-        document.addEventListener("mousedown", handler);
-        return () => document.removeEventListener("mousedown", handler);
-    }, [open]);
     const visible = actions.filter((a) => !a.hidden?.(row));
     if (visible.length === 0)
         return null;
-    return (_jsxs("div", { className: "dt-action-wrap", children: [_jsx("button", { ref: btnRef, className: "dt-dots-btn", "aria-label": "Row actions", "aria-haspopup": "true", "aria-expanded": open, onClick: (e) => {
-                    e.stopPropagation();
-                    setOpen((p) => !p);
-                }, children: _jsx("i", { className: "ti ti-dots-vertical", "aria-hidden": "true" }) }), open && (_jsx("div", { ref: menuRef, className: "dt-dropdown", role: "menu", children: visible.map((action, i) => (_jsxs("button", { role: "menuitem", className: `dt-dropdown-item${action.variant === "danger" ? " dt-dropdown-item--danger" : ""}`, onClick: (e) => {
-                        e.stopPropagation();
-                        setOpen(false);
-                        action.onClick(row);
-                    }, children: [action.icon && (_jsx("i", { className: `ti ${action.icon}`, "aria-hidden": "true" })), action.label] }, i))) }))] }));
+    const dropdownItems = visible.map((action, index) => ({
+        key: `${action.label}-${index}`,
+        label: action.label,
+        onClick: () => action.onClick(row),
+        variant: action.variant,
+    }));
+    return (_jsx("div", { className: "dt-action-wrap", children: _jsx(Dropdown, { items: dropdownItems, align: "right", placement: "bottom", panelClassName: "dt-dropdown-panel" }) }));
 }
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function DataTable({ rowKey, data, columns, actions = [], searchPlaceholder = "Search…", searchFields, filters = [], createButtons = [], pageSizeOptions = [10, 25, 50], defaultPageSize = 10, emptyMessage = "No records found.", selectable = false, onSelectionChange, className = "", loading = false, }) {
@@ -164,7 +149,7 @@ export function DataTable({ rowKey, data, columns, actions = [], searchPlacehold
                                     setSearch("");
                                     setActiveFilters({});
                                     setPage(1);
-                                }, children: [_jsx("i", { className: "ti ti-refresh", "aria-hidden": "true" }), "Reset"] }))] }), _jsx("div", { className: "dt-toolbar-right", children: createButtons.map((btn, i) => (_jsxs("button", { className: `dt-btn ${btn.variant === "secondary" ? "dt-btn--secondary" : "dt-btn--primary"}`, onClick: btn.onClick, children: [btn.icon && _jsx("i", { className: `ti ${btn.icon}`, "aria-hidden": "true" }), btn.label] }, i))) })] }), _jsx("div", { className: "dt-table-wrap", children: _jsxs("table", { className: "dt-table", "aria-label": "Data table", children: [_jsx("thead", { children: _jsxs("tr", { children: [selectable && (_jsx("th", { className: "dt-th dt-th--check", children: _jsx("input", { type: "checkbox", className: "dt-checkbox", checked: allPageSelected, ref: (el) => {
+                                }, children: [_jsx("i", { className: "ti ti-refresh", "aria-hidden": "true" }), "Reset"] }))] }), _jsx("div", { className: "dt-toolbar-right", children: createButtons.map((btn, i) => (_jsx(Button, { title: btn.label, variant: btn.variant === "secondary" ? "secondary" : "primary", size: "sm", onClick: btn.onClick }, i))) })] }), _jsx("div", { className: "dt-table-wrap", children: _jsxs("table", { className: "dt-table", "aria-label": "Data table", children: [_jsx("thead", { children: _jsxs("tr", { children: [selectable && (_jsx("th", { className: "dt-th dt-th--check", children: _jsx("input", { type: "checkbox", className: "dt-checkbox", checked: allPageSelected, ref: (el) => {
                                                 if (el)
                                                     el.indeterminate = somePageSelected && !allPageSelected;
                                             }, onChange: toggleAll, "aria-label": "Select all on this page" }) })), columns.map((col) => (_jsx("th", { className: `dt-th${col.sortable ? " dt-th--sortable" : ""}${sortKey === col.key ? " dt-th--sorted" : ""}`, style: { width: col.width, textAlign: col.align ?? "left" }, onClick: col.sortable ? () => handleSort(col.key) : undefined, "aria-sort": sortKey === col.key

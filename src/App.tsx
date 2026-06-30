@@ -20,10 +20,40 @@ const tableColumns = [
   { key: 'status', label: 'Status', sortable: true },
 ];
 
-const dropdownItems = [
-  { key: 'edit', label: 'Edit' },
-  { key: 'duplicate', label: 'Duplicate' },
+const dropdownItems: Array<{
+  key: string;
+  label: string;
+  variant?: "default" | "danger";
+}> = [
+  { key: 'edit', label: 'Edit', variant: 'default' },
+  { key: 'duplicate', label: 'Duplicate', variant: 'default' },
   { key: 'delete', label: 'Delete', variant: 'danger' },
+];
+
+const rowActions: Array<{
+  label: string;
+  icon: string;
+  onClick: (row: Person) => void;
+  variant?: "default" | "danger";
+}> = [
+  {
+    label: 'Edit',
+    icon: 'ti-pencil',
+    onClick: (row: Person) => alert(`Edit ${row.name}`),
+    variant: 'default',
+  },
+  {
+    label: 'Duplicate',
+    icon: 'ti-copy',
+    onClick: (row: Person) => alert(`Duplicate ${row.name}`),
+    variant: 'default',
+  },
+  {
+    label: 'Delete',
+    icon: 'ti-trash',
+    variant: 'danger',
+    onClick: (row: Person) => alert(`Delete ${row.name}`),
+  },
 ];
 
 function App() {
@@ -52,6 +82,7 @@ function App() {
             rowKey="id"
             data={tableData}
             columns={tableColumns}
+            actions={rowActions}
             createButtons={[
               { label: 'New User', icon: 'ti-user', onClick: () => undefined },
             ]}
