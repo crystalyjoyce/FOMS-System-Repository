@@ -207,7 +207,7 @@ export function Dropdown({
           onClick={() => setOpen(!open)}
           onKeyDown={handleTriggerKeyDown}
         >
-          <i className="ti ti-dots-vertical" aria-hidden="true" />
+          <span className="dd-trigger-icon" aria-hidden="true">⋮</span>
         </button>
       )}
 

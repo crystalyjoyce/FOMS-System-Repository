@@ -668,31 +668,19 @@ main {
 
 .dd-wrap {
   position: relative;
-  display: inline-block;
-}
-
-.dd-trigger-btn {
-  border: 1px solid #d1d5db;
-  background: #ffffff;
-  border-radius: 0.75rem;
-  padding: 0.75rem;
-}
-
-.dd-wrap {
-  position: relative;
-  display: inline-block;
+  display: inline-flex;
 }
 
 .dd-trigger-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
   padding: 0;
-  border: none;
-  background: transparent;
-  border-radius: 6px;
+  border: 1px solid var(--border, #d3d1c7);
+  background: var(--surface-2, #fff);
+  border-radius: 8px;
   color: var(--text-secondary, #5f5e5a);
   cursor: pointer;
 }
@@ -704,6 +692,11 @@ main {
 .dd-trigger-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.dd-trigger-icon {
+  font-size: 18px;
+  line-height: 1;
 }
 
 .dd-panel {
