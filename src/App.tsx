@@ -1,5 +1,5 @@
 import React from 'react';
-import { GlobalHeader, GlobalFooter, Button, Dropdown, DataTable } from './components';
+import { GlobalHeader, GlobalFooter, Button, Dropdown, DataTable, Sidebar, StatusCard } from './components';
 
 interface Person {
   id: number;
@@ -58,39 +58,85 @@ const rowActions: Array<{
 
 function App() {
   return (
-    <div className="app-shell">
-      <GlobalHeader />
+    <div className="app-layout">
+      <Sidebar />
 
-      <main>
-        <section className="component-section">
-          <h2 className="section-title">Buttons</h2>
-          <div className="component-row">
-            <Button title="Save Changes" />
-            <Button title="Cancel" variant="secondary" />
-            <Button title="Delete" variant="danger" />
-          </div>
-        </section>
+      <div className="main-area">
+        <GlobalHeader />
 
-        <section className="component-section">
-          <h2 className="section-title">Dropdown</h2>
-          <Dropdown items={dropdownItems} />
-        </section>
+        <main>
+          <section className="component-section">
+            <h2 className="section-title">Status Cards (KPIs)</h2>
+            <div className="g ga" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
+              <StatusCard
+                label="Active Shipments"
+                value="1,248"
+                icon="ti ti-truck"
+                variant="teal"
+                trend={{ value: '12%', type: 'up' }}
+                periodText="since last week"
+                sparklineData={[10, 15, 8, 12, 20, 16, 25]}
+              />
+              <StatusCard
+                label="Delivered Today"
+                value="354"
+                icon="ti ti-circle-check"
+                variant="success"
+                trend={{ value: '8%', type: 'up' }}
+                periodText="since yesterday"
+                sparklineData={[12, 14, 18, 11, 23, 29, 32]}
+              />
+              <StatusCard
+                label="At Risk SLA"
+                value="14"
+                icon="ti ti-alert-triangle"
+                variant="warning"
+                trend={{ value: '3%', type: 'up' }}
+                periodText="critical next 2h"
+                sparklineData={[4, 6, 8, 3, 9, 11, 14]}
+              />
+              <StatusCard
+                label="Failed Deliveries"
+                value="2"
+                icon="ti ti-circle-x"
+                variant="danger"
+                trend={{ value: '50%', type: 'down' }}
+                periodText="resolved within 24h"
+                sparklineData={[5, 4, 3, 2, 2, 1, 2]}
+              />
+            </div>
+          </section>
 
-        <section className="component-section">
-          <h2 className="section-title">Data Table</h2>
-          <DataTable
-            rowKey="id"
-            data={tableData}
-            columns={tableColumns}
-            actions={rowActions}
-            createButtons={[
-              { label: 'New User', icon: 'ti-user', onClick: () => undefined },
-            ]}
-          />
-        </section>
-      </main>
+          <section className="component-section">
+            <h2 className="section-title">Buttons</h2>
+            <div className="component-row">
+              <Button title="Save Changes" />
+              <Button title="Cancel" variant="secondary" />
+              <Button title="Delete" variant="danger" />
+            </div>
+          </section>
 
-      <GlobalFooter />
+          <section className="component-section">
+            <h2 className="section-title">Dropdown</h2>
+            <Dropdown items={dropdownItems} />
+          </section>
+
+          <section className="component-section">
+            <h2 className="section-title">Data Table</h2>
+            <DataTable
+              rowKey="id"
+              data={tableData}
+              columns={tableColumns}
+              actions={rowActions}
+              createButtons={[
+                { label: 'New User', icon: 'ti-user', onClick: () => undefined },
+              ]}
+            />
+          </section>
+        </main>
+
+        <GlobalFooter />
+      </div>
     </div>
   );
 }

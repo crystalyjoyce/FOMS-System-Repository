@@ -6,3 +6,5 @@ export { default as GlobalFooter } from './GlobalFooter';
 export { default as Button } from './Buttons';
 export { default as DataTable } from './DataTable';
 export { default as Dropdown } from './Dropdown';
+export { default as Sidebar } from './Sidebar';
+export { default as StatusCard } from './StatusCard';
