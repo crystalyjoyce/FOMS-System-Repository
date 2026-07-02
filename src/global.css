@@ -1,5 +1,5 @@
 :root {
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: #111827;
   background: #f8fafc;
   font-size: 16px;
@@ -1277,4 +1277,71 @@ main {
 /* Dark mode override overrides */
 html.dark .sidebar {
   border-right-color: var(--border);
+}
+
+/* ─── OVERRIDE: Strict Corporate Buttons from HTML Standard ─── */
+.btn { 
+  display: inline-flex; 
+  align-items: center; 
+  justify-content: center; 
+  gap: 8px; 
+  height: 38px; 
+  padding: 0 16px; 
+  border-radius: 8px; /* var(--radius-sm) */
+  font-weight: 600; 
+  font-size: 0.85rem; 
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); 
+  cursor: pointer; 
+  border: none !important; 
+  text-decoration: none; 
+  white-space: nowrap; 
+}
+
+/* Primary Button (Save / Submit) */
+.btn--primary, .btn-primary { 
+  background: #00A99D !important; 
+  color: #FFFFFF !important; 
+  box-shadow: none !important;
+}
+.btn--primary:hover, .btn-primary:hover { 
+  background: #009189 !important; 
+  transform: translateY(-1px); 
+  box-shadow: 0 4px 12px rgba(0, 169, 157, 0.25) !important; 
+}
+.btn--primary:active, .btn-primary:active { 
+  transform: translateY(0); 
+}
+
+/* Secondary/Outline Button */
+.btn--secondary, .btn-outline { 
+  background: #FFFFFF !important; 
+  border: 1.5px solid #DDE2EB !important; 
+  color: #475569 !important; 
+  box-shadow: none !important;
+}
+.btn--secondary:hover, .btn-outline:hover { 
+  border-color: #00A99D !important; 
+  color: #00A99D !important; 
+  background: rgba(0, 169, 157, 0.02) !important; 
+}
+
+/* Danger Button */
+.btn--danger, .btn-danger { 
+  background: rgba(220, 38, 38, 0.08) !important; 
+  border: 1.5px solid #DC2626 !important; 
+  color: #DC2626 !important; 
+  box-shadow: none !important;
+}
+.btn--danger:hover, .btn-danger:hover { 
+  background: #DC2626 !important; 
+  color: #FFFFFF !important; 
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25) !important; 
+}
+
+/* Disable states */
+.btn:disabled, .btn-disabled { 
+  opacity: 0.4 !important; 
+  cursor: not-allowed !important; 
+  transform: none !important; 
+  box-shadow: none !important; 
 }

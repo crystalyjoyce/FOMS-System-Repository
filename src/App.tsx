@@ -1,5 +1,5 @@
 import React from 'react';
-import { GlobalHeader, GlobalFooter, Button, Dropdown, DataTable, Sidebar, StatusCard } from './components';
+import { GlobalHeader, GlobalFooter, Button, Dropdown, DataTable, Sidebar, StatusCard, StatusBadge, DashboardLayout } from './components';
 
 interface Person {
   id: number;
@@ -66,6 +66,11 @@ function App() {
 
         <main>
           <section className="component-section">
+            <h2 className="section-title">Dashboard Layout</h2>
+            <DashboardLayout />
+          </section>
+
+          <section className="component-section">
             <h2 className="section-title">Status Cards (KPIs)</h2>
             <div className="g ga" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
               <StatusCard
@@ -104,6 +109,39 @@ function App() {
                 periodText="resolved within 24h"
                 sparklineData={[5, 4, 3, 2, 2, 1, 2]}
               />
+            </div>
+          </section>
+
+          <section className="component-section">
+            <h2 className="section-title">Status Badges</h2>
+            <div className="component-row" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <StatusBadge status="Active" />
+              <StatusBadge status="Deactivated" />
+              <StatusBadge status="Pending" />
+              <StatusBadge status="Done" />
+              <StatusBadge status="Delivered" />
+              <StatusBadge status="In Transit" />
+              <StatusBadge status="Failed" />
+              <StatusBadge status="Success" />
+              <StatusBadge status="Submitted" />
+              <StatusBadge status="Picked-Up" />
+              <StatusBadge status="Completed" />
+              <StatusBadge status="Processing" />
+              <StatusBadge status="Preparing" />
+              <StatusBadge status="Ready for Pickup" />
+              <StatusBadge status="Returning" />
+              <StatusBadge status="Not Submitted" />
+              <StatusBadge status="Assigned" />
+              <StatusBadge status="Out of Delivery" />
+              <StatusBadge status="Returned" />
+              <StatusBadge status="Cancelled" />
+              <StatusBadge status="Partially Paid" />
+              <StatusBadge status="Paid" />
+              <StatusBadge status="Inflow" />
+              <StatusBadge status="Outflow" />
+              <StatusBadge status="Overdue" />
+              <StatusBadge status="New Payment" />
+              <StatusBadge status="30 - 60 Days" />
             </div>
           </section>
 

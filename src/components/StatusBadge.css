@@ -1,0 +1,26 @@
+:root {
+  --status-active: #059669;
+  --status-pending: #D97706;
+  --status-failed: #DC2626;
+  --status-transit: #0284C7;
+  --status-new: #4F46E5;
+}
+
+.badge { 
+  display: inline-flex; 
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px; 
+  border-radius: 9999px; 
+  font-size: 0.72rem; 
+  font-weight: 700; 
+  letter-spacing: 0.5px; 
+  text-transform: uppercase; 
+  white-space: nowrap;
+}
+
+.badge-active { background: rgba(5, 150, 105, 0.1); color: var(--status-active); }
+.badge-pending { background: rgba(217, 119, 6, 0.1); color: var(--status-pending); }
+.badge-failed { background: rgba(220, 38, 38, 0.1); color: var(--status-failed); }
+.badge-transit { background: rgba(2, 132, 199, 0.1); color: var(--status-transit); }
+.badge-new { background: rgba(79, 70, 229, 0.1); color: var(--status-new); }

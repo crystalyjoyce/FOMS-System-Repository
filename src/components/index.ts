@@ -8,3 +8,5 @@ export { default as DataTable } from './DataTable';
 export { default as Dropdown } from './Dropdown';
 export { default as Sidebar } from './Sidebar';
 export { default as StatusCard } from './StatusCard';
+export { default as StatusBadge } from './StatusBadge';
+export { default as DashboardLayout } from './DashboardLayout';
