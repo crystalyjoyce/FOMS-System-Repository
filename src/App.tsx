@@ -1,5 +1,7 @@
 import React from 'react';
 import { GlobalHeader, GlobalFooter, Button, Dropdown, DataTable, Sidebar, StatusCard, StatusBadge, DashboardLayout } from './components';
+import ToastBar from './components/ToastBar';
+import ActionButtons from './components/ActionButtons';
 
 interface Person {
   id: number;
@@ -170,6 +172,16 @@ function App() {
                 { label: 'New User', icon: 'ti-user', onClick: () => undefined },
               ]}
             />
+          </section>
+
+          <section className="component-section">
+            <h2 className="section-title">Toastbar</h2>
+            <ToastBar />
+          </section>
+
+          <section className="component-section">
+            <h2 className="section-title">Action</h2>
+            <ActionButtons />
           </section>
         </main>
 
