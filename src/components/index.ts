@@ -10,3 +10,6 @@ export { default as Sidebar } from './Sidebar';
 export { default as StatusCard } from './StatusCard';
 export { default as StatusBadge } from './StatusBadge';
 export { default as DashboardLayout } from './DashboardLayout';
+export { default as FormModals } from './FormModals';
+export { default as SearchBar } from './SearchBar';
+

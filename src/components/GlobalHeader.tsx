@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Bell, CheckCheck, Trash2, Info, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Bell, CheckCheck, Trash2, Info, AlertTriangle, CheckCircle2, Settings, LogOut } from 'lucide-react';
 import './GlobalHeader.css';
 
 export interface NotificationItem {
@@ -17,9 +17,29 @@ const DUMMY_NOTIFICATIONS: NotificationItem[] = [
   { id: '3', title: 'Delivery Success', description: 'Package successfully delivered to Sofia.', timestamp: '2 hours ago', read: true, type: 'success' },
 ];
 
-const GlobalHeader = () => {
+export interface GlobalHeaderProps {
+  title?: string;
+  profile?: {
+    name: string;
+    role: string;
+    avatarInitials: string;
+  };
+}
+
+const defaultProfile = {
+  name: 'Hermione Benitez',
+  role: 'Logistics Director',
+  avatarInitials: 'HB',
+};
+
+const GlobalHeader: React.FC<GlobalHeaderProps> = ({ 
+  title = 'Dashboard', 
+  profile = defaultProfile 
+}) => {
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
   const [notifications, setNotifications] = useState<NotificationItem[]>(DUMMY_NOTIFICATIONS);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
 
@@ -27,6 +47,9 @@ const GlobalHeader = () => {
     const handleClickOutside = (event: MouseEvent) => {
       if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
         setShowNotifications(false);
+      }
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setShowProfileMenu(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -51,20 +74,22 @@ const GlobalHeader = () => {
   return (
     <header className="site-header">
       <nav className="nav-bar">
-        <a className="brand" href="#">BrandName</a>
-        <ul className="nav-links">
-          <li><a href="#features">Features</a></li>
-          <li><a href="#about">About</a></li>
-          <li><a href="#contact">Contact</a></li>
-        </ul>
+        {/* Left Side: Page Title */}
+        <h1 className="header-title">{title}</h1>
         
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        {/* Right Side: Interactive Controls */}
+        <div className="header-controls">
+          {/* Notification Button & Dropdown */}
           <div className="header-notification-container" ref={notificationRef}>
             <button 
-              className="header-notification-btn" 
-              onClick={() => setShowNotifications(!showNotifications)}
+              className="header-icon-btn" 
+              onClick={() => {
+                setShowNotifications(!showNotifications);
+                setShowProfileMenu(false); // Close profile dropdown when opening notifications
+              }}
+              aria-label="Notifications"
             >
-              <Bell size={20} />
+              <Bell size={20} strokeWidth={1.75} />
               {unreadCount > 0 && <span className="notification-dot" />}
             </button>
             
@@ -72,16 +97,23 @@ const GlobalHeader = () => {
               <div className="notification-dropdown">
                 <div className="notification-dropdown-header">
                   <span>Notifications Center</span>
+                  {unreadCount > 0 && (
+                    <span className="notification-unread-pill">{unreadCount} new</span>
+                  )}
                 </div>
                 
-                <div style={{ padding: '0 18px', borderBottom: '1px solid var(--border)', display: 'flex', gap: '20px', background: '#fff' }}>
-                  <span onClick={() => setFilter('all')} style={{ padding: '12px 0', fontSize: '0.85rem', cursor: 'pointer', fontWeight: filter === 'all' ? 700 : 500, color: filter === 'all' ? 'var(--primary)' : 'var(--text-secondary)', position: 'relative' }}>
-                    All Notification
-                    {filter === 'all' && <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: '2px', background: 'var(--primary)' }} />}
+                <div className="notification-filter-bar">
+                  <span 
+                    onClick={() => setFilter('all')} 
+                    className={`notification-filter-tab ${filter === 'all' ? 'active' : ''}`}
+                  >
+                    All Notifications
                   </span>
-                  <span onClick={() => setFilter('unread')} style={{ padding: '12px 0', fontSize: '0.85rem', cursor: 'pointer', fontWeight: filter === 'unread' ? 700 : 500, color: filter === 'unread' ? 'var(--primary)' : 'var(--text-secondary)', position: 'relative' }}>
+                  <span 
+                    onClick={() => setFilter('unread')} 
+                    className={`notification-filter-tab ${filter === 'unread' ? 'active' : ''}`}
+                  >
                     Unread
-                    {filter === 'unread' && <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: '2px', background: 'var(--primary)' }} />}
                   </span>
                 </div>
 
@@ -117,11 +149,11 @@ const GlobalHeader = () => {
                   )}
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 18px', borderTop: '1px solid var(--border)', background: 'var(--bg-main)' }}>
-                  <span onClick={markAllAsUnread} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', cursor: 'pointer', color: 'var(--text-secondary)', fontWeight: 600, transition: 'color 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.color = 'var(--primary)'} onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}>
+                <div className="notification-dropdown-footer">
+                  <span onClick={markAllAsUnread} className="notification-footer-action font-semibold">
                     <CheckCheck size={16} /> Mark all as Unread
                   </span>
-                  <span onClick={clearAll} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', cursor: 'pointer', color: 'var(--status-failed)', fontWeight: 600, transition: 'opacity 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'} onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}>
+                  <span onClick={clearAll} className="notification-footer-action clear-action font-semibold">
                     <Trash2 size={16} /> Clear All
                   </span>
                 </div>
@@ -129,7 +161,60 @@ const GlobalHeader = () => {
             )}
           </div>
 
-          <button className="cta-button">Get Started</button>
+          {/* Profile Avatar & Dropdown */}
+          <div className="header-profile-container" ref={profileRef}>
+            <button 
+              className="header-avatar-btn" 
+              onClick={() => {
+                setShowProfileMenu(!showProfileMenu);
+                setShowNotifications(false); // Close notifications when opening profile dropdown
+              }}
+              aria-label="User Profile Dropdown"
+            >
+              <div className="avatar-circle">
+                {profile.avatarInitials}
+              </div>
+            </button>
+
+            {showProfileMenu && (
+              <div className="profile-dropdown">
+                {/* User Details Header */}
+                <div className="profile-dropdown-user-info">
+                  <div className="profile-dropdown-avatar">
+                    {profile.avatarInitials}
+                  </div>
+                  <div className="profile-dropdown-meta">
+                    <span className="profile-dropdown-name">{profile.name}</span>
+                    <span className="profile-dropdown-role">{profile.role}</span>
+                  </div>
+                </div>
+                
+                {/* Dropdown Options */}
+                <div className="profile-dropdown-options">
+                  <button 
+                    className="profile-dropdown-option"
+                    onClick={() => {
+                      alert('Settings Page clicked');
+                      setShowProfileMenu(false);
+                    }}
+                  >
+                    <Settings size={16} strokeWidth={2} className="option-icon" />
+                    <span>Settings</span>
+                  </button>
+                  <button 
+                    className="profile-dropdown-option logout-option"
+                    onClick={() => {
+                      alert('Log Out clicked');
+                      setShowProfileMenu(false);
+                    }}
+                  >
+                    <LogOut size={16} strokeWidth={2} className="option-icon" />
+                    <span>Log Out</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </nav>
     </header>
