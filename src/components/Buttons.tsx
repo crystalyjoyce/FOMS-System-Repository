@@ -14,9 +14,9 @@ export type ButtonSize = "sm" | "md" | "lg";
 
 export interface ButtonProps
   extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "title"> {
-  /** Button label. Also used to auto-infer color if `variant` is omitted. */
+  /** Button label. */
   title: string;
-  /** Explicit color/intent. If omitted, inferred from `title` keywords. */
+  /** Explicit color/intent. Defaults to "primary". */
   variant?: ButtonVariant;
   size?: ButtonSize;
   icon?: string; // Tabler icon class, e.g. "ti-trash"
@@ -26,67 +26,11 @@ export interface ButtonProps
   children?: ReactNode;
 }
 
-// ─── Keyword → variant inference ───────────────────────────────────────────────
-// Used only as a fallback when `variant` isn't explicitly passed.
-
-const KEYWORD_RULES: { variant: ButtonVariant; words: string[] }[] = [
-  // Destructive / negative actions
-  {
-    variant: "danger",
-    words: [
-      "delete",
-      "remove",
-      "discard",
-      "destroy",
-      "revoke",
-      "reject",
-      "decline",
-      "deactivate",
-    ],
-  },
-  // Positive / confirming actions
-  {
-    variant: "success",
-    words: ["save", "approve", "activate", "complete", "publish", "confirm"],
-  },
-  {
-    variant: "warning",
-    words: ["archive", "suspend", "pause", "warning"],
-  },
-  // Creation / primary forward actions
-  {
-    variant: "primary",
-    words: [
-      "create",
-      "add",
-      "new",
-      "continue",
-      "next",
-      "get started",
-      "sign up",
-      "submit",
-    ],
-  },
-  // Neutral / editing / dismissive actions
-  {
-    variant: "secondary",
-    words: ["edit", "cancel", "back", "close", "dismiss"],
-  },
-];
-
-function inferVariant(title: string): ButtonVariant {
-  const t = title.trim().toLowerCase();
-  for (const rule of KEYWORD_RULES) {
-    if (rule.words.some((w) => t.includes(w))) return rule.variant;
-  }
-  return "secondary";
-}
-
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export function Button({
   title,
-  variant,
+  variant = "primary",
   size = "md",
   icon,
   iconPosition = "left",
@@ -97,12 +41,10 @@ export function Button({
   children,
   ...rest
 }: ButtonProps) {
-  const resolvedVariant = variant ?? inferVariant(title);
-
   return (
     <button
       type="button"
-      className={`btn btn--${resolvedVariant} btn--${size}${
+      className={`btn btn--${variant} btn--${size}${
         fullWidth ? " btn--full" : ""
       } ${className}`}
       disabled={disabled || loading}

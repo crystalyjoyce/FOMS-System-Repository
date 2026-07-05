@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+﻿import React, { useState, useRef, useEffect, useId } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -33,6 +33,7 @@ export interface TextFieldProps {
   disabled?: boolean;
   maxLength?: number;
   required?: boolean;
+  id?: string;
 }
 
 export const TextField: React.FC<TextFieldProps> = ({
@@ -49,8 +50,12 @@ export const TextField: React.FC<TextFieldProps> = ({
   disabled = false,
   maxLength,
   required = false,
+  id: customId,
 }) => {
   const [isFocused, setIsFocused] = useState(false);
+  const reactId = useId();
+  const inputId = customId || reactId;
+  const hintId = `${inputId}-hint`;
 
   let computedState = state;
   if (disabled) {
@@ -69,16 +74,18 @@ export const TextField: React.FC<TextFieldProps> = ({
     if (onBlur) onBlur(e);
   };
 
-  let displayMessage = message || '';
+  const isError = computedState === 'error' || computedState === 'error-focused';
+  const hasHint = !!message;
 
   return (
     <div className={`tf-group state-${computedState}`}>
-      <label className="tf-label">
+      <label className="tf-label" htmlFor={inputId}>
         {label}
         {required && <span className="tf-label-required"> *</span>}
       </label>
       <div className="tf-wrapper">
         <input
+          id={inputId}
           type={type}
           placeholder={placeholder}
           value={value}
@@ -89,6 +96,8 @@ export const TextField: React.FC<TextFieldProps> = ({
           disabled={disabled}
           maxLength={maxLength}
           className="tf-input"
+          aria-invalid={isError ? 'true' : 'false'}
+          aria-describedby={hasHint ? hintId : undefined}
         />
 
         {computedState === 'success' && (
@@ -96,22 +105,22 @@ export const TextField: React.FC<TextFieldProps> = ({
             <CheckCircle2 size={15} strokeWidth={2} />
           </span>
         )}
-        {(computedState === 'error' || computedState === 'error-focused') && (
+        {isError && (
           <span className="tf-status-icon">
             <AlertTriangle size={15} strokeWidth={2} />
           </span>
         )}
       </div>
 
-      {displayMessage && (
-        <span className="tf-hint">
-          {(computedState === 'error' || computedState === 'error-focused') && (
+      {hasHint && (
+        <span className="tf-hint" id={hintId}>
+          {isError && (
             <AlertTriangle size={12} strokeWidth={2} style={{ flexShrink: 0 }} />
           )}
           {computedState === 'success' && (
             <CheckCircle2 size={12} strokeWidth={2} style={{ flexShrink: 0 }} />
           )}
-          {displayMessage}
+          {message}
         </span>
       )}
     </div>
@@ -129,6 +138,8 @@ export interface CalendarPickerProps {
   message?: string;
   placeholder?: string;
   required?: boolean;
+  id?: string;
+  disablePastDates?: boolean;
 }
 
 export const CalendarPicker: React.FC<CalendarPickerProps> = ({
@@ -139,10 +150,16 @@ export const CalendarPicker: React.FC<CalendarPickerProps> = ({
   message,
   placeholder = 'Select date...',
   required = false,
+  id: customId,
+  disablePastDates = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [currentDate, setCurrentDate] = useState(new Date());
+
+  const reactId = useId();
+  const pickerId = customId || reactId;
+  const hintId = `${pickerId}-hint`;
 
   useEffect(() => {
     if (value) {
@@ -161,6 +178,15 @@ export const CalendarPicker: React.FC<CalendarPickerProps> = ({
   }, []);
 
   const handleDaySelect = (day: number) => {
+    // If it's a disabled date, block selection
+    if (disablePastDates) {
+      const d = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+      const todayDate = new Date();
+      todayDate.setHours(0,0,0,0);
+      d.setHours(0,0,0,0);
+      if (d < todayDate) return;
+    }
+
     const d = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
     const yyyy = d.getFullYear();
     const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -190,10 +216,12 @@ export const CalendarPicker: React.FC<CalendarPickerProps> = ({
     : '';
 
   const computedState = isOpen ? 'focused' : state;
+  const isError = computedState === 'error';
+  const hasHint = !!message;
 
   return (
     <div className={`tf-group state-${computedState}`} ref={containerRef} style={{ position: 'relative' }}>
-      <label className="tf-label">
+      <label className="tf-label" htmlFor={pickerId}>
         {label}
         {required && <span className="tf-label-required"> *</span>}
       </label>
@@ -203,17 +231,20 @@ export const CalendarPicker: React.FC<CalendarPickerProps> = ({
       >
         <span className="tf-cal-icon"><CalendarIcon size={15} strokeWidth={2} /></span>
         <input
+          id={pickerId}
           type="text"
           value={formattedValue}
           placeholder={placeholder}
           readOnly
           className="tf-input tf-cal-input"
+          aria-invalid={isError ? 'true' : 'false'}
+          aria-describedby={hasHint ? hintId : undefined}
         />
       </div>
 
-      {message && (
-        <span className="tf-hint">
-          {state === 'error' && <AlertTriangle size={12} strokeWidth={2} style={{ flexShrink: 0 }} />}
+      {hasHint && (
+        <span className="tf-hint" id={hintId}>
+          {isError && <AlertTriangle size={12} strokeWidth={2} style={{ flexShrink: 0 }} />}
           {state === 'success' && <CheckCircle2 size={12} strokeWidth={2} style={{ flexShrink: 0 }} />}
           {message}
         </span>
@@ -222,9 +253,9 @@ export const CalendarPicker: React.FC<CalendarPickerProps> = ({
       {isOpen && (
         <div className="cal-popover">
           <div className="cal-header">
-            <button className="cal-nav-btn" onClick={() => navMonth(-1)}><ChevronLeft size={15} /></button>
+            <button type="button" className="cal-nav-btn" onClick={() => navMonth(-1)}><ChevronLeft size={15} /></button>
             <span className="cal-month-label">{monthNames[month]} {year}</span>
-            <button className="cal-nav-btn" onClick={() => navMonth(1)}><ChevronRight size={15} /></button>
+            <button type="button" className="cal-nav-btn" onClick={() => navMonth(1)}><ChevronRight size={15} /></button>
           </div>
           <div className="cal-weekdays">
             {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d => (
@@ -234,6 +265,15 @@ export const CalendarPicker: React.FC<CalendarPickerProps> = ({
           <div className="cal-days">
             {daysArray.map((day, idx) => {
               if (day === null) return <div key={`e-${idx}`} className="cal-day empty" />;
+              
+              const d = new Date(year, month, day);
+              const todayDate = new Date();
+              todayDate.setHours(0,0,0,0);
+              d.setHours(0,0,0,0);
+
+              const isPast = d < todayDate;
+              const isDisabled = disablePastDates && isPast;
+
               const isSel = value && new Date(value).getDate() === day &&
                             new Date(value).getMonth() === month &&
                             new Date(value).getFullYear() === year;
@@ -243,8 +283,8 @@ export const CalendarPicker: React.FC<CalendarPickerProps> = ({
               return (
                 <div
                   key={`d-${day}`}
-                  className={`cal-day${isSel ? ' selected' : ''}${isToday ? ' today' : ''}`}
-                  onClick={() => handleDaySelect(day)}
+                  className={`cal-day${isSel ? ' selected' : ''}${isToday ? ' today' : ''}${isDisabled ? ' disabled' : ''}`}
+                  onClick={() => !isDisabled && handleDaySelect(day)}
                 >
                   {day}
                 </div>
@@ -275,6 +315,8 @@ const TOAST_EXIT_MS     = 200;
 // 4.  MAIN COMPONENT
 // ─────────────────────────────────────────────────────────────────
 export const FormModals: React.FC = () => {
+  const textareaId = useId();
+  const textareaHintId = `${textareaId}-hint`;
 
   /* ── Modal visibility ── */
   const [isCreateModalOpen,       setIsCreateModalOpen]       = useState(false);
@@ -375,15 +417,11 @@ export const FormModals: React.FC = () => {
     }
   };
 
-  /* ─────────────────────────────────────────────────────────────
-     RENDER
-  ───────────────────────────────────────────────────────────── */
   return (
     <div className="fm-section">
 
       {/* ── Trigger cards ── */}
       <div className="fm-trigger-grid">
-
         <div className="fm-trigger-card">
           <button
             id="btn-open-create-modal"
@@ -405,15 +443,9 @@ export const FormModals: React.FC = () => {
             Lock Profile
           </button>
         </div>
-
       </div>
 
-
-
-
-      {/* ════════════════════════════════════════════════════
-          MODAL 1 — CREATE RECORD FORM
-      ════════════════════════════════════════════════════ */}
+      {/* MODAL 1 — CREATE RECORD FORM */}
       {isCreateModalOpen && (
         <div
           className={`modal-overlay${isCreateModalClosing ? ' closing' : ''}`}
@@ -423,8 +455,7 @@ export const FormModals: React.FC = () => {
             className={`modal-card${isCreateModalClosing ? ' closing' : ''}`}
             onClick={e => e.stopPropagation()}
           >
-
-            {/* ── Header ── */}
+            {/* Header */}
             <div className="modal-hd">
               <div className="modal-hd-left">
                 <span className="modal-hd-icon">
@@ -438,7 +469,7 @@ export const FormModals: React.FC = () => {
             </div>
             <div className="modal-hd-divider" />
 
-            {/* ── Body ── */}
+            {/* Body */}
             <form onSubmit={handleFormSubmit}>
               <div className="modal-bd">
 
@@ -466,9 +497,10 @@ export const FormModals: React.FC = () => {
                     }
                   />
                   <div className="tf-group state-default">
-                    <label className="tf-label">CATEGORY</label>
+                    <label className="tf-label" htmlFor="record-category-select">CATEGORY</label>
                     <div className="tf-wrapper tf-select-wrapper">
                       <select
+                        id="record-category-select"
                         className="tf-select"
                         value={recordCategory}
                         onChange={e => setRecordCategory(e.target.value)}
@@ -543,6 +575,7 @@ export const FormModals: React.FC = () => {
                     placeholder="Select date..."
                     value={recordDate}
                     onChange={date => setRecordDate(date)}
+                    disablePastDates={true}
                     state={
                       formSubmitted
                         ? (!recordDate ? 'error' : 'success')
@@ -553,7 +586,7 @@ export const FormModals: React.FC = () => {
                   />
                 </div>
 
-                {/* Row 4: Notes (full-width textarea, 250-word limit) */}
+                {/* Row 4: Notes */}
                 {(() => {
                   const wordCount = recordReason.trim() === '' ? 0 : recordReason.trim().split(/\s+/).length;
                   const atLimit = wordCount >= 250;
@@ -564,7 +597,7 @@ export const FormModals: React.FC = () => {
                   return (
                     <div className={`tf-group state-${noteState}`}>
                       <div className="tf-label-row">
-                        <label className="tf-label">
+                        <label className="tf-label" htmlFor={textareaId}>
                           NOTES
                           <span className="tf-label-required"> *</span>
                         </label>
@@ -574,16 +607,18 @@ export const FormModals: React.FC = () => {
                       </div>
                       <div className="tf-wrapper tf-textarea-wrapper">
                         <textarea
+                          id={textareaId}
                           className="tf-textarea"
                           placeholder="Write notes for this record entry..."
                           value={recordReason}
+                          aria-invalid={noteState === 'error' ? 'true' : 'false'}
+                          aria-describedby={(formSubmitted && !recordReason.trim()) || (formSubmitted && getReasonState(recordReason) === 'error') || atLimit ? textareaHintId : undefined}
                           onChange={e => {
                             const raw = e.target.value;
                             const words = raw.trim() === '' ? [] : raw.trim().split(/\s+/);
                             if (words.length <= 250) {
                               setRecordReason(raw);
                             } else {
-                              // Hard-cap: allow editing but block adding new words beyond 250
                               setRecordReason(words.slice(0, 250).join(' '));
                             }
                           }}
@@ -591,18 +626,18 @@ export const FormModals: React.FC = () => {
                         />
                       </div>
                       {formSubmitted && !recordReason.trim() ? (
-                        <span className="tf-hint">
+                        <span className="tf-hint" id={textareaHintId}>
                           <AlertTriangle size={12} strokeWidth={2} style={{ flexShrink: 0 }} />
                           Notes are required to answer.
                         </span>
                       ) : formSubmitted && getReasonState(recordReason) === 'error' ? (
-                        <span className="tf-hint">
+                        <span className="tf-hint" id={textareaHintId}>
                           <AlertTriangle size={12} strokeWidth={2} style={{ flexShrink: 0 }} />
                           Notes must be at least 10 characters.
                         </span>
                       ) : null}
                       {atLimit && (
-                        <span className="tf-hint tf-hint--limit">
+                        <span className="tf-hint tf-hint--limit" id={textareaHintId}>
                           <AlertTriangle size={12} strokeWidth={2} style={{ flexShrink: 0 }} />
                           250-word limit reached.
                         </span>
@@ -613,7 +648,7 @@ export const FormModals: React.FC = () => {
 
               </div>
 
-              {/* ── Footer ── */}
+              {/* Footer */}
               <div className="modal-ft-divider" />
               <div className="modal-ft">
                 <button type="button" className="btn btn--outline" onClick={closeCreateModal}>
@@ -628,10 +663,7 @@ export const FormModals: React.FC = () => {
         </div>
       )}
 
-
-      {/* ════════════════════════════════════════════════════
-          MODAL 2 — DOUBLE-FACTOR VERIFICATION
-      ════════════════════════════════════════════════════ */}
+      {/* MODAL 2 — DOUBLE-FACTOR VERIFICATION */}
       {isVerificationModalOpen && (
         <div
           className={`modal-overlay${isVerificationModalClosing ? ' closing' : ''}`}
@@ -707,10 +739,7 @@ export const FormModals: React.FC = () => {
         </div>
       )}
 
-
-      {/* ════════════════════════════════════════════════════
-          MODAL 3 — SUCCESS POPUP
-      ════════════════════════════════════════════════════ */}
+      {/* MODAL 3 — SUCCESS POPUP */}
       {showSuccessPopup && createdRecord && (
         <div className={`modal-overlay${isSuccessPopupClosing ? ' closing' : ''}`}>
           <div
@@ -755,8 +784,7 @@ export const FormModals: React.FC = () => {
         </div>
       )}
 
-
-      {/* ── Toasts ── */}
+      {/* Toasts */}
       <div className="toast-container">
         {toasts.map(toast => (
           <div key={toast.id} className={`toast${toast.type === 'error' ? ' toast-error' : ''}${toast.leaving ? ' leaving' : ''}`}>

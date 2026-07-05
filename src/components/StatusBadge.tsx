@@ -1,13 +1,15 @@
 import React from 'react';
+import { 
+  CheckCircle2, 
+  ArrowRightCircle, 
+  AlertCircle, 
+  XCircle, 
+  Ban, 
+  UserCircle 
+} from 'lucide-react';
 import './StatusBadge.css';
 
-export type BadgeStatus = 
-  | 'Active' | 'Deactivated' | 'Pending' | 'Done' | 'Delivered' 
-  | 'In Transit' | 'Failed' | 'Success' | 'Submitted' | 'Picked-Up' 
-  | 'Completed' | 'Processing' | 'Preparing' | 'Ready for Pickup' 
-  | 'Returning' | 'Not Submitted' | 'Assigned' | 'Out of Delivery' 
-  | 'Returned' | 'Cancelled' | 'Partially Paid' | 'Paid' 
-  | 'Inflow' | 'Outflow' | 'Overdue' | 'New Payment' | string;
+export type BadgeStatus = string;
 
 export interface StatusBadgeProps {
   status: BadgeStatus;
@@ -17,32 +19,59 @@ export interface StatusBadgeProps {
 export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className = '' }) => {
   const normalized = status.toString().toLowerCase().trim();
 
-  let variantClass = 'badge-pending'; // Default fallback
+  let tier: 'success' | 'info' | 'warning' | 'danger' | 'neutral' | 'assign' = 'neutral';
 
-  // Active / Success (Green)
-  if (['active', 'done', 'delivered', 'success', 'completed', 'paid', 'inflow'].includes(normalized)) {
-    variantClass = 'badge-active';
+  // 1. Critical / Negative
+  if (['failed', 'overdue', 'outflow'].includes(normalized) || normalized.includes('60-90') || normalized.includes('90+')) {
+    tier = 'danger';
   }
-  // Pending / Warning (Amber)
-  else if (['pending', 'processing', 'preparing', 'ready for pickup', 'not submitted', 'partially paid'].includes(normalized) || normalized.includes('days')) {
-    variantClass = 'badge-pending';
+  // 2. Positive / Success
+  else if (['active', 'done', 'delivered', 'success', 'completed', 'paid', 'inflow'].includes(normalized)) {
+    tier = 'success';
   }
-  // Failed / Error (Red)
-  else if (['deactivated', 'failed', 'returning', 'returned', 'cancelled', 'outflow', 'overdue'].includes(normalized)) {
-    variantClass = 'badge-failed';
+  // 3. Informative / In-Progress
+  else if (['in transit', 'submitted', 'picked-up', 'out of delivery', 'out for delivery'].includes(normalized)) {
+    tier = 'info';
   }
-  // Transit / Info (Blue)
-  else if (['in transit', 'picked-up', 'out of delivery'].includes(normalized)) {
-    variantClass = 'badge-transit';
+  // 4. Attention / Pending
+  else if (
+    ['pending', 'preparing', 'ready for pickup', 'processing', 'returning', 'not submitted', 'partially paid'].includes(normalized) ||
+    normalized.includes('days') || normalized.includes('day')
+  ) {
+    tier = 'warning';
   }
-  // New / Primary (Indigo)
-  else if (['submitted', 'assigned', 'new payment'].includes(normalized)) {
-    variantClass = 'badge-new';
+  // 5. Assignment / Ownership
+  else if (['assigned', 'new payment'].includes(normalized)) {
+    tier = 'assign';
   }
+  // 6. Neutral / Terminated (Fallback)
+  else if (['deactivated', 'cancelled', 'returned'].includes(normalized)) {
+    tier = 'neutral';
+  }
+
+  // Get matching icon and configurations
+  const renderIcon = () => {
+    switch (tier) {
+      case 'success':
+        return <CheckCircle2 size={12} strokeWidth={2.5} className="badge-icon" />;
+      case 'info':
+        return <ArrowRightCircle size={12} strokeWidth={2.5} className="badge-icon" />;
+      case 'warning':
+        return <AlertCircle size={12} strokeWidth={2.5} className="badge-icon" />;
+      case 'danger':
+        return <XCircle size={12} strokeWidth={2.5} className="badge-icon" />;
+      case 'assign':
+        return <UserCircle size={12} strokeWidth={2.5} className="badge-icon" />;
+      case 'neutral':
+      default:
+        return <Ban size={12} strokeWidth={2.5} className="badge-icon" />;
+    }
+  };
 
   return (
-    <span className={`badge ${variantClass} ${className}`}>
-      {status}
+    <span className={`badge badge-${tier} ${className}`}>
+      {renderIcon()}
+      <span className="badge-label">{status}</span>
     </span>
   );
 };

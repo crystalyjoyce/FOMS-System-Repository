@@ -8,20 +8,23 @@ const variantColors = {
     new: { accent: 'var(--new)', bg: 'var(--new-bg)' },
     delivery: { accent: 'var(--delivery)', bg: 'var(--delivery-bg)' },
 };
-export const StatusCard = ({ label, value, icon, variant = 'teal', trend, periodText, sparklineData, }) => {
+export const StatusCard = ({ label, value, icon, variant = 'teal', trend, periodText, sparklineData, polarity = 'higher-is-better', }) => {
     const colors = variantColors[variant] || variantColors.teal;
-    // Custom properties cast for TSX inline styling
     const customStyles = {
         '--kpi-ac': colors.accent,
         '--kpi-ibg': colors.bg,
         '--kpi-ic': colors.accent,
     };
+    // Polarity aware coloring: for 'lower-is-better', a decrease is positive (green), and an increase is negative (red)
     const getTrendClass = (type) => {
-        if (type === 'up')
-            return 't-up';
-        if (type === 'down')
-            return 't-dn';
-        return 't-nl';
+        if (type === 'neutral')
+            return 't-nl';
+        if (polarity === 'lower-is-better') {
+            return type === 'down' ? 't-up' : 't-dn';
+        }
+        else {
+            return type === 'up' ? 't-up' : 't-dn';
+        }
     };
     const getTrendIcon = (type) => {
         if (type === 'up')

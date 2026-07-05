@@ -1,21 +1,15 @@
-import React from "react";
+import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { CheckCircle2, Info, AlertTriangle, XCircle } from "lucide-react";
-import { useToast, Toast } from "./ToastContext";
-
-export const ToastBar: React.FC = () => {
-  const { toasts, dismissToast } = useToast();
-
-  const handleAction = (toast: Toast) => {
-    if (toast.onAction) {
-      toast.onAction();
-    }
-    dismissToast(toast.id);
-  };
-
-  return (
-    <>
-      <style>
-        {`
+import { useToast } from "./ToastContext";
+export const ToastBar = () => {
+    const { toasts, dismissToast } = useToast();
+    const handleAction = (toast) => {
+        if (toast.onAction) {
+            toast.onAction();
+        }
+        dismissToast(toast.id);
+    };
+    return (_jsxs(_Fragment, { children: [_jsx("style", { children: `
           /* Toast Stack Container */
           .tb-toast-wrapper {
             position: fixed;
@@ -228,50 +222,9 @@ export const ToastBar: React.FC = () => {
           .tb-demo-btn.error-trigger { border-left: 3px solid #DC2626; }
           .tb-demo-btn.info-trigger { border-left: 3px solid #0284C7; }
           .tb-demo-btn.warning-trigger { border-left: 3px solid #D97706; }
-        `}
-      </style>
-
-      {/* Toast Container Stack */}
-      <div className="tb-toast-wrapper">
-        {toasts.map((toast) => {
-          return (
-            <div
-              key={toast.id}
-              className={`tb-toast-item tb-${toast.type} ${
-                toast.isLeaving ? "tb-toast-leave" : "tb-toast-enter"
-              }`}
-            >
-              <div className="tb-toast-icon">
-                {toast.type === "success" && <CheckCircle2 size={18} strokeWidth={2.5} />}
-                {toast.type === "info" && <Info size={18} strokeWidth={2.5} />}
-                {toast.type === "warning" && <AlertTriangle size={18} strokeWidth={2.5} />}
-                {toast.type === "error" && <XCircle size={18} strokeWidth={2.5} />}
-              </div>
-              <div className="tb-toast-content">
-                <h4 className="tb-toast-title">{toast.title}</h4>
-                <p className="tb-toast-msg">{toast.message}</p>
-                {toast.actionLabel && (
-                  <button
-                    className="tb-toast-action-btn"
-                    onClick={() => handleAction(toast)}
-                  >
-                    {toast.actionLabel}
-                  </button>
-                )}
-              </div>
-              <button
-                className="tb-toast-close"
-                onClick={() => dismissToast(toast.id)}
-                aria-label="Close notification"
-              >
-                ✕
-              </button>
-            </div>
-          );
-        })}
-      </div>
-    </>
-  );
+        ` }), _jsx("div", { className: "tb-toast-wrapper", children: toasts.map((toast) => {
+                    return (_jsxs("div", { className: `tb-toast-item tb-${toast.type} ${toast.isLeaving ? "tb-toast-leave" : "tb-toast-enter"}`, children: [_jsxs("div", { className: "tb-toast-icon", children: [toast.type === "success" && _jsx(CheckCircle2, { size: 18, strokeWidth: 2.5 }), toast.type === "info" && _jsx(Info, { size: 18, strokeWidth: 2.5 }), toast.type === "warning" && _jsx(AlertTriangle, { size: 18, strokeWidth: 2.5 }), toast.type === "error" && _jsx(XCircle, { size: 18, strokeWidth: 2.5 })] }), _jsxs("div", { className: "tb-toast-content", children: [_jsx("h4", { className: "tb-toast-title", children: toast.title }), _jsx("p", { className: "tb-toast-msg", children: toast.message }), toast.actionLabel && (_jsx("button", { className: "tb-toast-action-btn", onClick: () => handleAction(toast), children: toast.actionLabel }))] }), _jsx("button", { className: "tb-toast-close", onClick: () => dismissToast(toast.id), "aria-label": "Close notification", children: "\u2715" })] }, toast.id));
+                }) })] }));
 };
-
 export default ToastBar;
+//# sourceMappingURL=ToastBar.js.map

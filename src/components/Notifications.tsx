@@ -39,7 +39,7 @@ export const Notifications: React.FC = () => {
     <div className="section-card" style={{ maxWidth: '800px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div className="section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 0, paddingBottom: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <Bell size={24} style={{ color: 'var(--primary)' }} />
+          <Bell size={24} style={{ color: 'var(--teal)' }} />
           <span>Notifications</span>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
@@ -69,12 +69,12 @@ export const Notifications: React.FC = () => {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {filtered.length === 0 ? (
-          <div className="empty-state" style={{ padding: '40px 20px', border: '1px dashed var(--border)', borderRadius: 'var(--radius-md)' }}>
-            <div className="empty-state-icon" style={{ marginBottom: '12px', background: 'rgba(0, 169, 157, 0.08)', width: '56px', height: '56px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-md)' }}>
-              <Bell size={28} style={{ color: 'var(--primary)' }} />
+          <div className="empty-state" style={{ padding: '40px 20px', border: '1px dashed var(--border)', borderRadius: 'var(--r-md)' }}>
+            <div className="empty-state-icon" style={{ marginBottom: '12px', background: 'var(--teal-bg)', width: '56px', height: '56px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--r-md)' }}>
+              <Bell size={28} style={{ color: 'var(--teal)' }} />
             </div>
-            <div className="empty-state-title" style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>You are all caught up.</div>
-            <div className="empty-state-desc" style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '6px' }}>New system alerts and order updates will appear here as they come in.</div>
+            <div className="empty-state-title" style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--tp)' }}>You are all caught up.</div>
+            <div className="empty-state-desc" style={{ fontSize: '0.85rem', color: 'var(--tt)', marginTop: '6px' }}>New system alerts and order updates will appear here as they come in.</div>
           </div>
         ) : (
           filtered.map(n => (
@@ -83,22 +83,22 @@ export const Notifications: React.FC = () => {
               style={{
                 background: n.read ? 'transparent' : 'rgba(0, 169, 157, 0.04)',
                 border: '1px solid var(--border)',
-                borderLeft: !n.read ? '4px solid var(--primary)' : '1px solid var(--border)',
+                borderLeft: !n.read ? '4px solid var(--teal)' : '1px solid var(--border)',
                 padding: '16px',
-                borderRadius: 'var(--radius-sm)',
+                borderRadius: 'var(--r-sm)',
                 display: 'flex',
                 gap: '16px',
                 alignItems: 'flex-start',
                 cursor: 'pointer',
-                transition: 'var(--transition)'
+                transition: 'all var(--mt-std) var(--ease-std)'
               }}
               onClick={() => markAsRead(n.id)}
             >
               <div style={{
-                color: n.type === 'alert' ? 'var(--status-failed)' : n.type === 'success' ? 'var(--status-active)' : 'var(--primary)',
-                background: 'var(--bg-body)',
+                color: n.type === 'alert' ? 'var(--err)' : n.type === 'success' ? 'var(--ok)' : 'var(--teal)',
+                background: 'var(--s1)',
                 padding: '10px',
-                borderRadius: 'var(--radius-sm)'
+                borderRadius: 'var(--r-sm)'
               }}>
                 {n.type === 'alert' && <AlertTriangle size={20} />}
                 {n.type === 'success' && <CheckCircle2 size={20} />}
@@ -106,10 +106,10 @@ export const Notifications: React.FC = () => {
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', alignItems: 'center' }}>
-                  <strong style={{ color: 'var(--text-primary)', fontSize: '0.95rem' }}>{n.title}</strong>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{n.timestamp}</span>
+                  <strong style={{ color: 'var(--tp)', fontSize: '0.95rem' }}>{n.title}</strong>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--tt)' }}>{n.timestamp}</span>
                 </div>
-                <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-secondary)' }}>{n.description}</p>
+                <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--ts)' }}>{n.description}</p>
                 <div style={{ marginTop: '10px' }}>
                   <StatusBadge status={n.type === 'alert' ? 'Failed' : n.type === 'success' ? 'Active' : 'Pending'} />
                 </div>

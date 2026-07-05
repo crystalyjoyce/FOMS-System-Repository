@@ -75,6 +75,12 @@
   gap: 16px;
 }
 
+.spx-last-updated {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
 /* ─── Stat Cards (4-col grid from .four-col standard) ─── */
 .spx-stats-grid {
   display: grid;
@@ -104,7 +110,7 @@
   left: 0;
   width: 100%;
   height: 3px;
-  background: var(--accent, var(--primary));
+  background: var(--accent, var(--teal));
 }
 
 .spx-stat-card:hover {
@@ -116,7 +122,7 @@
 .spx-stat-icon {
   width: 44px;
   height: 44px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--r-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -163,7 +169,7 @@
 /* ─── Panel cards (matches .section-card) ─── */
 .spx-card {
   background: var(--bg-card);
-  border-radius: var(--radius-md);
+  border-radius: var(--r-md);
   padding: 24px;
   box-shadow: var(--shadow-card);
   border: 1px solid var(--border);
@@ -205,7 +211,7 @@
 .spx-badge-pending { background: rgba(217, 119, 6, 0.1);  color: var(--status-pending); }
 .spx-badge-transit { background: rgba(2, 132, 199, 0.1);  color: var(--status-transit); }
 .spx-badge-new     { background: rgba(79, 70, 229, 0.1);  color: var(--status-new);     }
-.spx-badge-primary { background: rgba(0, 169, 157, 0.09); color: var(--primary);        }
+.spx-badge-primary { background: rgba(0, 169, 157, 0.09); color: var(--teal);        }
 
 /* ─── Chart Legend ─── */
 .spx-legend {

@@ -379,6 +379,7 @@
 .cal-day.empty          { cursor: default; background: transparent !important; }
 .cal-day.selected       { background: var(--teal, #00A99D) !important; color: #fff !important; font-weight: 700; }
 .cal-day.today          { border-color: var(--teal, #00A99D); color: var(--teal, #00A99D); font-weight: 700; }
+.cal-day.disabled       { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
 
 
 /* ================================================================

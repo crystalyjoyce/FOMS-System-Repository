@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import {
   BarChart, Bar, XAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell, Legend
@@ -11,16 +11,15 @@ import './DashboardLayout.css';
 
 /**
  * ─── SPEEDEX Graph Color Tokens (Stakeholder-Friendly) ───
- * Using the exact "Status Action Swatches" from the HTML standard.
- * This provides semantic meaning (Red=Bad, Amber=Warning) for stakeholders
- * without inventing random non-corporate colors.
+ * Unified color dictionary shared across DMS, TARS, and FinSys.
+ * No color-to-meaning overlap is allowed.
  */
 const C = {
-  primary:  '#00A99D', // Brand Teal (Deliveries / Main)
-  navy:     '#1B254B', // Secondary Navy (Returned pie slice)
-  transit:  '#0284C7', // Transit Sky Blue
-  pending:  '#D97706', // Pending Warning Amber
-  failed:   '#DC2626', // Locked Error Red
+  success:  '#00A99D', // Delivered / Completed (Teal)
+  info:     '#0284C7', // In Transit (Blue)
+  warning:  '#D97706', // Pending / Preparing (Amber)
+  failed:   '#DC2626', // Critical / Failed (Red)
+  neutral:  '#64748B', // Returned / Cancelled (Grey)
 };
 
 /* ─── Static demo data ─── */
@@ -35,19 +34,19 @@ const weeklyData = [
 ];
 
 const pieData = [
-  { name: 'Delivered',  value: 214, color: C.primary },
-  { name: 'In Transit', value: 67,  color: C.transit },
-  { name: 'Pending',    value: 43,  color: C.pending },
+  { name: 'Delivered',  value: 214, color: C.success },
+  { name: 'In Transit', value: 67,  color: C.info },
+  { name: 'Pending',    value: 43,  color: C.warning },
   { name: 'Failed',     value: 18,  color: C.failed  },
-  { name: 'Returned',   value: 12,  color: C.navy    },
+  { name: 'Returned',   value: 12,  color: C.neutral },
 ];
 
 const activityFeed = [
-  { id: 1, text: 'Waybill SP-78921 delivered to Maria Santos',  time: '2 mins ago',  color: '#059669' },
-  { id: 2, text: 'Waybill SP-78888 picked up by Driver Reyes',  time: '14 mins ago', color: '#0284C7' },
-  { id: 3, text: 'Waybill SP-78790 marked as Failed',           time: '32 mins ago', color: '#DC2626' },
-  { id: 4, text: 'New order SP-79001 submitted by Client BDO',  time: '1 hr ago',    color: '#D97706' },
-  { id: 5, text: 'Waybill SP-78811 returned to warehouse',      time: '2 hrs ago',   color: '#1B254B' },
+  { id: 1, text: 'Waybill SP-78921 delivered to Maria Santos',  time: '2 mins ago',  color: C.success },
+  { id: 2, text: 'Waybill SP-78888 picked up by Driver Reyes',  time: '14 mins ago', color: C.info },
+  { id: 3, text: 'Waybill SP-78790 marked as Failed',           time: '32 mins ago', color: C.failed },
+  { id: 4, text: 'New order SP-79001 submitted by Client BDO',  time: '1 hr ago',    color: C.warning },
+  { id: 5, text: 'Waybill SP-78811 returned to warehouse',      time: '2 hrs ago',   color: C.neutral },
 ];
 
 const statCards = [
@@ -56,17 +55,17 @@ const statCards = [
     value: '110',
     sub: 'Pending & In-Transit',
     icon: <ClipboardList size={20} />,
-    iconBg: 'rgba(217, 119, 6, 0.1)',      // --status-pending tint
-    iconColor: '#D97706',                  // --status-pending
-    accent: '#D97706',
+    iconBg: 'rgba(217, 119, 6, 0.1)',
+    iconColor: C.warning,
+    accent: C.warning,
   },
   {
     label: 'Completed Today',
     value: '214',
     sub: 'Total successful deliveries',
     icon: <CheckCircle2 size={20} />,
-    iconBg: 'rgba(5, 150, 105, 0.1)',      // --status-active tint
-    iconColor: '#059669',                  // --status-active
+    iconBg: 'rgba(5, 150, 105, 0.1)',
+    iconColor: '#059669',
     accent: '#059669',
   },
   {
@@ -74,18 +73,18 @@ const statCards = [
     value: '67',
     sub: 'Currently on-road',
     icon: <Truck size={20} />,
-    iconBg: 'rgba(2, 132, 199, 0.1)',      // --status-transit tint
-    iconColor: '#0284C7',                  // --status-transit
-    accent: '#0284C7',
+    iconBg: 'rgba(2, 132, 199, 0.1)',
+    iconColor: C.info,
+    accent: C.info,
   },
   {
     label: 'Failed / Returned',
     value: '30',
     sub: 'Needs attention',
     icon: <AlertCircle size={20} />,
-    iconBg: 'rgba(220, 38, 38, 0.1)',      // --status-failed tint
-    iconColor: '#DC2626',                  // --status-failed
-    accent: '#DC2626',
+    iconBg: 'rgba(220, 38, 38, 0.1)',
+    iconColor: C.failed,
+    accent: C.failed,
   },
 ];
 
@@ -95,34 +94,34 @@ const systemStatus = [
     detail: '24 employees active',
     icon: <Users size={16} />,
     iconBg: 'rgba(0, 169, 157, 0.08)',
-    iconColor: '#00A99D', // --primary
+    iconColor: C.success,
   },
   {
     name: 'Delivery Management',
     detail: '354 total orders',
     icon: <ClipboardList size={16} />,
     iconBg: 'rgba(220, 38, 38, 0.1)',
-    iconColor: '#DC2626', // --status-failed
+    iconColor: C.failed,
   },
   {
     name: 'Delivery Tracker',
     detail: '67 active shipments',
     icon: <Package size={16} />,
     iconBg: 'rgba(5, 150, 105, 0.1)',
-    iconColor: '#059669', // --status-active
+    iconColor: '#059669',
   },
 ];
 
-/* ─── Custom Tooltip — styled per SPEEDEX card spec ─── */
+/* ─── Custom Tooltip ─── */
 const BarTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
   return (
     <div style={{
       background: '#FFFFFF',
       border: '1px solid #DDE2EB',
-      borderRadius: '8px',          /* --radius-sm */
+      borderRadius: '8px',
       padding: '10px 14px',
-      boxShadow: '0px 4px 20px rgba(15, 23, 42, 0.05)', /* --shadow-card */
+      boxShadow: '0px 4px 20px rgba(15, 23, 42, 0.05)',
       fontSize: '0.8rem',
       fontFamily: "'Outfit', sans-serif",
     }}>
@@ -146,20 +145,21 @@ const today = new Date().toLocaleDateString('en-US', {
 export const DashboardLayout: React.FC = () => (
   <div className="speedex-dashboard">
 
-    {/* ── Header Card — matches .header-card from standard ── */}
+    {/* Header Card */}
     <div className="spx-header-card">
       <div className="spx-header-info">
         <h1>Board Overview</h1>
         <p>Admin Dashboard · Operations</p>
       </div>
       <div className="spx-header-controls">
+        <span className="spx-last-updated">Last Sync: Just now</span>
         <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#475569', background: '#F4F6F9', border: '1px solid #DDE2EB', borderRadius: '8px', padding: '8px 14px' }}>
           {today}
         </span>
       </div>
     </div>
 
-    {/* ── Stat Cards — four-col grid from standard ── */}
+    {/* Stat Cards */}
     <div className="spx-stats-grid">
       {statCards.map((card) => (
         <div
@@ -179,7 +179,7 @@ export const DashboardLayout: React.FC = () => (
       ))}
     </div>
 
-    {/* ── Bar Chart + Activity Feed ── */}
+    {/* Bar Chart + Activity Feed */}
     <div className="spx-main-grid">
 
       {/* Delivery Performance Bar Chart */}
@@ -189,18 +189,17 @@ export const DashboardLayout: React.FC = () => (
             <TrendingUp size={18} color="#00A99D" />
             Delivery Performance
           </div>
-          {/* .badge-transit from standard */}
           <span className="spx-badge spx-badge-transit">This Week</span>
         </div>
 
-        {/* Legend — using exact color tokens */}
+        {/* Legend using unified tokens */}
         <div className="spx-legend">
           <div className="spx-legend-item">
-            <div className="spx-legend-dot" style={{ background: C.primary }} />
+            <div className="spx-legend-dot" style={{ background: C.success }} />
             Deliveries
           </div>
           <div className="spx-legend-item">
-            <div className="spx-legend-dot" style={{ background: C.pending }} />
+            <div className="spx-legend-dot" style={{ background: C.neutral }} />
             Returned
           </div>
           <div className="spx-legend-item">
@@ -212,7 +211,7 @@ export const DashboardLayout: React.FC = () => (
         <div style={{ width: '100%', height: 220 }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={weeklyData} barGap={4}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EBF0F5" /* --bg-body */ />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EBF0F5" />
               <XAxis
                 dataKey="day"
                 axisLine={false}
@@ -220,8 +219,8 @@ export const DashboardLayout: React.FC = () => (
                 tick={{ fontSize: 11, fill: '#64748B', fontWeight: 600, fontFamily: 'Outfit' }}
               />
               <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(0, 169, 157, 0.03)' }} />
-              <Bar dataKey="deliveries" name="Deliveries" fill={C.primary}  radius={[4,4,0,0]} maxBarSize={32} />
-              <Bar dataKey="returned"   name="Returned"   fill={C.pending}  radius={[4,4,0,0]} maxBarSize={32} />
+              <Bar dataKey="deliveries" name="Deliveries" fill={C.success}  radius={[4,4,0,0]} maxBarSize={32} />
+              <Bar dataKey="returned"   name="Returned"   fill={C.neutral}  radius={[4,4,0,0]} maxBarSize={32} />
               <Bar dataKey="failed"     name="Failed"     fill={C.failed}   radius={[4,4,0,0]} maxBarSize={32} />
             </BarChart>
           </ResponsiveContainer>
@@ -235,7 +234,6 @@ export const DashboardLayout: React.FC = () => (
             <ClipboardList size={18} color="#00A99D" />
             Recent Activity
           </div>
-          {/* .badge-active from standard */}
           <span className="spx-badge spx-badge-active">Live</span>
         </div>
         {activityFeed.map((log) => (
@@ -251,10 +249,10 @@ export const DashboardLayout: React.FC = () => (
 
     </div>
 
-    {/* ── Pie Chart + System Status ── */}
+    {/* Pie Chart + System Status */}
     <div className="spx-bottom-grid">
 
-      {/* Order Status Pie — donut using status color tokens */}
+      {/* Order Status Pie */}
       <div className="spx-card">
         <div className="spx-card-title">
           <div className="spx-card-title-left">
@@ -283,9 +281,9 @@ export const DashboardLayout: React.FC = () => (
                 formatter={(val: any, name: any) => [`${val} orders`, name]}
                 contentStyle={{
                   fontSize: '0.8rem',
-                  borderRadius: '8px',             /* --radius-sm */
-                  border: '1px solid #DDE2EB',     /* --border */
-                  boxShadow: '0px 4px 20px rgba(15, 23, 42, 0.05)', /* --shadow-card */
+                  borderRadius: '8px',
+                  border: '1px solid #DDE2EB',
+                  boxShadow: '0px 4px 20px rgba(15, 23, 42, 0.05)',
                   fontFamily: 'Outfit, sans-serif',
                 }}
               />
@@ -313,7 +311,6 @@ export const DashboardLayout: React.FC = () => (
             <TrendingUp size={18} color="#00A99D" />
             System Status
           </div>
-          {/* .badge-active from standard */}
           <span className="spx-badge spx-badge-active">All Operational</span>
         </div>
         {systemStatus.map((s) => (
