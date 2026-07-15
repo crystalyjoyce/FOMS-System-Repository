@@ -3,6 +3,7 @@ import Dropdown, { DropdownItem } from "./Dropdown";
 import { StatusBadge } from "./StatusBadge";
 import { AlertTriangle, Trash2, CheckCircle2, ShieldAlert } from "lucide-react";
 import { useToast } from "./ToastContext";
+import { Button } from "./Buttons";
 
 type ModalType = "view" | "edit" | "delete" | "delete-finance" | "create" | null;
 
@@ -170,6 +171,8 @@ const ActionButtons: React.FC = () => {
                         border-radius: 12px;
                         padding: 28px;
                         width: 380px;
+                        max-height: 85vh;
+                        overflow-y: auto;
                         box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
                         font-family: var(--fb, 'Inter', sans-serif);
                         position: relative;
@@ -287,46 +290,6 @@ const ActionButtons: React.FC = () => {
                         justify-content: flex-end;
                         gap: 10px;
                     }
-                    .ab-btn {
-                        height: 36px;
-                        padding: 0 16px;
-                        border-radius: 6px;
-                        font-weight: 600;
-                        font-size: 13px;
-                        cursor: pointer;
-                        transition: background 0.15s, border-color 0.15s, color 0.15s;
-                        display: inline-flex;
-                        align-items: center;
-                        justify-content: center;
-                    }
-                    .ab-btn-primary {
-                        background: #00a99d;
-                        color: #ffffff;
-                        border: 1px solid #00a99d;
-                    }
-                    .ab-btn-primary:hover {
-                        background: #009189;
-                        border-color: #009189;
-                    }
-                    .ab-btn-outline {
-                        background: #ffffff;
-                        color: #475569;
-                        border: 1px solid #cbd5e1;
-                    }
-                    .ab-btn-outline:hover {
-                        background: #f8fafc;
-                        border-color: #94a3b8;
-                        color: #1e293b;
-                    }
-                    .ab-btn-danger {
-                        background: #dc2626;
-                        color: #ffffff;
-                        border: 1px solid #dc2626;
-                    }
-                    .ab-btn-danger:hover {
-                        background: #b91c1c;
-                        border-color: #b91c1c;
-                    }
 
                     /* Warning/danger style layout */
                     .ab-modal-centered {
@@ -410,12 +373,11 @@ const ActionButtons: React.FC = () => {
         <div style={{ width: "fit-content" }}>
           <Dropdown items={menuItems} align="left" placement="bottom" />
         </div>
-        <button
-          className="btn btn--primary"
+        <Button
+          title="+ New Transaction"
+          variant="primary"
           onClick={() => handleOpenModal("create")}
-        >
-          + New Transaction
-        </button>
+        />
       </div>
 
       {activeModal && (
@@ -465,15 +427,16 @@ const ActionButtons: React.FC = () => {
                 </div>
 
                 <div className="ab-modal-footer">
-                  <button className="ab-btn ab-btn-outline" onClick={handleCloseModal}>
-                    Close
-                  </button>
-                  <button
-                    className="ab-btn ab-btn-primary"
+                  <Button
+                    title="Close"
+                    variant="secondary"
+                    onClick={handleCloseModal}
+                  />
+                  <Button
+                    title="Edit Details"
+                    variant="primary"
                     onClick={() => handleOpenModal("edit")}
-                  >
-                    Edit Details
-                  </button>
+                  />
                 </div>
               </>
             )}
@@ -514,15 +477,16 @@ const ActionButtons: React.FC = () => {
                   </div>
                 </div>
                 <div className="ab-modal-footer">
-                  <button
-                    className="ab-btn ab-btn-outline"
+                  <Button
+                    title="Back"
+                    variant="secondary"
                     onClick={() => handleOpenModal("view")}
-                  >
-                    Back
-                  </button>
-                  <button className="ab-btn ab-btn-primary" onClick={handleCloseModal}>
-                    Save Changes
-                  </button>
+                  />
+                  <Button
+                    title="Save Changes"
+                    variant="primary"
+                    onClick={handleCloseModal}
+                  />
                 </div>
               </>
             )}
@@ -563,12 +527,16 @@ const ActionButtons: React.FC = () => {
                   </div>
                 </div>
                 <div className="ab-modal-footer">
-                  <button className="ab-btn ab-btn-outline" onClick={handleCloseModal}>
-                    Cancel
-                  </button>
-                  <button className="ab-btn ab-btn-primary" onClick={handleCloseModal}>
-                    Create
-                  </button>
+                  <Button
+                    title="Cancel"
+                    variant="secondary"
+                    onClick={handleCloseModal}
+                  />
+                  <Button
+                    title="Create"
+                    variant="primary"
+                    onClick={handleCloseModal}
+                  />
                 </div>
               </>
             )}
@@ -587,15 +555,15 @@ const ActionButtons: React.FC = () => {
                   This action cannot be undone.
                 </p>
                 <div className="ab-modal-footer">
-                  <button
-                    ref={cancelBtnRef}
-                    className="ab-btn ab-btn-outline"
+                  <Button
+                    title="Cancel"
+                    variant="secondary"
                     onClick={handleCloseModal}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    className="ab-btn ab-btn-danger"
+                    ref={cancelBtnRef}
+                  />
+                  <Button
+                    title="Delete Record"
+                    variant="danger"
                     onClick={() => {
                       handleCloseModal();
                       toast.error(
@@ -603,9 +571,7 @@ const ActionButtons: React.FC = () => {
                         "Deleted"
                       );
                     }}
-                  >
-                    Delete Record
-                  </button>
+                  />
                 </div>
               </div>
             )}
@@ -648,30 +614,25 @@ const ActionButtons: React.FC = () => {
                 />
 
                 <div className="ab-modal-footer">
-                  <button
-                    ref={cancelBtnRef}
-                    className="ab-btn ab-btn-outline"
+                  <Button
+                    title="Cancel"
+                    variant="secondary"
                     onClick={handleCloseModal}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    className="ab-btn ab-btn-danger"
+                    ref={cancelBtnRef}
+                  />
+                  <Button
+                    title="Delete Cleared Record"
+                    variant="danger"
                     disabled={confirmInputText !== "TXN-8472910"}
                     style={{
                       opacity: confirmInputText === "TXN-8472910" ? 1 : 0.45,
-                      cursor:
-                        confirmInputText === "TXN-8472910"
-                          ? "pointer"
-                          : "not-allowed",
+                      cursor: confirmInputText === "TXN-8472910" ? "pointer" : "not-allowed",
                     }}
                     onClick={() => {
                       handleCloseModal();
                       toast.error("Cleared payment TXN-8472910 deleted.", "Deleted");
                     }}
-                  >
-                    Delete Cleared Record
-                  </button>
+                  />
                 </div>
               </div>
             )}

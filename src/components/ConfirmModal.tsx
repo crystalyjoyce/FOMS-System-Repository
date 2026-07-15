@@ -173,13 +173,13 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
         )}
 
         <div className="dt-dialog-actions" style={{ marginTop: "24px" }}>
-          <button
-            ref={cancelBtnRef}
-            className="btn btn--secondary btn--sm"
+          <Button
+            title={cancelLabel}
+            variant="secondary"
+            size="sm"
             onClick={onCancel}
-          >
-            {cancelLabel}
-          </button>
+            ref={cancelBtnRef}
+          />
           <Button
             title={confirmLabel}
             variant={variant}

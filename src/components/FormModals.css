@@ -537,14 +537,16 @@
 
 .modal-card {
   background: #fff;
-  border-radius: 16px;
+  border-radius: 12px;
   width: 100%;
-  max-width: 560px;
+  max-width: 560px !important;
+  font-family: var(--fb, var(--font-sans, "Inter", sans-serif)) !important;
   display: flex;
   flex-direction: column;
   box-shadow: 0 24px 64px rgba(15,23,42,.18);
   z-index: var(--z-modal);
-  overflow: visible;
+  overflow: hidden;
+  max-height: 90vh;
   animation: cardIn var(--motion-enter) var(--ease-enter);
 }
 .modal-card.closing {
@@ -586,10 +588,10 @@
 }
 
 .modal-hd-title {
-  font-family: 'Outfit', sans-serif;
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--navy, #1B254B);
+  font-family: var(--fh, "Montserrat", sans-serif) !important;
+  font-size: 1.1rem !important;
+  font-weight: 700 !important;
+  color: var(--tp, #0F172A);
   margin: 0;
 }
 .modal-hd-title--danger { color: var(--err, #DC2626); }
@@ -628,7 +630,7 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  overflow: visible;
+  overflow-y: auto;
 }
 
 /* 2-column row */
@@ -636,6 +638,22 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
+}
+
+/* Detail Labels and Values */
+.modal-detail-label {
+  display: block;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  color: var(--tt, #6B7280) !important;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.modal-detail-value {
+  font-size: 13px !important;
+  color: var(--tp, #0F172A) !important;
+  font-weight: 600 !important;
 }
 
 /* Half-width row (left half only) */
@@ -787,7 +805,7 @@
   position: fixed;
   bottom: 24px;
   right: 24px;
-  z-index: var(--z-toast);
+  z-index: 999999;
   display: flex;
   flex-direction: column;
   gap: 10px;

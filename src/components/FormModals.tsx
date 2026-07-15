@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect, useId } from 'react';
+import React, { useState, useRef, useEffect, useId } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -15,6 +15,7 @@ import {
   ClipboardList,
 } from 'lucide-react';
 import './FormModals.css';
+import { Button } from './Buttons';
 
 // ─────────────────────────────────────────────────────────────────
 // 1.  TEXTFIELD COMPONENT
@@ -423,25 +424,25 @@ export const FormModals: React.FC = () => {
       {/* ── Trigger cards ── */}
       <div className="fm-trigger-grid">
         <div className="fm-trigger-card">
-          <button
+          <Button
             id="btn-open-create-modal"
-            className="btn btn--primary fm-trigger-btn"
+            title="Open Form Modal"
+            variant="primary"
+            icon={<PlusCircle size={15} strokeWidth={2} />}
+            className="fm-trigger-btn"
             onClick={() => setIsCreateModalOpen(true)}
-          >
-            <PlusCircle size={15} strokeWidth={2} />
-            Open Form Modal
-          </button>
+          />
         </div>
 
         <div className="fm-trigger-card">
-          <button
+          <Button
             id="btn-open-lock-modal"
-            className="btn btn--danger fm-trigger-btn"
+            title="Lock Profile"
+            variant="danger"
+            icon={<Lock size={15} strokeWidth={2} />}
+            className="fm-trigger-btn"
             onClick={() => setIsVerificationModalOpen(true)}
-          >
-            <Lock size={15} strokeWidth={2} />
-            Lock Profile
-          </button>
+          />
         </div>
       </div>
 
@@ -651,12 +652,17 @@ export const FormModals: React.FC = () => {
               {/* Footer */}
               <div className="modal-ft-divider" />
               <div className="modal-ft">
-                <button type="button" className="btn btn--outline" onClick={closeCreateModal}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn--primary modal-ft-action">
-                  SAVE RECORD
-                </button>
+                <Button 
+                  title="Cancel" 
+                  variant="secondary" 
+                  onClick={closeCreateModal} 
+                />
+                <Button 
+                  title="SAVE RECORD" 
+                  type="submit" 
+                  variant="primary" 
+                  className="modal-ft-action" 
+                />
               </div>
             </form>
           </div>
@@ -723,17 +729,18 @@ export const FormModals: React.FC = () => {
 
             <div className="modal-ft-divider" />
             <div className="modal-ft">
-              <button type="button" className="btn btn--outline" onClick={closeVerificationModal}>
-                Cancel Action
-              </button>
-              <button
-                type="button"
-                className="btn btn--danger modal-ft-action"
+              <Button 
+                title="Cancel Action" 
+                variant="secondary" 
+                onClick={closeVerificationModal} 
+              />
+              <Button 
+                title="LOCK PROFILE" 
+                variant="danger" 
+                className="modal-ft-action"
                 disabled={confirmPasscode !== REQUIRED_PASSCODE}
-                onClick={handleLockConfirm}
-              >
-                LOCK PROFILE
-              </button>
+                onClick={handleLockConfirm} 
+              />
             </div>
           </div>
         </div>
@@ -773,13 +780,13 @@ export const FormModals: React.FC = () => {
               ))}
             </div>
 
-            <button
-              className="btn btn--primary"
-              style={{ width: '100%', padding: '11px', letterSpacing: '0.5px' }}
+            <Button
+              title="CONFIRM & CLOSE"
+              variant="primary"
+              fullWidth
+              style={{ padding: '11px', letterSpacing: '0.5px' }}
               onClick={closeSuccessPopup}
-            >
-              CONFIRM &amp; CLOSE
-            </button>
+            />
           </div>
         </div>
       )}

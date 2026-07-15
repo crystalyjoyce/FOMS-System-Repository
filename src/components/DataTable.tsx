@@ -26,16 +26,19 @@ export interface ColumnDef<T> {
   align?: "left" | "center" | "right";
   frozen?: boolean;
   defaultVisible?: boolean;
+  sortLabelAsc?: string;
+  sortLabelDesc?: string;
 }
 
 export interface FilterOption {
   label: string;
   value: string;
 }
-export interface FilterConfig {
+export interface FilterConfig<T = any> {
   key: string;
   label: string;
   options: FilterOption[];
+  filterFn?: (row: T, value: string) => boolean;
 }
 
 export interface ActionItem<T> {
@@ -63,13 +66,14 @@ export interface CreateButton {
 }
 
 export interface DataTableProps<T> {
+  title?: string;
   rowKey: keyof T;
   data: T[];
   columns: ColumnDef<T>[];
   actions?: ActionItem<T>[];
   searchPlaceholder?: string;
   searchFields?: (keyof T)[];
-  filters?: FilterConfig[];
+  filters?: FilterConfig<T>[];
   createButtons?: CreateButton[];
   bulkActions?: BulkAction[];
   pageSizeOptions?: number[];
@@ -92,7 +96,9 @@ export interface DataTableProps<T> {
   onSortChange?: (sortKey: string | null, sortDir: SortDirection) => void;
   onSearchChange?: (query: string) => void;
   onFilterChange?: (filters: Record<string, string>) => void;
-}
+  // Default pre-selected filter values
+  defaultFilters?: Record<string, string>;
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -101,12 +107,13 @@ function getValue<T>(row: T, key: string): unknown {
 }
 
 function matchesSearch<T>(row: T, query: string, fields?: (keyof T)[]): boolean {
-  if (!query.trim()) return true;
-  const q = query.toLowerCase();
-  const keys = fields ? (fields as string[]) : Object.keys(row as object);
+  if (!query || typeof query !== 'string' || !query.trim()) return true;
+  const q = query.toLowerCase().trim();
+  const keys = fields && fields.length > 0 ? (fields as string[]) : Object.keys(row as object);
   return keys.some((k) => {
     const v = getValue(row, k);
-    return v != null && String(v).toLowerCase().includes(q);
+    if (v == null) return false;
+    return String(v).toLowerCase().includes(q);
   });
 }
 
@@ -153,6 +160,7 @@ function ActionMenu<T>({ row, actions }: ActionMenuProps<T>) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function DataTable<T>({
+  title,
   rowKey,
   data,
   columns,
@@ -171,8 +179,8 @@ export function DataTable<T>({
   loading = false,
   exportable = false,
   onExport,
-  columnToggle = false,
-  densityToggle = false,
+  columnToggle = true,
+  densityToggle = true,
 
   // Server-side props
   serverSide = false,
@@ -182,11 +190,39 @@ export function DataTable<T>({
   onSortChange,
   onSearchChange,
   onFilterChange,
+  defaultFilters = {},
 }: DataTableProps<T>) {
   const { toast } = useToast();
 
   const [search, setSearch] = useState("");
-  const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
+  const [showRecent, setShowRecent] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [activeFilters, setActiveFilters] = useState<Record<string, string>>(defaultFilters);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`dt-recent-${window.location.pathname}`);
+      if (saved) {
+        setRecentSearches(JSON.parse(saved));
+      }
+    } catch (e) {}
+  }, []);
+
+  const saveRecentSearch = (term: string) => {
+    if (!term.trim()) return;
+    setRecentSearches(prev => {
+      const newRecent = [term, ...prev.filter(s => s !== term)].slice(0, 3);
+      try {
+        localStorage.setItem(`dt-recent-${window.location.pathname}`, JSON.stringify(newRecent));
+      } catch (e) {}
+      return newRecent;
+    });
+  };
+
+  const handleSearchBlur = () => {
+    setTimeout(() => setShowRecent(false), 200);
+    saveRecentSearch(search);
+  };
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<SortDirection>(null);
   const [page, setPage] = useState(1);
@@ -232,7 +268,12 @@ export function DataTable<T>({
     rows = rows.filter((r) => matchesSearch(r, search, searchFields));
     Object.entries(activeFilters).forEach(([key, val]) => {
       if (!val) return;
-      rows = rows.filter((r) => String(getValue(r, key)) === val);
+      const fDef = filters.find((f) => f.key === key);
+      if (fDef?.filterFn) {
+        rows = rows.filter((r) => fDef.filterFn!(r, val));
+      } else {
+        rows = rows.filter((r) => String(getValue(r, key)) === val);
+      }
     });
     if (sortKey && sortDir) {
       rows.sort((a, b) => {
@@ -364,7 +405,7 @@ export function DataTable<T>({
   const fromRow = totalRecords === 0 ? 0 : (page - 1) * pageSize + 1;
   const toRow = Math.min(page * pageSize, totalRecords);
   const showActions = actions.length > 0;
-  const hasActiveFilters = !!(search || Object.values(activeFilters).some(Boolean));
+  const hasActiveFilters = !!(search || Object.values(activeFilters).some(Boolean) || sortKey);
   const totalCols = visibleColumns.length + (selectable ? 1 : 0) + (showActions ? 1 : 0);
 
   // ── Operation Handlers ─────────────────────────────────────────────────────────
@@ -410,9 +451,12 @@ export function DataTable<T>({
   const clearAllFilters = () => {
     setSearch("");
     setActiveFilters({});
+    setSortKey(null);
+    setSortDir(null);
     setPage(1);
     onSearchChange?.("");
     onFilterChange?.({});
+    onSortChange?.(null, null);
     onPageChange?.(1);
   };
 
@@ -479,6 +523,11 @@ export function DataTable<T>({
   // ── Render ─────────────────────────────────────────────────────────────────────
   return (
     <div className={`dt-root ${densityClass} ${className}`}>
+      {title && (
+        <h2 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0F172A', margin: 0, paddingBottom: 0, paddingLeft: 24, paddingRight: 24, paddingTop: 28 }}>
+          {title}
+        </h2>
+      )}
       {/* ── Toolbar ── */}
       <div className="dt-toolbar">
         <div className="dt-toolbar-left">
@@ -491,6 +540,14 @@ export function DataTable<T>({
               placeholder={searchPlaceholder}
               value={search}
               onChange={(e) => handleSearchChange(e.target.value)}
+              onFocus={() => setShowRecent(true)}
+              onBlur={handleSearchBlur}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  saveRecentSearch(search);
+                  setShowRecent(false);
+                }
+              }}
               aria-label="Search records"
             />
             {search && (
@@ -501,6 +558,20 @@ export function DataTable<T>({
               >
                 <i className="ti ti-x" aria-hidden="true" />
               </button>
+            )}
+            {showRecent && recentSearches.length > 0 && (
+              <div className="dt-search-dropdown">
+                <div className="dt-search-dropdown-header">RECENT SEARCHES</div>
+                {recentSearches.map((term, i) => (
+                  <div key={i} className="dt-search-dropdown-item" onClick={() => handleSearchChange(term)}>
+                    <div className="dt-search-dropdown-icon" style={{ background: '#F1F5F9', color: '#64748B' }}>
+                      <i className="ti ti-clock" />
+                    </div>
+                    <span className="dt-search-dropdown-text">{term}</span>
+                    <span className="dt-search-dropdown-type">Search</span>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
@@ -629,6 +700,24 @@ export function DataTable<T>({
               </button>
             </span>
           )}
+          {sortKey && sortDir && (
+            <span className="dt-chip">
+              <i className={sortDir === 'asc' ? "ti ti-sort-ascending" : "ti ti-sort-descending"} aria-hidden="true" />
+              Sorted by: <strong>{columns.find(c => c.key === sortKey)?.label ?? sortKey} {sortDir === 'asc' ? (columns.find(c => c.key === sortKey)?.sortLabelAsc ?? '(A-Z)') : (columns.find(c => c.key === sortKey)?.sortLabelDesc ?? '(Z-A)')}</strong>
+              <button
+                className="dt-chip-remove"
+                aria-label="Clear sort"
+                onClick={() => {
+                  setSortKey(null);
+                  setSortDir(null);
+                  setPage(1);
+                  if (onSortChange) onSortChange(null, null);
+                }}
+              >
+                <i className="ti ti-x" aria-hidden="true" />
+              </button>
+            </span>
+          )}
           {Object.entries(activeFilters).map(([key, val]) => {
             if (!val) return null;
             const filterDef = filters.find((f) => f.key === key);
@@ -699,6 +788,28 @@ export function DataTable<T>({
               <i className="ti ti-x" aria-hidden="true" /> Deselect
             </button>
           </div>
+        </div>
+      )}
+
+      {/* ── No Results Banner ── */}
+      {paginated.length === 0 && hasActiveFilters && (
+        <div style={{ background: '#FFF7ED', border: '1px solid #FFEDD5', borderLeft: 'none', borderRight: 'none', padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0', overflow: 'hidden', boxSizing: 'border-box', flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#C2410C', minWidth: 0, flex: '1 1 auto' }}>
+            <i className="ti ti-search-off" style={{ fontSize: '18px', flexShrink: 0 }} />
+            <span style={{ fontSize: '14px', wordBreak: 'break-word' }}>
+              {search ? (
+                <>No results for <strong>"{search}"</strong></>
+              ) : (
+                <>No results found for applied filters</>
+              )}
+            </span>
+          </div>
+          <button 
+            onClick={clearAllFilters}
+            style={{ border: '1px solid #FED7AA', background: 'transparent', color: '#C2410C', padding: '6px 12px', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', flexShrink: 0 }}
+          >
+            <i className="ti ti-x" /> Clear filters
+          </button>
         </div>
       )}
 
@@ -791,7 +902,7 @@ export function DataTable<T>({
                 </tr>
               ))
             ) : paginated.length === 0 ? (
-              <tr>
+              <tr key="empty-state">
                 <td colSpan={totalCols} className="dt-td dt-empty">
                   <div className="dt-empty-inner">
                     <div className="dt-empty-icon-wrap">
@@ -937,6 +1048,27 @@ export function DataTable<T>({
             >
               <i className="ti ti-chevrons-right" aria-hidden="true" />
             </button>
+          </div>
+          <div className="dt-goto-page" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', color: '#64748B', marginLeft: 16 }}>
+            <span>Go to</span>
+            <input 
+              type="number" 
+              className="dt-goto-input" 
+              min={1} 
+              max={totalPages} 
+              value={page}
+              onChange={(e) => {
+                const val = parseInt(e.target.value, 10);
+                if (!isNaN(val) && val >= 1 && val <= totalPages) {
+                  handlePageChange(val);
+                }
+              }}
+              style={{
+                width: 40, height: 28, padding: '0 4px', textAlign: 'center',
+                border: '1px solid #E2E8F0', borderRadius: 6, fontSize: '0.85rem',
+                color: '#0F172A', outline: 'none'
+              }}
+            />
           </div>
         </div>
       </div>

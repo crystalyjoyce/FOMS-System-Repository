@@ -14,3 +14,6 @@ export { default as FormModals } from "./FormModals";
 export { default as SearchBar } from "./SearchBar";
 export { default as ConfirmModal } from "./ConfirmModal";
 export { ToastProvider, useToast } from "./ToastContext";
+export { ProtectedRoute } from "./ProtectedRoute";
+export { default as MainLayout } from "./MainLayout";
+export { default as Container } from "./Container";

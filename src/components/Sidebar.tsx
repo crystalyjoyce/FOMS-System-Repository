@@ -1,78 +1,25 @@
-﻿import React, { useState, useEffect, useRef } from "react";
-
-export interface NavSubItem {
-  label: string;
-  active?: boolean;
-  onClick?: () => void;
-}
-
-export interface NavItem {
-  label: string;
-  icon?: string; // Tabler icon class, e.g., 'ti ti-smart-home'
-  badge?: {
-    text: string;
-    variant?: "teal" | "warn" | "error" | "default";
-  };
-  active?: boolean;
-  onClick?: () => void;
-  subItems?: NavSubItem[];
-}
-
-export interface NavGroup {
-  label?: string;
-  items: NavItem[];
-}
+import React, { useState, useEffect, useRef } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { NAV_CONFIG, ROLE_LABELS } from "../data/seed";
+import type { UserRole } from "../types/auth";
 
 export interface SidebarProps {
   logoUrl?: string;
   logoText?: string;
-  navGroups?: NavGroup[];
-  profile?: {
-    name: string;
-    role: string;
-    avatarInitials: string;
-  };
 }
-
-const defaultNavGroups: NavGroup[] = [
-  {
-    label: "Overview",
-    items: [
-      { label: "Dashboard", icon: "ti ti-dashboard", active: true },
-      { label: "Analytics", icon: "ti ti-chart-bar", badge: { text: "New", variant: "teal" } },
-    ],
-  },
-  {
-    label: "Management",
-    items: [
-      {
-        label: "Shipments",
-        icon: "ti ti-truck",
-        badge: { text: "8", variant: "warn" },
-        subItems: [
-          { label: "Active Routes", active: false },
-          { label: "Completed Log", active: false },
-          { label: "Returns Audit", active: false },
-        ],
-      },
-      { label: "Inventory", icon: "ti ti-box" },
-      { label: "Drivers", icon: "ti ti-users" },
-    ],
-  },
-];
-
-const defaultProfile = {
-  name: "Hermione Benitez",
-  role: "Logistics Director",
-  avatarInitials: "HB",
-};
 
 export const Sidebar: React.FC<SidebarProps> = ({
   logoUrl = "/logo.png",
   logoText = "SPEEDEX",
-  navGroups = defaultNavGroups,
-  profile = defaultProfile,
 }) => {
+  const { user, logout } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Determine which nav groups to show based on role
+  const navGroups = user && NAV_CONFIG[user.role] ? NAV_CONFIG[user.role].groups : [];
+
   // Persist collapse preference
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window !== "undefined") {
@@ -142,8 +89,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <React.Fragment key={groupIndex}>
             {group.label && <span className="nav-module-label">{group.label}</span>}
             {group.items.map((item, itemIndex) => {
-              const hasSubItems = item.subItems && item.subItems.length > 0;
-              const isExpanded = !!expandedItems[item.label];
+              const isActive = location.pathname.startsWith(item.path);
 
               return (
                 <div key={itemIndex} className="nav-item-container">
@@ -151,59 +97,53 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     href="#"
                     onClick={(e) => {
                       e.preventDefault();
-                      if (hasSubItems) {
+                      if (item.children) {
                         toggleExpand(item.label);
-                        if (collapsed) {
-                          // Expand sidebar when clicking collapsed menu with sub-items
-                          setCollapsed(false);
-                          localStorage.setItem("sidebar-collapsed", "false");
-                        }
-                      } else if (item.onClick) {
-                        item.onClick();
+                      } else {
+                        navigate(item.path);
                       }
                     }}
-                    className={`nav-item ${item.active ? "active" : ""} ${hasSubItems ? "has-subs" : ""}`}
+                    className={`nav-item ${isActive ? "active" : ""}`}
                   >
                     {item.icon && (
                       <span className="nav-icon" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
                         <i className={item.icon} style={{ fontSize: "18px" }}></i>
-                        {/* Collapsed dot fallback indicator */}
-                        {item.badge && collapsed && (
-                          <span className={`nav-icon-badge-dot ${item.badge.variant || "default"}`} />
-                        )}
                       </span>
                     )}
                     <span className="nav-label">{item.label}</span>
-                    
-                    {/* Badge on expanded mode */}
-                    {item.badge && !collapsed && (
-                      <span className={`nav-badge ${item.badge.variant || ""}`}>
-                        {item.badge.text}
-                      </span>
-                    )}
-
-                    {/* Chevron for sub-menus */}
-                    {hasSubItems && !collapsed && (
-                      <i className={`ti ti-chevron-${isExpanded ? "down" : "right"} nav-chevron`} />
+                    {item.children && !collapsed && (
+                      <i className={`ti ti-chevron-${expandedItems[item.label] ? 'down' : 'right'}`} style={{ marginLeft: 'auto', fontSize: '14px', opacity: 0.7 }} />
                     )}
                   </a>
-
-                  {/* Sub-items list */}
-                  {hasSubItems && isExpanded && !collapsed && (
-                    <div className="nav-sub-list">
-                      {item.subItems!.map((sub, subIdx) => (
-                        <a
-                          key={subIdx}
-                          href="#"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            if (sub.onClick) sub.onClick();
-                          }}
-                          className={`nav-sub-item ${sub.active ? "active" : ""}`}
-                        >
-                          {sub.label}
-                        </a>
-                      ))}
+                  
+                  {item.children && expandedItems[item.label] && !collapsed && (
+                    <div className="nav-children" style={{ display: 'flex', flexDirection: 'column', marginLeft: '42px', marginTop: '4px', gap: '4px' }}>
+                      {item.children.map((child, childIndex) => {
+                        const isChildActive = location.pathname + location.search === child.path;
+                        return (
+                          <a
+                            key={childIndex}
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              const [pathname, search] = child.path.split('?');
+                              navigate({ pathname, search: search ? `?${search}` : '' });
+                            }}
+                            className={`nav-child-item ${isChildActive ? "active" : ""}`}
+                            style={{ 
+                              padding: '8px 12px', 
+                              borderRadius: '8px', 
+                              fontSize: '0.85rem', 
+                              color: isChildActive ? '#fff' : '#94A3B8',
+                              background: isChildActive ? 'rgba(255, 255, 255, 0.05)' : 'transparent',
+                              textDecoration: 'none',
+                              display: 'block'
+                            }}
+                          >
+                            {child.label}
+                          </a>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -214,7 +154,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </nav>
 
       {/* Clickable Profile Card / Account Menu */}
-      {profile && (
+      {user && (
         <div className="sidebar-footer" ref={profileRef}>
           <div 
             className={`profile-card ${showProfileMenu ? "active" : ""}`} 
@@ -223,10 +163,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             aria-haspopup="true"
             aria-expanded={showProfileMenu}
           >
-            <div className="profile-av">{profile.avatarInitials}</div>
+            <div className="profile-av">{user.avatarInitials}</div>
             <div className="profile-info">
-              <span className="profile-name">{profile.name}</span>
-              <span className="profile-role">{profile.role}</span>
+              <span className="profile-name">{user.fullName}</span>
+              <span className="profile-role">{ROLE_LABELS[user.role]}</span>
             </div>
             {!collapsed && (
               <i className="ti ti-selector profile-selector-icon" style={{ marginLeft: "auto", opacity: 0.5, fontSize: "14px" }} />
@@ -237,11 +177,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {showProfileMenu && (
             <div className={`sidebar-profile-dropdown ${collapsed ? "collapsed" : ""}`}>
               <div className="dropdown-identity">
-                <span className="dropdown-name">{profile.name}</span>
-                <span className="dropdown-role">{profile.role}</span>
+                <span className="dropdown-name">{user.fullName}</span>
+                <span className="dropdown-role">{ROLE_LABELS[user.role]}</span>
               </div>
               <div className="dropdown-divider" />
-              <button className="dropdown-option" onClick={() => alert("Redirecting to profile details...")}>
+              <button className="dropdown-option" onClick={() => {
+                navigate('/profile');
+                setShowProfileMenu(false);
+              }}>
                 <i className="ti ti-user" />
                 <span>My Profile</span>
               </button>
@@ -250,7 +193,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <span>System Settings</span>
               </button>
               <div className="dropdown-divider" />
-              <button className="dropdown-option logout" onClick={() => alert("Logging out of Speedex SSO System...")}>
+              <button className="dropdown-option logout" onClick={() => { logout(); }}>
                 <i className="ti ti-logout" />
                 <span>Log Out</span>
               </button>
