@@ -19,12 +19,12 @@ export const ToastBar: React.FC = () => {
           /* Toast Stack Container */
           .tb-toast-wrapper {
             position: fixed;
-            top: 24px;
+            top: 85px;
             right: 24px;
             display: flex;
             flex-direction: column;
             gap: 12px;
-            z-index: 1000;
+            z-index: 99999;
           }
 
           /* Toast Component Base */
@@ -41,6 +41,29 @@ export const ToastBar: React.FC = () => {
             font-family: var(--fb, 'Inter', sans-serif);
             border: 1px solid var(--border, #E2E8F0);
             transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            overflow: hidden;
+          }
+
+          /* Progress Bar */
+          .tb-toast-item::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 3px;
+            width: 100%;
+            background: currentColor;
+            opacity: 0.15;
+            animation: tb-shrink var(--toast-duration, 4s) linear forwards;
+          }
+          .tb-toast-item.tb-error::after {
+            opacity: 0.3;
+            background: #ffffff;
+            animation: none; /* errors are persistent */
+          }
+          @keyframes tb-shrink {
+            from { width: 100%; }
+            to { width: 0%; }
           }
 
           /* Severity Styles */
@@ -240,6 +263,9 @@ export const ToastBar: React.FC = () => {
               className={`tb-toast-item tb-${toast.type} ${
                 toast.isLeaving ? "tb-toast-leave" : "tb-toast-enter"
               }`}
+              style={{
+                "--toast-duration": `${toast.duration ?? (toast.type === "warning" ? 6 : 4)}s`,
+              } as React.CSSProperties}
             >
               <div className="tb-toast-icon">
                 {toast.type === "success" && <CheckCircle2 size={18} strokeWidth={2.5} />}

@@ -17,25 +17,26 @@ export interface StatusBadgeProps {
 }
 
 export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className = '' }) => {
+  if (status == null) return null;
   const normalized = status.toString().toLowerCase().trim();
 
   let tier: 'success' | 'info' | 'warning' | 'danger' | 'neutral' | 'assign' = 'neutral';
 
   // 1. Critical / Negative
-  if (['failed', 'overdue', 'outflow'].includes(normalized) || normalized.includes('60-90') || normalized.includes('90+')) {
+  if (['failed', 'overdue', 'outflow', 'missing'].includes(normalized) || normalized.includes('60-90') || normalized.includes('90+')) {
     tier = 'danger';
   }
   // 2. Positive / Success
-  else if (['active', 'done', 'delivered', 'success', 'completed', 'paid', 'inflow'].includes(normalized)) {
+  else if (['active', 'done', 'delivered', 'success', 'completed', 'paid', 'inflow', 'validated', 'validated (ctc)', 'billed', 'verified', 'verified & deposited', 'finalized'].includes(normalized)) {
     tier = 'success';
   }
   // 3. Informative / In-Progress
-  else if (['in transit', 'submitted', 'picked-up', 'out of delivery', 'out for delivery'].includes(normalized)) {
+  else if (['in transit', 'submitted', 'ctc submitted', 'picked-up', 'out of delivery', 'out for delivery'].includes(normalized)) {
     tier = 'info';
   }
   // 4. Attention / Pending
   else if (
-    ['pending', 'preparing', 'ready for pickup', 'processing', 'returning', 'not submitted', 'partially paid'].includes(normalized) ||
+    ['pending', 'preparing', 'ready for pickup', 'processing', 'returning', 'not submitted', 'partially paid', 'for checking', 'pending approval', 'pending validation', 'pending verification', 'needs revision'].includes(normalized) ||
     normalized.includes('days') || normalized.includes('day')
   ) {
     tier = 'warning';

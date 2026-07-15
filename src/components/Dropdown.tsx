@@ -116,8 +116,17 @@ export function Dropdown({
   useEffect(() => {
     if (!open || !triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
-    const spaceBelow = window.innerHeight - rect.bottom;
     const estimatedHeight = panelRef.current?.offsetHeight ?? 200;
+    
+    let spaceBelow = window.innerHeight - rect.bottom;
+    const scrollContainer = triggerRef.current.closest('.dt-table-wrap');
+    if (scrollContainer) {
+      const containerRect = scrollContainer.getBoundingClientRect();
+      // Calculate how much space is left inside the table container
+      const containerSpaceBelow = containerRect.bottom - rect.bottom;
+      spaceBelow = Math.min(spaceBelow, containerSpaceBelow);
+    }
+
     setResolvedPlacement(
       placement === "bottom" && spaceBelow < estimatedHeight && rect.top > estimatedHeight
         ? "top"

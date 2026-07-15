@@ -1,4 +1,4 @@
-import React, { ButtonHTMLAttributes, ReactNode } from "react";
+import React, { ButtonHTMLAttributes, ReactNode, forwardRef } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -19,7 +19,7 @@ export interface ButtonProps
   /** Explicit color/intent. Defaults to "primary". */
   variant?: ButtonVariant;
   size?: ButtonSize;
-  icon?: string; // Tabler icon class, e.g. "ti-trash"
+  icon?: string | ReactNode; // Tabler icon class or a React component (e.g. from lucide-react)
   iconPosition?: "left" | "right";
   loading?: boolean;
   fullWidth?: boolean;
@@ -28,7 +28,7 @@ export interface ButtonProps
 
 // ─── Component ─────────────────────────────────────────────────────────────────
 
-export function Button({
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
   title,
   variant = "primary",
   size = "md",
@@ -40,27 +40,29 @@ export function Button({
   className = "",
   children,
   ...rest
-}: ButtonProps) {
+}, ref) => {
   return (
     <button
+      ref={ref}
       type="button"
-      className={`btn btn--${variant} btn--${size}${
-        fullWidth ? " btn--full" : ""
-      } ${className}`}
+      className={`btn btn--${variant} btn--${size}${fullWidth ? " btn--full" : ""
+        } ${className}`}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       {...rest}
     >
       {loading && <i className="ti ti-loader-2 btn-spinner" aria-hidden="true" />}
       {!loading && icon && iconPosition === "left" && (
-        <i className={`ti ${icon}`} aria-hidden="true" />
+        typeof icon === 'string' ? <i className={`ti ${icon}`} aria-hidden="true" /> : icon
       )}
       <span>{children ?? title}</span>
       {!loading && icon && iconPosition === "right" && (
-        <i className={`ti ${icon}`} aria-hidden="true" />
+        typeof icon === 'string' ? <i className={`ti ${icon}`} aria-hidden="true" /> : icon
       )}
     </button>
   );
-}
+});
+
+Button.displayName = "Button";
 
 export default Button;
