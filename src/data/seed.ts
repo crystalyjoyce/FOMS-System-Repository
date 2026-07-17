@@ -1590,7 +1590,7 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
       {
         label: 'Operations',
         items: [
-          { label: 'Client Accounts', path: '/clients', icon: 'ti ti-users' },
+          { label: 'Client Search', path: '/clients', icon: 'ti ti-search' },
           { label: 'Waybill / POD Records', path: '/waybills', icon: 'ti ti-file-import' },
         ],
       },
@@ -1605,17 +1605,32 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
         ],
       },
       {
-        label: 'Financial Controls',
+        label: 'Operations',
         items: [
-          { label: 'Client Rates', path: '/rate-configuration', icon: 'ti ti-calculator' },
-          { label: 'Invoicing', path: '/invoicing-desk', icon: 'ti ti-file-invoice' },
+          { label: 'Client Accounts', path: '/clients', icon: 'ti ti-users' },
+          { label: 'Billing Rates', path: '/rate-configuration', icon: 'ti ti-calculator' },
+        ],
+      },
+      {
+        label: 'Invoicing',
+        items: [
           { label: 'Create Invoice', path: '/invoice-create', icon: 'ti ti-file-plus' },
+          { label: 'Invoice List', path: '/invoicing-desk', icon: 'ti ti-file-invoice' },
         ],
       },
       {
         label: 'Receivables & Payments',
         items: [
+          { label: 'Accounts Receivable', path: '/accounts-receivable', icon: 'ti ti-report-money' },
           { label: 'Payments', path: '/payments', icon: 'ti ti-cash' },
+          { label: 'SpeedPay Validation', path: '/speedpay-validation', icon: 'ti ti-device-mobile-message' },
+          { label: 'Official Receipts', path: '/receipts', icon: 'ti ti-receipt' },
+        ],
+      },
+      {
+        label: 'Analytics',
+        items: [
+          { label: 'Reports', path: '/reports', icon: 'ti ti-chart-bar' },
         ],
       },
     ],
@@ -1629,9 +1644,18 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
         ],
       },
       {
-        label: 'Auditing',
+        label: 'Auditing & Receivables',
         items: [
           { label: 'Invoice Review', path: '/invoice-review', icon: 'ti ti-file-check' },
+          { label: 'Accounts Receivable', path: '/accounts-receivable', icon: 'ti ti-report-money' },
+          { label: 'Payment Validation', path: '/payments', icon: 'ti ti-cash' },
+        ],
+      },
+      {
+        label: 'Analytics & Control',
+        items: [
+          { label: 'Reports', path: '/reports', icon: 'ti ti-chart-bar' },
+          { label: 'Audit Trail', path: '/audit-trail', icon: 'ti ti-shield-check' },
         ],
       },
     ],
@@ -1644,28 +1668,6 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
           { label: 'Dashboard', path: '/dashboard', icon: 'ti ti-layout-dashboard' },
         ],
       },
-      {
-        label: 'Receivables & Payments',
-        items: [
-          { label: 'Accounts Receivable', path: '/accounts-receivable', icon: 'ti ti-report-money' },
-          { label: 'Payments', path: '/payments', icon: 'ti ti-cash' },
-        ],
-      },
-      {
-        label: 'Analytics',
-        items: [
-          { 
-            label: 'Reports', 
-            path: '/reports', 
-            icon: 'ti ti-chart-bar',
-            children: [
-              { label: 'Aging of Accounts', path: '/reports?tab=aging' },
-              { label: 'Invoice Summary', path: '/reports?tab=invoices' },
-              { label: 'Collection Report', path: '/reports?tab=collections' },
-            ]
-          },
-        ],
-      },
     ],
   },
   'Finance Manager': {
@@ -1676,28 +1678,16 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
           { label: 'Executive Dashboard', path: '/dashboard', icon: 'ti ti-layout-dashboard' },
         ],
       },
-
       {
-        label: 'Receivables & Payments',
+        label: 'Receivables',
         items: [
           { label: 'Accounts Receivable', path: '/accounts-receivable', icon: 'ti ti-report-money' },
-          { label: 'Payments', path: '/payments', icon: 'ti ti-cash' },
-          { label: 'Receipts', path: '/receipts', icon: 'ti ti-receipt' },
         ],
       },
       {
         label: 'Analytics & Control',
         items: [
-          { 
-            label: 'Reports', 
-            path: '/reports', 
-            icon: 'ti ti-chart-bar',
-            children: [
-              { label: 'Aging of Accounts', path: '/reports?tab=aging' },
-              { label: 'Invoice Summary', path: '/reports?tab=invoices' },
-              { label: 'Collection Report', path: '/reports?tab=collections' },
-            ]
-          },
+          { label: 'Reports', path: '/reports', icon: 'ti ti-chart-bar' },
           { label: 'Audit Trail', path: '/audit-trail', icon: 'ti ti-shield-check' },
         ],
       },

@@ -1,10 +1,13 @@
-import React, { Component, ErrorInfo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { Component, ErrorInfo, useState } from 'react';
+import { useSearchParams, useNavigate, useParams } from 'react-router-dom';
 import { SEEDED_INVOICES, SEEDED_CLIENTS, SEEDED_AR_RECORDS, SEEDED_PAYMENTS } from '../data/seed';
 import { TableContainer } from '../components/TableContainer';
 import { StatusCard } from '../components/StatusCard';
 import { DataTable } from '../components/DataTable';
+import { CustomDatePicker } from '../components/CustomDatePicker';
 import { StatusBadge } from '../components/StatusBadge';
+import { ClientInfoCard } from '../components/ClientInfoCard';
+import { Card } from '../components/Card';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, LineChart, Line, ComposedChart } from 'recharts';
 
 class ErrorBoundary extends Component<{children: React.ReactNode}, {hasError: boolean, error: Error | null}> {
@@ -43,8 +46,16 @@ type ReportTab = 'aging' | 'invoices' | 'collections';
 
 const ReportsContent: React.FC = () => {
   const [searchParams] = useSearchParams();
-  const activeTab = (searchParams.get('tab') as ReportTab) || 'aging';
-  const [selectedClientId, setSelectedClientId] = React.useState<string | null>(null);
+  const navigate = useNavigate();
+  
+  const { id } = useParams();
+  const selectedClientId = id;
+  const [reportType, setReportType] = useState(searchParams.get('tab') || 'aging');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [isGenerated, setIsGenerated] = useState(false);
+
+  const activeTab = reportType;
 
   let agingRecords: any[] = [];
   if (selectedClientId) {
@@ -110,21 +121,15 @@ const ReportsContent: React.FC = () => {
 
   const agingColumns = [
     { key: 'clientName', label: 'CLIENT', sortable: true, render: (row: any) => (
-      !selectedClientId ? (
-        <button onClick={() => setSelectedClientId(row.clientId)} style={{ background: 'none', border: 'none', padding: 0, color: '#3B82F6', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>
-          {row.clientName}
-        </button>
-      ) : (
-        <span style={{ fontWeight: 600 }}>{row.clientName}</span>
-      )
+      <span onClick={() => navigate(`/reports/${row.clientId}?tab=${activeTab}`)} style={{ color: '#0F172A', fontWeight: 700, cursor: 'pointer', textDecoration: 'none' }}>
+        {row.clientName}
+      </span>
     ) },
-    { key: 'invoiceNumber', label: 'INVOICE NO.' },
     { key: 'invoiceDate', label: 'INVOICE DATE', render: (row: any) => row.invoiceDate ? new Date(row.invoiceDate).toLocaleDateString('en-PH') : 'N/A' },
     { key: 'dueDate', label: 'DUE DATE', render: (row: any) => row.dueDate ? new Date(row.dueDate).toLocaleDateString('en-PH') : 'N/A' },
     { key: 'amount', label: 'AMOUNT', render: (row: any) => `₱${row.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` },
     { key: 'agingDays', label: 'DAYS OUTSTANDING', sortable: true },
-    { key: 'agingBracket', label: 'AGING BRACKET' },
-    { key: 'status', label: 'STATUS', render: (row: any) => <StatusBadge status={row.status} /> }
+    { key: 'status', label: 'PAYMENT STATUS', render: (row: any) => <StatusBadge status={row.status} /> }
   ];
 
   // ── 2. Invoice Summary Tab Data ────────────────────────────────
@@ -182,9 +187,9 @@ const ReportsContent: React.FC = () => {
     { key: 'invoiceNumber', label: 'INVOICE NO.', sortable: true },
     { key: 'clientName', label: 'CLIENT', sortable: true, render: (row: any) => (
       !selectedClientId ? (
-        <button onClick={() => setSelectedClientId(row.clientId)} style={{ background: 'none', border: 'none', padding: 0, color: '#3B82F6', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>
+        <span onClick={() => navigate(`/reports/${row.clientId}?tab=${activeTab}`)} style={{ color: '#0F172A', fontWeight: 700, cursor: 'pointer', textDecoration: 'none' }}>
           {row.clientName}
-        </button>
+        </span>
       ) : (
         <span style={{ fontWeight: 600 }}>{row.clientName}</span>
       )
@@ -259,9 +264,9 @@ const ReportsContent: React.FC = () => {
     { key: 'invoiceNumber', label: 'INVOICE NO.' },
     { key: 'clientName', label: 'CLIENT', sortable: true, render: (row: any) => (
       !selectedClientId ? (
-        <button onClick={() => setSelectedClientId(row.clientId)} style={{ background: 'none', border: 'none', padding: 0, color: '#3B82F6', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>
+        <span onClick={() => navigate(`/reports/${row.clientId}?tab=${activeTab}`)} style={{ color: '#0F172A', fontWeight: 700, cursor: 'pointer', textDecoration: 'none' }}>
           {row.clientName}
-        </button>
+        </span>
       ) : (
         <span style={{ fontWeight: 600 }}>{row.clientName}</span>
       )
@@ -273,13 +278,54 @@ const ReportsContent: React.FC = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {selectedClientId && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: -8 }}>
-          <button onClick={() => setSelectedClientId(null)} style={{ background: '#F1F5F9', border: '1px solid #CBD5E1', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, color: '#475569', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <i className="ti ti-arrow-left"></i> Back to Summary
-          </button>
+      
+      {/* ── Filter Controls ── */}
+      <div style={{ background: '#fff', borderRadius: 12, padding: 24, border: '1px solid #E2E8F0', display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'flex-end' }}>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <label style={{ fontSize: '0.82rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: 6 }}>Report Type</label>
+          <select value={reportType} onChange={e => { setReportType(e.target.value); setIsGenerated(false); }} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC', fontSize: '0.9rem', color: '#0F172A', fontWeight: 500 }}>
+            <option value="aging">Aging of Accounts</option>
+            <option value="invoices">Invoice Summary</option>
+            <option value="collections">Collection Summary</option>
+            <option value="outstanding">Outstanding Balance Report</option>
+            <option value="payment_validation">Payment Validation Report</option>
+          </select>
         </div>
+        <div style={{ width: 220 }}>
+          <label style={{ fontSize: '0.82rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: 6 }}>Date From</label>
+          <CustomDatePicker value={dateFrom} onChange={val => { setDateFrom(val); setIsGenerated(false); }} />
+        </div>
+        <div style={{ width: 220 }}>
+          <label style={{ fontSize: '0.82rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: 6 }}>Date To</label>
+          <CustomDatePicker value={dateTo} onChange={val => { setDateTo(val); setIsGenerated(false); }} />
+        </div>
+        <div>
+          {!selectedClientId && (
+            <button onClick={() => setIsGenerated(true)} style={{ background: '#0F172A', color: '#fff', padding: '10px 24px', borderRadius: 8, border: 'none', fontWeight: 600, fontSize: '0.9rem', cursor: 'pointer' }}>
+              Generate Report
+            </button>
+          )}
+        </div>
+      </div>
+
+      {selectedClientId && SEEDED_CLIENTS.find(c => c.id === selectedClientId) && (
+        <>
+          <div onClick={() => navigate('/reports?tab=' + activeTab)} style={{ cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600, width: 'fit-content' }}>
+            <i className="ti ti-arrow-left" style={{ fontSize: '16px' }}></i> Back to Reports
+          </div>
+          <ClientInfoCard client={SEEDED_CLIENTS.find(c => c.id === selectedClientId)!} />
+        </>
       )}
+
+      {!isGenerated ? (
+        <div style={{ background: '#fff', borderRadius: 12, padding: 64, textAlign: 'center', border: '1px dashed #CBD5E1' }}>
+          <i className="ti ti-report" style={{ fontSize: 48, color: '#94A3B8', marginBottom: 16, display: 'block' }}></i>
+          <h3 style={{ margin: '0 0 8px', color: '#0F172A', fontSize: '1.1rem' }}>No Report Generated</h3>
+          <p style={{ margin: 0, color: '#64748B', fontSize: '0.95rem' }}>Please select your criteria above and click "Generate Report" to view the data.</p>
+        </div>
+      ) : (
+        <>
+          {/* Removed inline back button */}
       {/* ── Tab 1: Aging of Accounts ── */}
       {activeTab === 'aging' && (
         <>
@@ -321,20 +367,20 @@ const ReportsContent: React.FC = () => {
             <DataTable 
               title="Detailed Aging Ledger"
               data={agingRecords} 
-              columns={selectedClientId ? agingColumns : agingColumns.filter(c => !['invoiceNumber', 'agingBracket', 'status'].includes(c.key))} 
+              columns={agingColumns} 
               rowKey="id"
               exportable={true} 
               columnToggle={true} 
               densityToggle={true} 
               searchPlaceholder="Search aging records (Client, Invoice)..."
-              searchFields={['clientName', 'invoiceNumber', 'agingBracket']}
+              searchFields={['clientName', 'invoiceNumber']}
             />
           </TableContainer>
         </>
       )}
 
-      {/* ── Tab 2: Invoice Summary ── */}
-      {activeTab === 'invoices' && (
+      {/* ── Tab 2 & 4: Invoice Summary & Outstanding Balance ── */}
+      {(activeTab === 'invoices' || activeTab === 'outstanding') && (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
             <StatusCard label="Total Invoiced" value={`₱${totalInvoiced.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} icon="ti-file-invoice" variant="teal" />
@@ -378,8 +424,8 @@ const ReportsContent: React.FC = () => {
         </>
       )}
 
-      {/* ── Tab 3: Collection Report ── */}
-      {activeTab === 'collections' && (
+      {/* ── Tab 3 & 5: Collection Report & Payment Validation ── */}
+      {(activeTab === 'collections' || activeTab === 'payment_validation') && (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
             <StatusCard label="Total Collected (This Period)" value={`₱${totalCollected.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} icon="ti-coin" variant="success" />
@@ -496,6 +542,8 @@ const ReportsContent: React.FC = () => {
             />
           </TableContainer>
         </>
+      )}
+      </>
       )}
     </div>
   );

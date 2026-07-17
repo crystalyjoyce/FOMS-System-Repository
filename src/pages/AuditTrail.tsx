@@ -19,8 +19,8 @@ export const AuditTrail: React.FC = () => {
   const [filterModule, setFilterModule] = useState('All');
   const [filterUser, setFilterUser] = useState('All');
 
-  const modules = ['All', ...Array.from(new Set(logs.map(l => l.module)))];
-  const users = ['All', ...Array.from(new Set(logs.map(l => l.userFullName)))];
+  const modules = ['All', ...Array.from(new Set(logs.map(l => l.module))).filter(m => m !== 'All')];
+  const users = ['All', ...Array.from(new Set(logs.map(l => l.userFullName))).filter(u => u !== 'All')];
 
   const filtered = logs.filter(log => {
     const moduleMatch = filterModule === 'All' || log.module === filterModule;

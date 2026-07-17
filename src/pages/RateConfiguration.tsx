@@ -1,11 +1,16 @@
 import React from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import Button from '../components/Buttons';
 import { DataTable } from '../components/DataTable';
 import { SEEDED_RATES, SEEDED_CLIENTS, BillingRate } from '../data/seed';
 import { TableContainer } from '../components/TableContainer';
+import { ClientInfoCard } from '../components/ClientInfoCard';
+import { Card } from '../components/Card';
 
 export const RateConfiguration: React.FC = () => {
-  const [selectedClientId, setSelectedClientId] = React.useState<string | null>(null);
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const selectedClientId = id;
 
   // Combine Rates with Client Data
   let ratesWithClientData: any[] = [];
@@ -48,9 +53,9 @@ export const RateConfiguration: React.FC = () => {
   const tableColumns = [
     { key: 'clientName', label: 'CLIENT NAME', render: (row: any) => (
       !selectedClientId ? (
-        <button onClick={() => setSelectedClientId(row.clientId)} style={{ background: 'none', border: 'none', padding: 0, color: '#3B82F6', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>
+        <span onClick={() => navigate(`/rate-configuration/${row.clientId}`)} style={{ color: '#0F172A', fontWeight: 700, cursor: 'pointer', textDecoration: 'none' }}>
           {row.clientName}
-        </button>
+        </span>
       ) : (
         <span style={{ fontWeight: 600 }}>{row.clientName}</span>
       )
@@ -66,6 +71,33 @@ export const RateConfiguration: React.FC = () => {
     { key: 'agreedSchedule', label: 'AGREED SCHEDULE' }
   ];
 
+  if (selectedClientId && SEEDED_CLIENTS.find(c => c.id === selectedClientId)) {
+    const client = SEEDED_CLIENTS.find(c => c.id === selectedClientId)!;
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div onClick={() => navigate('/rate-configuration')} style={{ cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600, width: 'fit-content' }}>
+          <i className="ti ti-arrow-left" style={{ fontSize: '16px' }}></i> Back to Summary
+        </div>
+        
+        <ClientInfoCard client={client} />
+
+        <Card>
+          <div style={{ padding: '24px' }}>
+            <DataTable 
+              title="Client Rates"
+              data={ratesWithClientData}
+              columns={tableColumns}
+              rowKey="id"
+              columnToggle={true}
+              densityToggle={true}
+              exportable={false}
+            />
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       
@@ -73,18 +105,13 @@ export const RateConfiguration: React.FC = () => {
         <DataTable 
           title="Client Rates"
           data={ratesWithClientData}
-          columns={selectedClientId ? tableColumns : tableColumns.filter(c => !['region'].includes(c.key as string))}
+          columns={tableColumns.filter(c => !['region'].includes(c.key as string))}
           rowKey="id"
           columnToggle={true}
           densityToggle={true}
           exportable={false}
         />
       </TableContainer>
-      {selectedClientId && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
-          <Button variant="secondary" title="← Back to Summary" onClick={() => setSelectedClientId(null)} />
-        </div>
-      )}
     </div>
   );
 };

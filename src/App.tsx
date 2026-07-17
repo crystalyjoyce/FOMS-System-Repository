@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ToastProvider } from "./components/ToastContext";
 import ToastBar from "./components/ToastBar";
 import { AuthProvider } from "./context/AuthContext";
+import { NotificationProvider } from "./context/NotificationContext";
 import { AuditProvider } from "./context/AuditContext";
 import { AppDataProvider } from "./context/AppDataContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
@@ -47,6 +48,7 @@ function App() {
     <BrowserRouter>
       <AppDataProvider>
         <AuthProvider>
+          <NotificationProvider>
           <AuditProvider>
             <ToastProvider>
               <ToastBar />
@@ -68,11 +70,19 @@ function App() {
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/notifications" element={<NotificationsPage />} />
 
-              {/* ── Coordinator ───────────────────────────────── */}
+              {/* ── Coordinator & Accountant ────────────────────── */}
               <Route
                 path="/clients"
                 element={
-                  <ProtectedRoute allowedRoles={['Coordinator', 'Finance Manager', 'Assistant of Finance Manager', 'Accountant']}>
+                  <ProtectedRoute allowedRoles={['Coordinator', 'Accountant']}>
+                    <ClientManagement />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/clients/:id"
+                element={
+                  <ProtectedRoute allowedRoles={['Coordinator', 'Accountant']}>
                     <ClientManagement />
                   </ProtectedRoute>
                 }
@@ -85,18 +95,42 @@ function App() {
                   </ProtectedRoute>
                 }
               />
+              <Route
+                path="/waybills/:id"
+                element={
+                  <ProtectedRoute allowedRoles={['Coordinator']}>
+                    <Waybills />
+                  </ProtectedRoute>
+                }
+              />
 
-              {/* ── Accountant ────────────────────────────────── */}
+              {/* ── Accountant Only ───────────────────────────── */}
               <Route
                 path="/rate-configuration"
                 element={
-                  <ProtectedRoute allowedRoles={['Accountant', 'Finance Manager', 'Assistant of Finance Manager']}>
+                  <ProtectedRoute allowedRoles={['Accountant']}>
+                    <RateConfiguration />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/rate-configuration/:id"
+                element={
+                  <ProtectedRoute allowedRoles={['Accountant']}>
                     <RateConfiguration />
                   </ProtectedRoute>
                 }
               />
               <Route
                 path="/invoicing-desk"
+                element={
+                  <ProtectedRoute allowedRoles={['Accountant']}>
+                    <InvoicingDesk />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/invoicing-desk/:id"
                 element={
                   <ProtectedRoute allowedRoles={['Accountant']}>
                     <InvoicingDesk />
@@ -111,8 +145,24 @@ function App() {
                   </ProtectedRoute>
                 }
               />
+              <Route
+                path="/receipts"
+                element={
+                  <ProtectedRoute allowedRoles={['Accountant']}>
+                    <Receipts />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/receipts/:id"
+                element={
+                  <ProtectedRoute allowedRoles={['Accountant']}>
+                    <Receipts />
+                  </ProtectedRoute>
+                }
+              />
 
-              {/* ── Head Accountant ───────────────────────────── */}
+              {/* ── Head Accountant Only ──────────────────────── */}
               <Route
                 path="/invoice-review"
                 element={
@@ -121,40 +171,28 @@ function App() {
                   </ProtectedRoute>
                 }
               />
-
-              {/* ── Assistant of Finance Manager ──────────────── */}
               <Route
-                path="/finance-master"
+                path="/invoice-review/:id"
                 element={
-                  <ProtectedRoute allowedRoles={['Assistant of Finance Manager']}>
-                    <FinanceMaster />
+                  <ProtectedRoute allowedRoles={['Head Accountant']}>
+                    <InvoiceReview />
                   </ProtectedRoute>
                 }
               />
 
-              {/* ── Finance Manager Read-Only Overview ───────── */}
-              <Route
-                path="/waybill-logs"
-                element={
-                  <ProtectedRoute allowedRoles={['Finance Manager']}>
-                    <WaybillLogs />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/invoices"
-                element={
-                  <ProtectedRoute allowedRoles={['Finance Manager']}>
-                    <InvoiceArchives />
-                  </ProtectedRoute>
-                }
-              />
-
-              {/* ── Shared: FM + Asst. FM ─────────────────────── */}
+              {/* ── Shared Finance Roles ──────────────────────── */}
               <Route
                 path="/accounts-receivable"
                 element={
-                  <ProtectedRoute allowedRoles={['Finance Manager', 'Assistant of Finance Manager']}>
+                  <ProtectedRoute allowedRoles={['Accountant', 'Head Accountant', 'Finance Manager']}>
+                    <AccountsReceivable />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/accounts-receivable/:id"
+                element={
+                  <ProtectedRoute allowedRoles={['Accountant', 'Head Accountant', 'Finance Manager']}>
                     <AccountsReceivable />
                   </ProtectedRoute>
                 }
@@ -162,47 +200,64 @@ function App() {
               <Route
                 path="/payments"
                 element={
-                  <ProtectedRoute allowedRoles={['Finance Manager', 'Assistant of Finance Manager', 'Accountant']}>
+                  <ProtectedRoute allowedRoles={['Accountant', 'Head Accountant', 'Finance Manager']}>
                     <Payments />
                   </ProtectedRoute>
                 }
               />
               <Route
-                path="/receipts"
+                path="/payments/:id"
                 element={
-                  <ProtectedRoute allowedRoles={['Finance Manager']}>
-                    <Receipts />
+                  <ProtectedRoute allowedRoles={['Accountant', 'Head Accountant', 'Finance Manager']}>
+                    <Payments />
                   </ProtectedRoute>
                 }
               />
               <Route
                 path="/reports"
                 element={
-                  <ProtectedRoute allowedRoles={['Finance Manager', 'Assistant of Finance Manager']}>
+                  <ProtectedRoute allowedRoles={['Accountant', 'Head Accountant', 'Finance Manager']}>
                     <Reports />
                   </ProtectedRoute>
                 }
               />
-
-              {/* ── Finance Manager Only ──────────────────────── */}
+              <Route
+                path="/reports/:id"
+                element={
+                  <ProtectedRoute allowedRoles={['Accountant', 'Head Accountant', 'Finance Manager']}>
+                    <Reports />
+                  </ProtectedRoute>
+                }
+              />
               <Route
                 path="/audit-trail"
                 element={
-                  <ProtectedRoute allowedRoles={['Finance Manager']}>
+                  <ProtectedRoute allowedRoles={['Head Accountant', 'Finance Manager']}>
                     <AuditTrail />
                   </ProtectedRoute>
                 }
               />
 
               {/* Fallbacks */}
+              <Route path="/speedpay-validation" element={
+                <ProtectedRoute allowedRoles={['Accountant', 'Head Accountant', 'Finance Manager']}>
+                  <SpeedPayValidation />
+                </ProtectedRoute>
+              } />
+              <Route path="/speedpay-validation/:id" element={
+                <ProtectedRoute allowedRoles={['Accountant', 'Head Accountant', 'Finance Manager']}>
+                  <SpeedPayValidation />
+                </ProtectedRoute>
+              } />
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </ToastProvider>
-      </AuditProvider>
-    </AuthProvider>
+          </AuditProvider>
+          </NotificationProvider>
+        </AuthProvider>
   </AppDataProvider>
   </BrowserRouter>
   );

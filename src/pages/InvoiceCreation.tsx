@@ -126,9 +126,9 @@ export const InvoiceCreation: React.FC = () => {
     { key: 'waybillNumber', label: 'WAYBILL NO.', sortable: true },
     { key: 'clientCode', label: 'CLIENT', render: (row: any) => (
       !selectedClientId ? (
-        <button onClick={() => setSelectedClientId(row.clientCode)} style={{ background: 'none', border: 'none', padding: 0, color: '#3B82F6', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>
+        <span onClick={() => setSelectedClientId(row.clientCode)} style={{ color: '#0F172A', fontWeight: 700, cursor: 'pointer', textDecoration: 'none' }}>
           {row.clientName}
-        </button>
+        </span>
       ) : (
         <span style={{ fontWeight: 600 }}>{row.clientName}</span>
       )

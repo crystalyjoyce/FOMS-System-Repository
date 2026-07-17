@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useAppData } from '../context/AppDataContext';
 
 // Removing inner Card so it inherits from MainLayout Container
 
 const BoardOverview: React.FC = () => {
   const { user } = useAuth();
+  const { clients } = useAppData();
   const location = useLocation();
   const [currentTime, setCurrentTime] = useState<string>('');
 
@@ -139,6 +141,21 @@ const BoardOverview: React.FC = () => {
   if (path.startsWith('/profile')) {
     pageName = 'Profile';
     title = 'User Profile';
+  }
+
+  // Check if we are in a detail view for client-based modules
+  const pathParts = path.split('/').filter(Boolean);
+  if (pathParts.length > 1) {
+    const moduleId = pathParts[0];
+    const entityId = pathParts[1];
+    
+    // Modules where the detail view is a Client Drill-Down
+    if (['accounts-receivable', 'payments', 'receipts', 'waybills'].includes(moduleId)) {
+      const client = clients.find(c => c.id === entityId);
+      if (client) {
+        title = client.name;
+      }
+    }
   }
 
   const roleLabel = role === 'Assistant of Finance Manager' ? 'Assistant Finance Manager' : role;

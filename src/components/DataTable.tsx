@@ -10,6 +10,8 @@ import Button from "./Buttons";
 import Dropdown from "./Dropdown";
 import ConfirmModal from "./ConfirmModal";
 import { useToast } from "./ToastContext";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import "./DataTable.css";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -499,7 +501,7 @@ export function DataTable<T>({
   };
 
   // ── Export ─────────────────────────────────────────────────────────────────────
-  const handleExport = () => {
+  const handleExportCSV = () => {
     const rows =
       selectAllMatching || selected.size === 0
         ? processed
@@ -512,6 +514,34 @@ export function DataTable<T>({
     toast.success(
       `Exported ${rows.length} record${rows.length !== 1 ? "s" : ""} to CSV.`
     );
+  };
+
+  const handleExportPDF = () => {
+    const rows =
+      selectAllMatching || selected.size === 0
+        ? processed
+        : processed.filter((r) => selected.has(r[rowKey] as string | number));
+    
+    const doc = new jsPDF();
+    const tableColumn = visibleColumns.map(c => c.label);
+    const tableRows: any[] = [];
+    
+    rows.forEach(row => {
+      const rowData = visibleColumns.map(c => String(getValue(row, c.key) ?? "").replace(/(<([^>]+)>)/gi, ""));
+      tableRows.push(rowData);
+    });
+
+    doc.text(title || "Exported Data", 14, 15);
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: 20,
+      styles: { fontSize: 8, cellPadding: 3 },
+      headStyles: { fillColor: [15, 23, 42], textColor: 255 },
+    });
+    
+    doc.save(`${title?.replace(/\s+/g, '_') || 'export'}_${Date.now()}.pdf`);
+    toast.success(`Exported ${rows.length} record${rows.length !== 1 ? "s" : ""} to PDF.`);
   };
 
   const densityClass = {
@@ -583,7 +613,7 @@ export function DataTable<T>({
               value={activeFilters[f.key] ?? ""}
               onChange={(e) => handleFilterChange(f.key, e.target.value)}
             >
-              <option value="">{f.label}</option>
+              <option value="" hidden>{f.label}</option>
               {f.options.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
@@ -662,14 +692,22 @@ export function DataTable<T>({
           )}
 
           {exportable && (
-            <button
-              id="dt-export-btn"
-              className="dt-btn dt-btn--secondary"
-              onClick={handleExport}
-              title="Export to CSV"
-            >
-              <i className="ti ti-download" aria-hidden="true" /> Export
-            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                className="dt-btn dt-btn--secondary"
+                onClick={handleExportCSV}
+                title="Export to CSV"
+              >
+                <i className="ti ti-file-spreadsheet" aria-hidden="true" /> CSV
+              </button>
+              <button
+                className="dt-btn dt-btn--secondary"
+                onClick={handleExportPDF}
+                title="Export to PDF"
+              >
+                <i className="ti ti-file-description" aria-hidden="true" /> PDF
+              </button>
+            </div>
           )}
 
           {createButtons.map((btn, i) => (

@@ -20,14 +20,40 @@ const CoordinatorDashboard: React.FC = () => {
   const pendingWaybills = waybills.filter(w => w.status === 'Pending Validation' || w.status === 'CTC Submitted').length;
   const todayIntake = waybills.filter(w => new Date(w.encodedAt).toDateString() === new Date().toDateString()).length;
   const activeClients = clients.filter((c: any) => c.status === 'Active').length;
-  const recentActivity = auditLogs.filter(log => log.userRole === 'Coordinator').slice(0, 10);
+  const recentActivity = auditLogs.filter(log => log.userRole === 'Coordinator').slice(0, 5);
+  const navigate = useNavigate();
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
         <StatusCard label="Today's Intake" value={todayIntake} icon="ti-file-import" variant="new" periodText="Waybills recorded today" />
         <StatusCard label="Pending Validation" value={pendingWaybills} icon="ti-clock-hour-4" variant="warning" periodText="Awaiting POD check" />
         <StatusCard label="Total Active Clients" value={activeClients} icon="ti-users" variant="success" periodText="Registered clients" />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+        <Card>
+          <div onClick={() => navigate('/clients')} style={{ padding: '24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '16px', transition: 'background 0.2s', borderRadius: '12px' }} onMouseEnter={(e) => e.currentTarget.style.background = '#F8FAFC'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+            <div style={{ background: '#EFF6FF', color: '#3B82F6', width: 48, height: 48, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>
+              <i className="ti ti-search" />
+            </div>
+            <div>
+              <h3 style={{ margin: '0 0 4px', fontSize: '1.1rem', fontWeight: 600, color: '#0F172A' }}>Client Search</h3>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748B' }}>Find client accounts and details</p>
+            </div>
+          </div>
+        </Card>
+        <Card>
+          <div onClick={() => navigate('/waybills')} style={{ padding: '24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '16px', transition: 'background 0.2s', borderRadius: '12px' }} onMouseEnter={(e) => e.currentTarget.style.background = '#F8FAFC'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+            <div style={{ background: '#EEF2FF', color: '#6366F1', width: 48, height: 48, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>
+              <i className="ti ti-file-import" />
+            </div>
+            <div>
+              <h3 style={{ margin: '0 0 4px', fontSize: '1.1rem', fontWeight: 600, color: '#0F172A' }}>Waybill / POD Records</h3>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748B' }}>Encode waybills and validate PODs</p>
+            </div>
+          </div>
+        </Card>
       </div>
 
       <RecentActivity logs={recentActivity} />
@@ -36,10 +62,11 @@ const CoordinatorDashboard: React.FC = () => {
 };
 
 const AccountantDashboard: React.FC = () => {
-  const { waybills, invoices, auditLogs } = useAppData();
-  const pendingWaybillsCount = waybills.filter(w => w.status === 'Validated' || w.status === 'Validated (CTC)' || w.status === 'CTC Submitted').length;
-  const outstandingInvoicesCount = invoices.filter(i => i.status === 'Pending Approval' || i.status === 'Finalized').length;
-  const draftInvoicesCount = invoices.filter(i => i.status === 'Draft').length;
+  const { invoices, auditLogs, arRecords, speedPay } = useAppData();
+  const unpaidInvoices = invoices.filter(i => i.status === 'Verified' || i.status === 'Finalized').length;
+  const overdueInvoices = invoices.filter(i => i.status === 'Overdue').length;
+  const totalBalance = arRecords?.reduce((sum: number, r: any) => sum + (r.outstandingBalance || 0), 0) || 0;
+  const pendingSpeedPay = speedPay?.filter((s: any) => s.status === 'Pending Validation').length || 0;
   
   // Ensure we get at least 5 logs if possible, filtering by role
   const recentActivity = auditLogs.filter(l => l.userRole === 'Accountant').slice(0, 5);
@@ -47,9 +74,10 @@ const AccountantDashboard: React.FC = () => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-        <StatusCard label="Waybills Pending Invoice" value={pendingWaybillsCount} icon="ti-file-description" variant="new" periodText="Validated or CTC Submitted" />
-        <StatusCard label="Outstanding Invoices" value={outstandingInvoicesCount} icon="ti-file-invoice" variant="warning" periodText="Pending Approval or Sent" />
-        <StatusCard label="Draft Invoices" value={draftInvoicesCount} icon="ti-edit" variant="info" periodText="Not yet submitted" />
+        <StatusCard label="Total Unpaid Balance" value={`₱${totalBalance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} icon="ti-coin" variant="new" />
+        <StatusCard label="Unpaid Invoices" value={unpaidInvoices} icon="ti-file-invoice" variant="info" />
+        <StatusCard label="Overdue Invoices" value={overdueInvoices} icon="ti-alert-circle" variant="danger" />
+        <StatusCard label="Pending Payment Validations" value={pendingSpeedPay} icon="ti-clock-hour-4" variant="warning" />
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 20 }}>
         <RecentActivity logs={recentActivity.length >= 5 ? recentActivity : auditLogs.filter(l => l.userRole === 'Accountant' || l.action.includes('INVOICE') || l.action.includes('PAYMENT')).slice(0, 5)} />
@@ -60,32 +88,39 @@ const AccountantDashboard: React.FC = () => {
 
 const HeadAccountantDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { invoices, auditLogs } = useAppData();
-  const pending = invoices.filter(i => i.status === 'Pending Approval').length;
-  const verified = invoices.filter(i => i.status === 'Verified').length;
-  const flagged = invoices.filter(i => i.status === 'Needs Revision').length;
+  const { invoices, auditLogs, arRecords, speedPay } = useAppData();
+  
+  const pendingInvoices = invoices.filter(i => i.status === 'Pending Approval').length;
+  const unpaidInvoices = invoices.filter(i => i.status === 'Verified' || i.status === 'Finalized').length;
+  const overdueInvoices = invoices.filter(i => i.status === 'Overdue').length;
+  const totalBalance = arRecords?.reduce((sum: number, r: any) => sum + (r.outstandingBalance || 0), 0) || 0;
+  const pendingSpeedPay = speedPay?.filter((s: any) => s.status === 'Pending Validation').length || 0;
+  const nearDueAccounts = arRecords?.filter(r => r.status === 'Due Soon') || [];
+  
   const recentActivity = auditLogs.filter(l => l.userRole === 'Head Accountant').slice(0, 5);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-        <StatusCard label="Pending Review" value={pending} icon="ti-clock-hour-4" variant="warning" periodText="Awaiting your verification" />
-        <StatusCard label="Verified Today" value={verified} icon="ti-circle-check" variant="success" periodText="Verified invoices" />
-        <StatusCard label="Flagged Discrepancies" value={flagged} icon="ti-alert-circle" variant="danger" periodText="Returned to Accountant" />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16 }}>
+        <StatusCard label="Total Balance" value={`₱${totalBalance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} icon="ti-coin" variant="new" />
+        <StatusCard label="Unpaid Invoices" value={unpaidInvoices} icon="ti-file-invoice" variant="info" />
+        <StatusCard label="Overdue" value={overdueInvoices} icon="ti-alert-circle" variant="danger" />
+        <StatusCard label="Pending Approval" value={pendingInvoices} icon="ti-file-check" variant="warning" />
+        <StatusCard label="Pending Payments" value={pendingSpeedPay} icon="ti-cash" variant="warning" />
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
         <Card>
-          <h3 style={{ margin: '0 0 16px', fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>Invoices Requiring Review</h3>
-          {invoices.filter(i => i.status === 'Pending Approval').map(inv => (
-            <div key={inv.id} onClick={() => navigate('/invoice-review', { state: { invoiceId: inv.id, clientId: inv.clientId } })} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #F1F5F9', cursor: 'pointer' }}>
+          <h3 style={{ margin: '0 0 16px', fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>Accounts Near Due Date</h3>
+          {nearDueAccounts.map((account: any) => (
+            <div key={account.id} onClick={() => navigate('/accounts-receivable')} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #F1F5F9', cursor: 'pointer' }}>
               <div>
-                <p style={{ margin: 0, fontWeight: 600, fontSize: '0.875rem', color: '#0F172A' }}>{inv.invoiceNumber}</p>
-                <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#94A3B8' }}>Due: {new Date(inv.dueDate).toLocaleDateString('en-PH')}</p>
+                <p style={{ margin: 0, fontWeight: 600, fontSize: '0.875rem', color: '#0F172A' }}>{account.clientName}</p>
+                <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#F59E0B' }}>Due Soon</p>
               </div>
-              <p style={{ margin: 0, fontWeight: 700, color: '#F59E0B' }}>₱{inv.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+              <p style={{ margin: 0, fontWeight: 700, color: '#F59E0B' }}>₱{account.outstandingBalance?.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
             </div>
           ))}
-          {pending === 0 && <p style={{ color: '#94A3B8', fontSize: '0.875rem', textAlign: 'center', padding: '24px 0' }}>No invoices pending review.</p>}
+          {nearDueAccounts.length === 0 && <p style={{ color: '#94A3B8', fontSize: '0.875rem', textAlign: 'center', padding: '24px 0' }}>No accounts are currently near due date.</p>}
         </Card>
         <RecentActivity logs={recentActivity.length > 0 ? recentActivity : auditLogs.slice(0, 5)} />
       </div>
@@ -118,6 +153,7 @@ const AsstFinanceDashboard: React.FC = () => {
 };
 
 const FinanceManagerDashboard: React.FC = () => {
+  const navigate = useNavigate();
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const { invoices, arRecords, payments, clients } = useAppData();
   const [collectionTrendView, setCollectionTrendView] = useState<'weekly' | 'monthly'>('monthly');
@@ -138,6 +174,8 @@ const FinanceManagerDashboard: React.FC = () => {
     const d = new Date(p.recordedAt);
     return d.getMonth() === currentMonth && d.getFullYear() === currentYear && p.status === 'Validated';
   }).reduce((s, p) => s + p.amount, 0);
+
+  const nearDueCount = invoices.filter(inv => (inv.status as any) === 'Due Soon' || (inv.status !== 'Paid' && inv.status !== 'Finalized' && Math.ceil((new Date(inv.dueDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) <= 7 && Math.ceil((new Date(inv.dueDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) >= 0)).length;
 
   // AR Aging Donut Data
   const agingData = [
@@ -167,6 +205,22 @@ const FinanceManagerDashboard: React.FC = () => {
   ];
 
   const trendData = collectionTrendView === 'monthly' ? collectionTrendMonthly : collectionTrendWeekly;
+
+  // Ranking Computations
+  const topOverdueAccounts = [...arRecords]
+    .filter(r => r.outstandingBalance > 0 && r.status === 'Overdue')
+    .sort((a, b) => b.outstandingBalance - a.outstandingBalance)
+    .slice(0, 5)
+    .map(r => ({ ...r, clientName: clients.find((c: any) => c.id === r.clientId)?.name || 'Unknown' }));
+
+  const topPayingClients = [...clients]
+    .map((c: any) => {
+      const collected = payments.filter(p => p.clientId === c.id && p.status === 'Validated').reduce((sum, p) => sum + p.amount, 0);
+      return { id: c.id, name: c.name, collected };
+    })
+    .filter(c => c.collected > 0)
+    .sort((a, b) => b.collected - a.collected)
+    .slice(0, 5);
 
   // Accounts Near Due Date Table Data
   
@@ -216,13 +270,9 @@ const FinanceManagerDashboard: React.FC = () => {
 
   const tableColumns = [
     { key: 'clientName', label: 'CLIENT', sortable: true, render: (row: any) => (
-      !selectedClientId ? (
-        <button onClick={() => setSelectedClientId(row.clientId)} style={{ background: 'none', border: 'none', padding: 0, color: '#3B82F6', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>
-          {row.clientName}
-        </button>
-      ) : (
-        <span style={{ fontWeight: 600 }}>{row.clientName}</span>
-      )
+      <span onClick={() => navigate(`/accounts-receivable/${row.clientId}`)} style={{ color: '#0F172A', fontWeight: 700, cursor: 'pointer', textDecoration: 'none' }}>
+        {row.clientName}
+      </span>
     ) },
     { key: 'invoiceNumber', label: 'INVOICE NO.' },
     { key: 'amountDue', label: 'AMOUNT DUE', render: (row: any) => `₱${row.amountDue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` },
@@ -242,38 +292,16 @@ const FinanceManagerDashboard: React.FC = () => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
         <StatusCard label="Total AR Outstanding" value={`₱${totalAR.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} icon="ti-report-money" variant="warning" />
+        <StatusCard label="Near-Due Accounts" value={nearDueCount} icon="ti-calendar-time" variant="warning" periodText="Due within 7 days" />
         <StatusCard label="Collection Rate" value={`${collectionRate}%`} icon="ti-chart-pie" variant="info" periodText="vs. total invoiced" />
         <StatusCard label="Cash Inflow (This Month)" value={`₱${cashInflow.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} icon="ti-cash" variant="success" />
       </div>
 
       {/* Charts Section */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 24 }}>
-        {/* AR Aging Distribution */}
-        <Card>
-          <div style={{ marginBottom: 16 }}>
-            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>AR Aging Distribution</h3>
-            <p style={{ margin: '4px 0 0', fontSize: '0.8125rem', color: '#64748B' }}>Outstanding Balance by Overdue Period</p>
-          </div>
-          <div style={{ width: '100%', height: 280 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={agingData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={2} dataKey="value" stroke="none">
-                  {agingData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  formatter={(value: any) => `₱${Number(value).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`}
-                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-                />
-                <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 600, color: '#334155' }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 24 }}>
+        
         {/* Collection Trend */}
         <Card>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
@@ -296,21 +324,82 @@ const FinanceManagerDashboard: React.FC = () => {
               </button>
             </div>
           </div>
-          <div style={{ width: '100%', height: 280 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={trendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                <XAxis dataKey="period" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B', fontWeight: 500 }} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B', fontWeight: 500 }} tickFormatter={(val) => `₱${val >= 1000 ? (val / 1000).toFixed(1).replace('.0', '') + 'k' : val}`} width={60} />
-                <Tooltip 
-                  cursor={{ fill: '#F8FAFC' }}
-                  formatter={(value: any) => [`₱${Number(value).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, 'Collected']}
-                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-                  labelStyle={{ fontWeight: 700, color: '#0F172A', marginBottom: '4px' }}
-                />
-                <Bar dataKey="collected" fill="#3B82F6" radius={[4, 4, 0, 0]} maxBarSize={50} />
-              </BarChart>
-            </ResponsiveContainer>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 24 }}>
+            <div style={{ width: '100%', height: 280 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={trendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                  <XAxis dataKey="period" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B', fontWeight: 500 }} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B', fontWeight: 500 }} tickFormatter={(val) => `₱${val >= 1000 ? (val / 1000).toFixed(1).replace('.0', '') + 'k' : val}`} width={60} />
+                  <Tooltip 
+                    cursor={{ fill: '#F8FAFC' }}
+                    formatter={(value: any) => [`₱${Number(value).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, 'Collected']}
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+                    labelStyle={{ fontWeight: 700, color: '#0F172A', marginBottom: '4px' }}
+                  />
+                  <Bar dataKey="collected" fill="#3B82F6" radius={[4, 4, 0, 0]} maxBarSize={50} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <h4 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Top Paying Clients</h4>
+              {topPayingClients.length > 0 ? topPayingClients.map((c, i) => (
+                <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: '#3B82F6', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700 }}>{i + 1}</div>
+                    <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#0F172A' }}>{c.name}</span>
+                  </div>
+                  <span style={{ fontSize: '0.875rem', fontWeight: 700, color: '#10B981' }}>₱{c.collected.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                </div>
+              )) : (
+                <div style={{ fontSize: '0.85rem', color: '#64748B', textAlign: 'center', padding: '20px 0' }}>No payment data yet.</div>
+              )}
+            </div>
+          </div>
+        </Card>
+
+        {/* AR Aging Distribution */}
+        <Card>
+          <div style={{ marginBottom: 16 }}>
+            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>AR Aging Distribution</h3>
+            <p style={{ margin: '4px 0 0', fontSize: '0.8125rem', color: '#64748B' }}>Outstanding Balance by Overdue Period</p>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 24 }}>
+            <div style={{ width: '100%', height: 280 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={agingData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={2} dataKey="value" stroke="none">
+                    {agingData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    formatter={(value: any) => `₱${Number(value).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`}
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+                  />
+                  <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 600, color: '#334155' }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <h4 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Top Overdue Accounts</h4>
+              {topOverdueAccounts.length > 0 ? topOverdueAccounts.map((a, i) => (
+                <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#FEF2F2', borderRadius: '8px', border: '1px solid #FECACA' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: '#EF4444', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700 }}>{i + 1}</div>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span onClick={() => navigate(`/accounts-receivable/${a.clientId}`)} style={{ fontSize: '0.875rem', fontWeight: 600, color: '#0F172A', cursor: 'pointer', textDecoration: 'none' }}>{a.clientName}</span>
+                      <span style={{ fontSize: '0.75rem', color: '#64748B' }}>{(a as any).invoiceNumber || 'Multiple'}</span>
+                    </div>
+                  </div>
+                  <span style={{ fontSize: '0.875rem', fontWeight: 700, color: '#EF4444' }}>₱{a.outstandingBalance.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                </div>
+              )) : (
+                <div style={{ fontSize: '0.85rem', color: '#64748B', textAlign: 'center', padding: '20px 0' }}>No overdue accounts.</div>
+              )}
+            </div>
           </div>
         </Card>
       </div>

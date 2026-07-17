@@ -1,88 +1,17 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { Bell, AlertTriangle, CheckCircle2, Info, Settings } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { StatusBadge } from "../components/StatusBadge";
 import ConfirmModal from "../components/ConfirmModal";
 import { Button } from "../components/Buttons";
+import { useNotifications } from "../context/NotificationContext";
 import "./NotificationsPage.css";
 
-const SAMPLE_NOTIFICATIONS = [
-  {
-    id: "1",
-    title: "Delivery Failed",
-    description: "Delivery attempt failed in Makati for Juan Dela Cruz. Rider could not locate address.",
-    timestamp: "10:32 AM",
-    date: "Today",
-    isToday: true,
-    read: false,
-    type: "alert",
-    category: "logistics",
-    waybillNo: "SP-77291",
-    statusBadge: "Failed",
-    source: "DMS Auto-Alert",
-  },
-  {
-    id: "2",
-    title: "SLA Breach Warning",
-    description: "Route #8 is running 35 mins behind schedule. SLA impact imminent for 3 orders.",
-    timestamp: "9:15 AM",
-    date: "Today",
-    isToday: true,
-    read: false,
-    type: "alert",
-    category: "logistics",
-    waybillNo: "SP-80124",
-    statusBadge: "Active",
-    source: "TARS Monitor",
-  },
-  {
-    id: "3",
-    title: "Order Delivered",
-    description: "Package successfully delivered to Sofia Martinez in Quezon City.",
-    timestamp: "8:45 AM",
-    date: "Today",
-    isToday: true,
-    read: false,
-    type: "success",
-    category: "logistics",
-    waybillNo: "SP-77288",
-    statusBadge: "Delivered",
-    source: "DMS",
-  },
-  {
-    id: "4",
-    title: "New Route Manifest",
-    description: "Waybill SP-77291 assigned to driver Juan dela Cruz for afternoon dispatch.",
-    timestamp: "7:00 AM",
-    date: "Today",
-    isToday: true,
-    read: true,
-    type: "info",
-    category: "logistics",
-    waybillNo: "SP-77291",
-    statusBadge: "Assigned",
-    source: "DMS",
-  },
-  {
-    id: "5",
-    title: "Invoice Settlement Failed",
-    description: "Vendor payout to FastTrack Cargo rejected by bank. Amount: PHP 45,000.",
-    timestamp: "Yesterday, 4:30 PM",
-    date: "Yesterday",
-    isToday: false,
-    read: false,
-    type: "alert",
-    category: "finance",
-    waybillNo: "INV-2024-088",
-    statusBadge: "Failed",
-    source: "FinSys",
-  }
-];
-
 export const NotificationsPage: React.FC = () => {
-  const [notifications, setNotifications] = useState<any[]>(SAMPLE_NOTIFICATIONS);
+  const navigate = useNavigate();
+  const { notifications, unreadCount, markAllAsRead, clearAll, toggleReadStatus } = useNotifications();
   const [activeTab, setActiveTab] = useState("all");
   const [selectedId, setSelectedId] = useState("");
-  const [checkedIds, setCheckedIds] = useState<string[]>([]);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const selected = useMemo(() => notifications.find((n) => n.id === selectedId) ?? null, [notifications, selectedId]);
@@ -92,7 +21,6 @@ export const NotificationsPage: React.FC = () => {
     return notifications.filter((n) => n.type === activeTab && !n.read);
   }, [notifications, activeTab]);
 
-  const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
 
   const tabs = useMemo(() => [
     { key: "all", label: "All" },
@@ -104,28 +32,18 @@ export const NotificationsPage: React.FC = () => {
 
   const grouped = useMemo(() => {
     return filtered.reduce((acc: any, n: any) => {
-      const dateKey = n.date.toUpperCase();
+      const dateKey = n.isToday ? 'TODAY' : 'EARLIER';
       if (!acc[dateKey]) acc[dateKey] = [];
       acc[dateKey].push(n);
       return acc;
     }, {});
   }, [filtered]);
 
-  const markAllAsRead = useCallback(() => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  }, []);
-
-  const clearAll = useCallback(() => {
-    setNotifications([]);
+  const handleClearConfirm = useCallback(() => {
+    clearAll();
     setSelectedId("");
-    setCheckedIds([]);
     setShowClearConfirm(false);
-  }, []);
-
-  const handleToggleCheck = useCallback((e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    setCheckedIds((prev) => prev.includes(id) ? prev.filter((cid) => cid !== id) : [...prev, id]);
-  }, []);
+  }, [clearAll]);
 
   const TypeIcon = ({ type, size = 18 }: any) => {
     switch (type) {
@@ -174,8 +92,17 @@ export const NotificationsPage: React.FC = () => {
                 <div key={date}>
                   <div className="notif-date-header">{date}</div>
                   {items.map((n: any) => (
-                    <div key={n.id} className={`notif-item ${selectedId === n.id ? "selected" : ""} ${!n.read ? "unread" : ""}`} onClick={() => setSelectedId(n.id)}>
-                      <input type="checkbox" className="notif-checkbox" checked={checkedIds.includes(n.id)} onChange={(e) => handleToggleCheck(e as any, n.id)} onClick={(e) => e.stopPropagation()} />
+                    <div 
+                      key={n.id} 
+                      className={`notif-item ${selectedId === n.id ? "selected" : ""} ${!n.read ? "unread" : ""}`} 
+                      onClick={() => {
+                        setSelectedId(n.id);
+                        if (!n.read) toggleReadStatus(n.id);
+                        if (n.link) navigate(n.link);
+                      }}
+                      style={{ cursor: n.link ? 'pointer' : 'default' }}
+                    >
+                      <input type="checkbox" className="notif-checkbox" checked={n.read} onChange={() => toggleReadStatus(n.id)} onClick={(e) => e.stopPropagation()} />
                       <div className="notif-item-content">
                         <div className="notif-item-header">
                           <strong style={{ color: !n.read ? '#0F172A' : '#64748B' }}>{n.title}</strong>
@@ -203,7 +130,7 @@ export const NotificationsPage: React.FC = () => {
         cancelLabel="Cancel"
         icon="ti-trash"
         onCancel={() => setShowClearConfirm(false)}
-        onConfirm={clearAll}
+        onConfirm={handleClearConfirm}
       />
     </div>
   );
