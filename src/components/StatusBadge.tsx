@@ -20,59 +20,22 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className = ''
   if (status == null) return null;
   const normalized = status.toString().toLowerCase().trim();
 
-  let tier: 'success' | 'info' | 'warning' | 'danger' | 'neutral' | 'assign' = 'neutral';
+  let tier: 'success' | 'warning' | 'danger' = 'warning'; // default to orange/warning as seen in the image for most things
 
-  // 1. Critical / Negative
-  if (['failed', 'overdue', 'outflow', 'missing'].includes(normalized) || normalized.includes('60-90') || normalized.includes('90+')) {
+  // 1. Critical / Negative (Red)
+  if (['failed', 'overdue', 'outflow', 'missing', 'deactivated', 'cancelled', 'returned'].includes(normalized) || normalized.includes('60-90') || normalized.includes('90+')) {
     tier = 'danger';
   }
-  // 2. Positive / Success
+  // 2. Positive / Success (Green)
   else if (['active', 'done', 'delivered', 'success', 'completed', 'paid', 'inflow', 'validated', 'validated (ctc)', 'billed', 'verified', 'verified & deposited', 'finalized'].includes(normalized)) {
     tier = 'success';
   }
-  // 3. Informative / In-Progress
-  else if (['in transit', 'submitted', 'ctc submitted', 'picked-up', 'out of delivery', 'out for delivery'].includes(normalized)) {
-    tier = 'info';
-  }
-  // 4. Attention / Pending
-  else if (
-    ['pending', 'preparing', 'ready for pickup', 'processing', 'returning', 'not submitted', 'partially paid', 'for checking', 'pending approval', 'pending validation', 'pending verification', 'needs revision'].includes(normalized) ||
-    normalized.includes('days') || normalized.includes('day')
-  ) {
-    tier = 'warning';
-  }
-  // 5. Assignment / Ownership
-  else if (['assigned', 'new payment'].includes(normalized)) {
-    tier = 'assign';
-  }
-  // 6. Neutral / Terminated (Fallback)
-  else if (['deactivated', 'cancelled', 'returned'].includes(normalized)) {
-    tier = 'neutral';
-  }
-
-  // Get matching icon and configurations
-  const renderIcon = () => {
-    switch (tier) {
-      case 'success':
-        return <CheckCircle2 size={12} strokeWidth={2.5} className="badge-icon" />;
-      case 'info':
-        return <ArrowRightCircle size={12} strokeWidth={2.5} className="badge-icon" />;
-      case 'warning':
-        return <AlertCircle size={12} strokeWidth={2.5} className="badge-icon" />;
-      case 'danger':
-        return <XCircle size={12} strokeWidth={2.5} className="badge-icon" />;
-      case 'assign':
-        return <UserCircle size={12} strokeWidth={2.5} className="badge-icon" />;
-      case 'neutral':
-      default:
-        return <Ban size={12} strokeWidth={2.5} className="badge-icon" />;
-    }
-  };
+  // 3. Attention / Pending / Default (Orange)
+  // Everything else defaults to warning (orange), exactly like PENDING, DRAFT, APPROVED, REJECTED, REVIEWING, ON HOLD, PROCESSING in the image.
 
   return (
     <span className={`badge badge-${tier} ${className}`}>
-      {renderIcon()}
-      <span className="badge-label">{status}</span>
+      {status}
     </span>
   );
 };

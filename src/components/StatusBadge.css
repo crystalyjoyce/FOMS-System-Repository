@@ -1,76 +1,34 @@
-﻿:root {
-  /* Dynamic 6-tier status colors (SpeedEx OneUI Standard) */
-  --status-success: #059669;    /* Positive / Terminal Green */
-  --status-info: #0284C7;       /* Informative / In-Progress Sky Blue */
-  --status-warning: #D97706;    /* Attention / Pending Amber */
-  --status-danger: #DC2626;     /* Critical / Negative Red */
-  --status-neutral: #64748B;    /* Neutral / Terminated Slate Grey */
-  --status-assign: #4F46E5;     /* Assignment / Ownership Indigo */
-}
-
 .badge { 
   display: inline-flex; 
   align-items: center;
-  gap: 5px;
-  padding: 4px 10px; 
+  justify-content: center;
+  padding: 4px 12px; 
   border-radius: 9999px; 
   font-family: var(--fb, 'Inter', sans-serif);
   font-size: 11px; 
-  letter-spacing: 0.25px; 
-  text-transform: none; /* Keep label casing professional (e.g. In Transit, Out of Delivery) */
+  letter-spacing: 0.5px; 
+  text-transform: uppercase;
   white-space: nowrap;
   line-height: 1.2;
 }
 
-.badge-icon {
-  flex-shrink: 0;
-  display: inline-block;
-  vertical-align: middle;
-}
-
-.badge-label {
-  display: inline-block;
-  vertical-align: middle;
-}
-
-/* 1. Positive / Success Tier - 600 weight */
+/* 1. Positive / Success Tier (Green variants e.g. ACTIVE, DONE, SUCCESS) */
 .badge-success { 
-  background: rgba(5, 150, 105, 0.1); 
-  color: var(--status-success); 
-  font-weight: 600;
-}
-
-/* 2. Informative / In-Progress Tier - 600 weight */
-.badge-info { 
-  background: rgba(2, 132, 199, 0.1); 
-  color: var(--status-info); 
-  font-weight: 600;
-}
-
-/* 3. Attention / Pending Tier - 600 weight */
-.badge-warning { 
-  background: rgba(217, 119, 6, 0.1); 
-  color: var(--status-warning); 
-  font-weight: 600;
-}
-
-/* 4. Critical / Negative Tier - 700 bold (signals high urgency) */
-.badge-danger { 
-  background: rgba(220, 38, 38, 0.1); 
-  color: var(--status-danger); 
+  background: #E4F8EC;
+  color: #007B55; 
   font-weight: 700;
 }
 
-/* 5. Neutral / Terminated Tier - 500 medium weight */
-.badge-neutral { 
-  background: rgba(100, 116, 139, 0.1); 
-  color: var(--status-neutral); 
-  font-weight: 500;
+/* 2. Attention / Pending Tier (Orange variants e.g. PENDING, DRAFT, APPROVED) */
+.badge-warning { 
+  background: #FFF3D6; 
+  color: #B76E00; 
+  font-weight: 700;
 }
 
-/* 6. Assignment / Ownership Tier - 600 weight */
-.badge-assign { 
-  background: rgba(79, 70, 229, 0.1); 
-  color: var(--status-assign); 
-  font-weight: 600;
+/* 3. Critical / Negative Tier (Red variants e.g. DEACTIVATED, FAILED, CANCELLED) */
+.badge-danger { 
+  background: #FFE9EA; 
+  color: #B71D18; 
+  font-weight: 700;
 }
