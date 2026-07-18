@@ -227,6 +227,11 @@ export const ClientManagement: React.FC = () => {
     }
   ];
 
+  const tableActions = [
+    { label: 'View Details', icon: 'ti-eye', onClick: (row: Client) => navigate(`/clients/${row.id}`) },
+    { label: 'Edit Record', icon: 'ti-pencil', onClick: (row: Client) => navigate(`/clients/${row.id}`) }
+  ];
+
   const handleAddNew = () => {
     setFormData({
       name: '',
@@ -309,6 +314,7 @@ export const ClientManagement: React.FC = () => {
           title={user?.role === 'Coordinator' ? "Client Search" : "Client Accounts"}
           data={clients}
           columns={tableColumns}
+          actions={tableActions}
           createButtons={user?.role === 'Accountant' ? [{ label: 'New Client', icon: 'ti-plus', onClick: handleAddNew, variant: 'primary' }] : undefined}
           rowKey="id"
           emptyMessage="No clients found matching criteria."

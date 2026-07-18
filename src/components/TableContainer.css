@@ -22,11 +22,10 @@
   margin-bottom: 0;
 }
 
-/* ── Table wrapper: prevent column cutoff by adding row padding ── */
+/* ── Table wrapper: add horizontal margin for padding effect ── */
 .table-container .dt-table-wrap {
-  border-radius: 0;
-  margin: 0;
-  padding: 0 24px;
+  margin: 0 24px;
+  width: calc(100% - 48px);
 }
 
 /* ── Pagination: 24px horizontal, 16px/20px vertical ── */

@@ -30,13 +30,6 @@ export const AuditTrail: React.FC = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {/* Summary */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-        <StatusCard label="Total Activities" value={logs.length} icon="ti-activity" variant="new" />
-        <StatusCard label="Active Users" value={new Set(logs.map(l => l.userId)).size} icon="ti-users" variant="success" />
-        <StatusCard label="Modules Tracked" value={new Set(logs.map(l => l.module)).size} icon="ti-layout-grid" variant="info" />
-      </div>
-
       {/* Filters + Log */}
       <TableContainer>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 20, borderBottom: '1px solid #E2E8F0', paddingLeft: 24, paddingRight: 24, paddingTop: 28 }}>

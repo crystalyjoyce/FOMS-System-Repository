@@ -1398,7 +1398,7 @@ function computeAging(dueDateStr: string): { bracket: ARRecord['agingBracket']; 
     else if (diffDays <= 60) bracket = '31-60 days';
     else if (diffDays <= 90) bracket = '61-90 days';
     else bracket = '90+ days';
-  } else if (daysUntilDue <= 7) {
+  } else if (daysUntilDue <= 15) {
     status = 'Due Soon';
     bracket = '0-30 days';
   }

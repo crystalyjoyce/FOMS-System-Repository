@@ -155,7 +155,7 @@ const AsstFinanceDashboard: React.FC = () => {
 const FinanceManagerDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
-  const { invoices, arRecords, payments, clients } = useAppData();
+  const { invoices, arRecords, payments, clients, auditLogs } = useAppData();
   const [collectionTrendView, setCollectionTrendView] = useState<'weekly' | 'monthly'>('monthly');
 
   const filteredInvoices = selectedClientId ? invoices.filter(i => i.clientId === selectedClientId) : invoices;
@@ -292,11 +292,20 @@ const FinanceManagerDashboard: React.FC = () => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-        <StatusCard label="Total AR Outstanding" value={`₱${totalAR.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} icon="ti-report-money" variant="warning" />
-        <StatusCard label="Near-Due Accounts" value={nearDueCount} icon="ti-calendar-time" variant="warning" periodText="Due within 7 days" />
-        <StatusCard label="Collection Rate" value={`${collectionRate}%`} icon="ti-chart-pie" variant="info" periodText="vs. total invoiced" />
-        <StatusCard label="Cash Inflow (This Month)" value={`₱${cashInflow.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} icon="ti-cash" variant="success" />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+          <StatusCard label="Total AR Outstanding" value={`₱${totalAR.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} icon="ti-report-money" variant="warning" />
+          <StatusCard label="Near-Due Accounts" value={nearDueCount} icon="ti-calendar-time" variant="warning" periodText="Due within 7 days" />
+          <StatusCard label="Collection Rate" value={`${collectionRate}%`} icon="ti-chart-pie" variant="info" periodText="vs. total invoiced" />
+          <StatusCard label="Cash Inflow (This Month)" value={`₱${cashInflow.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} icon="ti-cash" variant="success" />
+        </div>
+        
+        {/* Audit Trail KPIs */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+          <StatusCard label="Total System Activities" value={auditLogs.length} icon="ti-activity" variant="new" />
+          <StatusCard label="Active System Users" value={new Set(auditLogs.map(l => l.userId)).size} icon="ti-users" variant="success" />
+          <StatusCard label="Modules Tracked" value={new Set(auditLogs.map(l => l.module)).size} icon="ti-layout-grid" variant="info" />
+        </div>
       </div>
 
       {/* Charts Section */}
