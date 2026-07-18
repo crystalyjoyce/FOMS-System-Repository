@@ -145,6 +145,7 @@ function ActionMenu<T>({ row, actions }: ActionMenuProps<T>) {
   const dropdownItems = visible.map((action, index) => ({
     key: `${action.label}-${index}`,
     label: action.label,
+    icon: action.icon,
     onClick: () => action.onClick(row),
     variant: action.variant,
   }));
@@ -239,7 +240,7 @@ export function DataTable<T>({
     return h;
   });
   const [showColToggle, setShowColToggle] = useState(false);
-  const [density, setDensity] = useState<DensityMode>("regular");
+  const [density, setDensity] = useState<DensityMode>("relaxed");
   const [confirm, setConfirm] = useState<{
     message: string;
     onConfirm: () => void;
@@ -669,23 +670,28 @@ export function DataTable<T>({
                   aria-labelledby="dt-col-toggle-btn"
                 >
                   <p className="dt-col-panel-title">Show / Hide Columns</p>
-                  {columns.map((col) => (
-                    <label key={col.key} className="dt-col-item">
-                      <input
-                        type="checkbox"
-                        className="dt-checkbox"
-                        checked={!hiddenCols.has(col.key)}
-                        onChange={() =>
-                          setHiddenCols((prev) => {
-                            const n = new Set(prev);
-                            n.has(col.key) ? n.delete(col.key) : n.add(col.key);
-                            return n;
-                          })
-                        }
-                      />
-                      <span>{col.label}</span>
-                    </label>
-                  ))}
+                  {columns.map((col) => {
+                    const isLocked = col.label === 'Client ID' || col.label === 'Client Name';
+                    return (
+                      <label key={col.key} className="dt-col-item" style={{ opacity: isLocked ? 0.5 : 1, cursor: isLocked ? 'not-allowed' : 'pointer', pointerEvents: isLocked ? 'none' : 'auto' }}>
+                        <input
+                          type="checkbox"
+                          className="dt-checkbox"
+                          disabled={isLocked}
+                          checked={!hiddenCols.has(col.key)}
+                          onChange={() =>
+                            setHiddenCols((prev) => {
+                              if (isLocked) return prev;
+                              const n = new Set(prev);
+                              n.has(col.key) ? n.delete(col.key) : n.add(col.key);
+                              return n;
+                            })
+                          }
+                        />
+                        <span>{col.label}</span>
+                      </label>
+                    );
+                  })}
                 </div>
               )}
             </div>
