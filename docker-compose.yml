@@ -1,0 +1,114 @@
+version: "3.8"
+
+services:
+  # 1. PostgreSQL Database for AI metadata & logs
+  foms-ai-postgres:
+    image: pgvector/pgvector:pg15
+    container_name: foms-ai-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: foms_ai_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./database/postgresql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d foms_ai_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 2. MongoDB for Trend Snapshot time-series data
+  foms-ai-mongodb:
+    image: mongo:6.0
+    container_name: foms-ai-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+      - ./database/mongodb/init.js:/docker-entrypoint-initdb.d/init.js:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 3. Mock Legacy FOMS Service (Capstone 1 simulator)
+  foms-legacy-mock:
+    build:
+      context: ./mock-legacy
+      dockerfile: Dockerfile
+    container_name: foms-legacy-mock
+    ports:
+      - "8001:8001"
+    environment:
+      - PORT=8001
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # 4. Python FastAPI AI Service Backend
+  foms-ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: foms-ai-service
+    ports:
+      - "8000:8000"
+    environment:
+      - POSTGRES_CONNECTION_STRING=postgresql://postgres:postgres@foms-ai-postgres:5432/foms_ai_db
+      - MONGODB_URI=mongodb://foms-ai-mongodb:27017/
+      - FOMS_READ_API_URL=http://foms-legacy-mock:8001
+      - FOMS_AI_SERVICE_API_KEY=change-me
+      - AI_SERVICE_API_KEY=change-me
+      - SYNC_INTERVAL_MINUTES=10
+    depends_on:
+      foms-ai-postgres:
+        condition: service_healthy
+      foms-ai-mongodb:
+        condition: service_healthy
+      foms-legacy-mock:
+        condition: service_healthy
+
+  # 5. ASP.NET Core 10 Integration Gateway
+  foms-ai-gateway:
+    build:
+      context: ./integration-gateway
+      dockerfile: Dockerfile
+    container_name: foms-ai-gateway
+    ports:
+      - "5000:5000"
+    environment:
+      - AI_SERVICE_URL=http://foms-ai-service:8000
+      - AI_SERVICE_API_KEY=change-me
+    depends_on:
+      - foms-ai-service
+
+  # 6. React 19 Frontend Web Dashboard
+  foms-ai-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: foms-ai-frontend
+    depends_on:
+      - foms-ai-gateway
+
+  # 7. Global Nginx Router / Reverse Proxy
+  foms-nginx-proxy:
+    image: nginx:alpine
+    container_name: foms-nginx-proxy
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - foms-ai-frontend
+      - foms-ai-gateway
+
+volumes:
+  postgres-data:
+  mongodb-data:

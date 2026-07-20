@@ -1,0 +1,85 @@
+import React, { useEffect, useRef } from 'react';
+import { X } from 'lucide-react';
+
+interface ModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+  footerButtons?: React.ReactNode;
+}
+
+export const Modal: React.FC<ModalProps> = ({
+  isOpen,
+  onClose,
+  title,
+  children,
+  footerButtons
+}) => {
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  // Close on Escape key press
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+      // Simple Focus Trap: focus the modal container when it opens
+      modalRef.current?.focus();
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
+
+  return (
+    <div 
+      className="modal-overlay" 
+      onClick={handleOverlayClick}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+    >
+      <div 
+        className="modal-content" 
+        ref={modalRef} 
+        tabIndex={-1} 
+        style={{ outline: 'none' }}
+      >
+        <div className="modal-header">
+          <h3 id="modal-title">{title}</h3>
+          <button 
+            onClick={onClose} 
+            className="close-btn" 
+            aria-label="Close modal"
+          >
+            <X size={20} />
+          </button>
+        </div>
+        
+        <div className="modal-body">
+          {children}
+        </div>
+
+        {footerButtons && (
+          <div className="modal-footer">
+            {footerButtons}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
