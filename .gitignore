@@ -1,0 +1,33 @@
+# Node dependencies
+**/node_modules/
+**/dist/
+**/build/
+
+# Dotnet build folders
+**/bin/
+**/obj/
+.vs/
+.vscode/
+
+# Python cache & virtual environments
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.venv/
+venv/
+ENV/
+.pytest_cache/
+
+# Databases & local volumes data
+pgdata/
+mongodata/
+
+# Local configuration files
+.env
+.env.local
+.env.*.local
+
+# OS files
+.DS_Store
+Thumbs.db
