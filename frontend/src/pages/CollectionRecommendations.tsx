@@ -2,508 +2,362 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { AiHeader } from '../components/AiHeader';
 import { DecisionSupportNotice } from '../components/DecisionSupportNotice';
-import { TableSkeleton } from '../components/Skeletons';
-import { Modal } from '../components/Modal';
-import { Toast } from '../components/Toast';
-import { 
-  CheckCircle, FileText, AlertOctagon, Search, RefreshCw, Sparkles, AlertCircle 
-} from 'lucide-react';
+import DataTable from '../components/DataTable';
+import StatusBadge from '../components/StatusBadge';
+import { useToast } from '../components/ToastContext';
+import { Sparkles, ShieldAlert, CheckCircle, AlertCircle } from 'lucide-react';
 import { normalizeInvoiceNumber } from '../utils/referenceNormalizer';
 
 export const CollectionRecommendations: React.FC = () => {
   const { token, user } = useAuth();
+  const { toast } = useToast();
   const [recs, setRecs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Filters & Search
   const [statusFilter, setStatusFilter] = useState('Pending Review');
-  const [priorityFilter, setPriorityFilter] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 8;
 
-  // Human Review Modal State
+  // Review Modal State
   const [selectedRec, setSelectedRec] = useState<any | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
   const [decision, setDecision] = useState('Accepted as Recommendation');
   const [remarks, setRemarks] = useState('');
   const [recommendedAction, setRecommendedAction] = useState('');
 
-  // Toast
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [toastType, setToastType] = useState<'success' | 'error'>('success');
-
   const fetchRecommendations = async () => {
     setLoading(true);
     setError(null);
     try {
-      let url = `/api/ai/collection-recommendations?status=${statusFilter}`;
-      const res = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${token}` }
+      const res = await fetch(`/api/ai/collection-recommendations?status=${statusFilter}`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
-        let data = await res.json();
-        if (priorityFilter) {
-          data = data.filter((r: any) => r.priority?.priority_level === priorityFilter);
-        }
-        setRecs(data);
-        setCurrentPage(1);
+        setRecs(await res.json());
       } else {
-        setError("Failed to fetch collection priorities.");
+        setError('Failed to fetch collection recommendations.');
       }
-    } catch (e) {
-      setError("Service connection offline.");
+    } catch {
+      setError('Service connection offline.');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchRecommendations();
-  }, [token, statusFilter, priorityFilter]);
+  useEffect(() => { fetchRecommendations(); }, [token, statusFilter]);
 
-  const handleOpenReview = (rec: any) => {
-    setSelectedRec(rec);
+  const handleOpenReview = (row: any) => {
+    setSelectedRec(row);
     setDecision('Accepted as Recommendation');
     setRemarks('');
-    setRecommendedAction(rec.recommended_action || '');
-  };
-
-  const handleCloseReview = () => {
-    setSelectedRec(null);
+    setRecommendedAction(row.recommended_action || '');
   };
 
   const handleSubmitReview = async () => {
     if (!selectedRec) return;
     if (!remarks.trim()) {
-      setToastMessage("Investigation notes/remarks are required for review.");
-      setToastType("error");
+      toast.warning('Investigation notes/remarks are required for review.', 'Validation');
       return;
     }
     setModalLoading(true);
     try {
       const res = await fetch(`/api/ai/collection-recommendations/${selectedRec.id}/review`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          decision,
-          remarks,
-          recommendedAction
-        })
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ decision, remarks, recommendedAction }),
       });
       if (res.ok) {
-        handleCloseReview();
-        setToastMessage(`Logged review action on Recommendation #${selectedRec.id}`);
-        setToastType("success");
+        setSelectedRec(null);
+        toast.success(`Logged review action on Recommendation #${selectedRec.id}`, 'Review Submitted');
         fetchRecommendations();
       } else {
-        setToastMessage("Failed to submit review.");
-        setToastType("error");
+        toast.error('Failed to submit review.', 'Error');
       }
-    } catch (e) {
-      setToastMessage("Connection issue. Action failed.");
-      setToastType("error");
+    } catch {
+      toast.error('Connection issue. Action failed.', 'Error');
     } finally {
       setModalLoading(false);
     }
   };
 
-  const getPriorityBadgeClass = (lvl: string) => {
+  const canSubmitReviews =
+    user?.role && ['Financial Manager', 'Head Accountant', 'Accountant'].includes(user.role);
+
+  const priorityToStatus = (lvl: string) => {
     switch (lvl?.toLowerCase()) {
-      case 'urgent': return 'urgent';
-      case 'high': return 'high';
-      case 'medium': return 'medium';
-      case 'low': return 'low';
-      default: return 'low';
+      case 'urgent': return '90+ Days';
+      case 'high': return '60 - 90 Days';
+      case 'medium': return '30 - 60 Days';
+      default: return 'Active';
     }
   };
 
-  const getStatusBadgeClass = (status: string) => {
+  const reviewToStatus = (status: string) => {
     switch (status) {
-      case 'Pending Review': return 'badge-pending';
-      case 'Reviewed':
       case 'Accepted as Recommendation':
-        return 'badge-accepted';
-      case 'Rejected':
-        return 'badge-rejected';
-      default:
-        return 'badge-dismissed';
+      case 'Reviewed': return 'Completed';
+      case 'Rejected': return 'Failed';
+      default: return 'Processing';
     }
   };
 
-  const canSubmitReviews = user?.role && ["Financial Manager", "Head Accountant", "Accountant"].includes(user.role);
+  const columns: import('../components/DataTable').ColumnDef<any>[] = [
+    {
+      key: 'invoice_number',
+      label: 'Invoice Number',
+      sortable: true,
+      width: '160px',
+      render: (row: any) => (
+        <span style={{ fontWeight: 600, fontFamily: 'var(--fm)', color: 'var(--tp)' }}>
+          {row.priority?.normalized_invoice_number || normalizeInvoiceNumber(row.priority?.invoice_number)}
+        </span>
+      ),
+    },
+    {
+      key: 'client_name',
+      label: 'Client Name',
+      sortable: true,
+      width: '200px',
+      render: (row: any) => row.priority?.client_name,
+    },
+    {
+      key: 'outstanding_balance',
+      label: 'Outstanding Balance',
+      sortable: true,
+      width: '180px',
+      render: (row: any) => (
+        <span style={{ fontWeight: 700, color: 'var(--tp)' }}>
+          ₱{row.priority?.outstanding_balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+        </span>
+      ),
+    },
+    {
+      key: 'due_date',
+      label: 'Due Date',
+      sortable: true,
+      width: '130px',
+      render: (row: any) => new Date(row.priority?.due_date).toLocaleDateString(),
+    },
+    {
+      key: 'priority_level',
+      label: 'Urgency',
+      sortable: true,
+      width: '140px',
+      render: (row: any) => <StatusBadge status={priorityToStatus(row.priority?.priority_level)} />,
+    },
+    {
+      key: 'recommended_action',
+      label: 'Suggested Action',
+      width: '300px',
+      render: (row: any) => (
+        <span style={{ fontSize: '13px', color: 'var(--ts)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {row.recommended_action}
+        </span>
+      ),
+    },
+    {
+      key: 'review_status',
+      label: 'Status',
+      sortable: true,
+      width: '140px',
+      render: (row: any) => <StatusBadge status={reviewToStatus(row.review_status)} />,
+    },
+  ];
 
-  // Search filter
-  const filteredRecs = recs.filter(rec => {
-    const p = rec.priority;
-    if (!p) return true;
-    return searchQuery === '' || 
-      p.client_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.invoice_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.client_id.toString().includes(searchQuery);
-  });
-
-  const totalPages = Math.ceil(filteredRecs.length / itemsPerPage);
-  const displayedRecs = filteredRecs.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  const rowActions = [
+    {
+      label: 'Evaluate',
+      icon: 'ti-file-text',
+      onClick: handleOpenReview,
+    },
+  ];
 
   return (
     <div className="main-content fade-in">
-      <AiHeader title="AI Collection Recommendations" />
-      
-      <div className="page-container">
-        
-        {/* Page Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', borderBottom: '1px solid var(--border-soft)', paddingBottom: '16px' }}>
-          <div>
-            <h1 style={{ fontSize: '24px', fontWeight: 700, margin: 0 }}>Collection Recommendations</h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginTop: '4px' }}>
-              Review AI-generated collection action plans, priority justifications, and log validation decisions.
-            </p>
-          </div>
-          <button onClick={fetchRecommendations} className="btn btn-secondary">
-            <RefreshCw size={14} />
-            <span>Refresh</span>
-          </button>
-        </div>
+      <AiHeader title="Collection Recommendations" />
 
-        {/* Decision Support Banner */}
+      <div className="page-container">
         <DecisionSupportNotice />
 
-        {/* Filters */}
-        <div className="filter-bar">
-          <div className="filter-item" style={{ flex: 2, minWidth: '220px' }}>
-            <div style={{ position: 'relative', width: '100%' }}>
-              <Search size={16} style={{ position: 'absolute', left: '12px', top: '13px', color: 'var(--text-muted)' }} />
-              <input 
-                type="text" 
-                className="form-control" 
-                placeholder="Search by client name, client ID or invoice..."
-                style={{ paddingLeft: '36px' }}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
+        {error && (
+          <div className="advisory-banner danger" style={{ marginBottom: '20px' }}>
+            <ShieldAlert size={18} style={{ flexShrink: 0 }} />
+            <div><strong>AI Service Offline</strong> — {error}</div>
           </div>
+        )}
 
-          <div className="filter-item">
-            <select 
-              className="input-select" 
-              value={statusFilter} 
-              onChange={(e) => setStatusFilter(e.target.value)}
-              aria-label="Filter by review status"
-            >
-              <option value="Pending Review">Pending Review</option>
-              <option value="Reviewed">Reviewed & Closed</option>
-              <option value="Accepted as Recommendation">Accepted Recommendations</option>
-              <option value="Rejected">Rejected Recommendations</option>
-              <option value="">All Statuses</option>
-            </select>
-          </div>
-
-          <div className="filter-item">
-            <select 
-              className="input-select" 
-              value={priorityFilter} 
-              onChange={(e) => setPriorityFilter(e.target.value)}
-              aria-label="Filter by priority level"
-            >
-              <option value="">All Priorities</option>
-              <option value="Urgent">Urgent</option>
-              <option value="High">High</option>
-              <option value="Medium">Medium</option>
-              <option value="Low">Low</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Recommendations Table */}
-        <div className="table-card">
-          <div className="table-header">
-            <h3 className="table-title">Action Queue</h3>
-            <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 500 }}>
-              {filteredRecs.length} actionable suggestions
-            </span>
-          </div>
-
-          {loading ? (
-            <TableSkeleton columns={8} rows={6} />
-          ) : error ? (
-            <div className="state-container">
-              <AlertOctagon size={48} color="var(--danger)" style={{ marginBottom: '16px' }} />
-              <p className="state-title">Calculation Error</p>
-              <p className="state-desc">{error}</p>
-            </div>
-          ) : filteredRecs.length === 0 ? (
-            <div className="state-container">
-              <CheckCircle size={48} style={{ color: 'var(--success)', marginBottom: '16px' }} />
-              <p className="state-title">No Recommendations Available</p>
-              <p className="state-desc">No entries match the current status or filters.</p>
-            </div>
-          ) : (
-            <>
-              <div className="data-table-wrapper">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Invoice Number</th>
-                      <th>Client Name</th>
-                      <th>Outstanding Balance</th>
-                      <th>Due Date</th>
-                      <th>Urgency</th>
-                      <th>Suggested Action</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {displayedRecs.map((rec) => (
-                      <tr key={rec.id}>
-                        <td>
-                          <span style={{ fontWeight: 600 }}>
-                            {rec.priority?.normalized_invoice_number || normalizeInvoiceNumber(rec.priority?.invoice_number)}
-                          </span>
-                        </td>
-                        <td>{rec.priority?.client_name}</td>
-                        <td>
-                          <span style={{ fontWeight: 600 }}>
-                            PHP {rec.priority?.outstanding_balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                          </span>
-                        </td>
-                        <td>{new Date(rec.priority?.due_date).toLocaleDateString()}</td>
-                        <td>
-                          <span className={`priority-badge ${getPriorityBadgeClass(rec.priority?.priority_level)}`}>
-                            {rec.priority?.priority_level}
-                          </span>
-                        </td>
-                        <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {rec.recommended_action}
-                        </td>
-                        <td>
-                          <span className={`badge ${getStatusBadgeClass(rec.review_status)}`}>
-                            {rec.review_status}
-                          </span>
-                        </td>
-                        <td>
-                          <button 
-                            onClick={() => handleOpenReview(rec)}
-                            className="btn btn-secondary"
-                            style={{ padding: '0 12px', height: '32px', fontSize: '13px' }}
-                          >
-                            <FileText size={14} />
-                            <span>Evaluate</span>
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {totalPages > 1 && (
-                <div className="pagination">
-                  <div>
-                    Page {currentPage} of {totalPages}
-                  </div>
-                  <div className="pagination-buttons">
-                    <button 
-                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                      disabled={currentPage === 1}
-                      className="pagination-btn"
-                    >
-                      Prev
-                    </button>
-                    {Array.from({ length: totalPages }).map((_, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => setCurrentPage(idx + 1)}
-                        className={`pagination-btn ${currentPage === idx + 1 ? 'active' : ''}`}
-                      >
-                        {idx + 1}
-                      </button>
-                    ))}
-                    <button 
-                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                      disabled={currentPage === totalPages}
-                      className="pagination-btn"
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
+        <div className="card" style={{ padding: '24px', borderRadius: '16px', border: '1px solid var(--border)', boxShadow: 'var(--sh1)' }}>
+          <DataTable
+            title="Collection Recommendations"
+            rowKey="id"
+            data={recs}
+            columns={columns}
+            actions={rowActions}
+            loading={loading}
+            searchPlaceholder="Search recommendations..."
+            selectable
+            exportable
+            columnToggle
+            densityToggle
+            filters={[
+              {
+                key: 'review_status',
+                label: 'All Statuses',
+                options: [
+                  { label: 'Pending Review', value: 'Pending Review' },
+                  { label: 'Accepted', value: 'Accepted as Recommendation' },
+                  { label: 'Reviewed & Closed', value: 'Reviewed' },
+                  { label: 'Rejected', value: 'Rejected' },
+                ],
+              },
+            ]}
+            createButtons={[
+              { label: 'Refresh Data', icon: 'ti-refresh', variant: 'primary', onClick: () => fetchRecommendations() },
+            ]}
+          />
         </div>
       </div>
 
-      {/* Detail & Review Modal */}
+      {/* Evaluation Modal */}
       {selectedRec && (
-        <Modal
-          isOpen={!!selectedRec}
-          onClose={handleCloseReview}
-          title={`Evaluate Collection Recommendation (Rec #${selectedRec.id})`}
-          footerButtons={
-            <>
-              <button onClick={handleCloseReview} className="btn btn-secondary">
-                Close
-              </button>
-              {canSubmitReviews && selectedRec.review_status === 'Pending Review' && (
-                <button 
-                  onClick={handleSubmitReview}
-                  disabled={modalLoading || !remarks.trim()} 
-                  className="btn btn-primary"
-                >
-                  {modalLoading ? 'Saving...' : 'Log Decision'}
-                </button>
-              )}
-            </>
-          }
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 200,
+            background: 'rgba(0,0,0,0.45)', display: 'flex',
+            alignItems: 'center', justifyContent: 'center', padding: '20px',
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) setSelectedRec(null); }}
         >
-          {/* Section 1: Official FOMS Data */}
-          <div style={{ marginBottom: '16px' }}>
-            <span style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700, display: 'block', marginBottom: '8px' }}>
-              Official FOMS Data
-            </span>
-            <div style={{ backgroundColor: 'var(--surface-soft)', padding: '16px', borderRadius: '10px', border: '1px solid var(--border)' }}>
-              <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Client Account</div>
-              <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                {selectedRec.priority?.client_name} (Client ID: {selectedRec.priority?.client_id})
-              </div>
-              <div className="comparison-grid" style={{ marginTop: '12px' }}>
-                <div>
-                  <span className="comparison-label">Invoice Number</span>
-                  <div style={{ fontWeight: 600, fontSize: '14px' }}>
-                    {selectedRec.priority?.normalized_invoice_number || normalizeInvoiceNumber(selectedRec.priority?.invoice_number)}
-                  </div>
-                </div>
-                <div>
-                  <span className="comparison-label">Outstanding Balance</span>
-                  <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>
-                    PHP {selectedRec.priority?.outstanding_balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-              </div>
+          <div style={{
+            background: 'var(--s0)', borderRadius: 'var(--r-lg)',
+            boxShadow: 'var(--sh4)', width: '100%', maxWidth: '700px',
+            maxHeight: '90vh', overflow: 'auto', padding: '32px',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, fontFamily: 'var(--fh)' }}>
+                Evaluate Collection Recommendation #{selectedRec.id}
+              </h2>
+              <button onClick={() => setSelectedRec(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tt)', fontSize: '20px' }}>
+                <i className="ti ti-x" />
+              </button>
             </div>
-          </div>
 
-          {/* Section 2: AI Recommendation */}
-          <div style={{ marginBottom: '16px' }}>
-            <span style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--primary)', fontWeight: 700, display: 'block', marginBottom: '8px' }}>
-              AI Recommendation
-            </span>
-            <div style={{ backgroundColor: 'var(--surface-teal)', padding: '16px', borderRadius: '10px', border: '1px solid rgba(0,140,149,0.15)' }}>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '10px' }}>
-                <Sparkles size={16} style={{ color: 'var(--primary)' }} />
-                <span style={{ fontWeight: 700, color: 'var(--primary-dark)', fontSize: '14px' }}>Suggested Action Plan</span>
-              </div>
-              
-              <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '14px', marginBottom: '12px' }}>
-                {selectedRec.recommended_action}
-              </div>
-
-              {selectedRec.explanation_basis && selectedRec.explanation_basis.length > 0 && (
-                <div>
-                  <span className="comparison-label" style={{ fontSize: '12px', display: 'block', marginBottom: '6px', fontWeight: 600 }}>
-                    Supporting Factors:
-                  </span>
-                  <ul className="basis-list" style={{ paddingLeft: '8px' }}>
-                    {selectedRec.explanation_basis.map((reason: string, idx: number) => (
-                      <li key={idx} className="basis-item" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-                        <span className="basis-icon" style={{ backgroundColor: 'var(--primary)', width: '6px', height: '6px', borderRadius: '50%', flexShrink: 0 }}></span>
-                        <span>{reason}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Section 3: Finance Review */}
-          <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '16px' }}>
-            <span style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700, display: 'block', marginBottom: '8px' }}>
-              Finance Review
-            </span>
-
-            {canSubmitReviews && selectedRec.review_status === 'Pending Review' ? (
-              <div>
+            {/* Official FOMS Data */}
+            <div style={{ marginBottom: '16px' }}>
+              <p style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--tt)', fontWeight: 700, margin: '0 0 8px' }}>Official FOMS Data</p>
+              <div className="card" style={{ padding: '16px' }}>
+                <p style={{ fontSize: '13px', color: 'var(--tt)', margin: '0 0 4px' }}>Client Account</p>
+                <p style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 12px', color: 'var(--tp)' }}>
+                  {selectedRec.priority?.client_name} (Client ID: {selectedRec.priority?.client_id})
+                </p>
                 <div className="grid-2">
-                  <div className="form-group">
-                    <label htmlFor="review-decision">Review Decision</label>
-                    <select 
-                      id="review-decision"
-                      className="input-select" 
-                      value={decision}
-                      onChange={(e) => setDecision(e.target.value)}
-                    >
-                      <option value="Accepted as Recommendation">Accept Recommendation Basis</option>
-                      <option value="Reviewed">Reviewed & Closed</option>
-                      <option value="Rejected">Reject Priority Assignment</option>
-                    </select>
+                  <div>
+                    <p style={{ fontSize: '12px', color: 'var(--tt)', margin: '0 0 4px' }}>Invoice Number</p>
+                    <p style={{ fontWeight: 600, fontSize: '14px', margin: 0 }}>
+                      {selectedRec.priority?.normalized_invoice_number || normalizeInvoiceNumber(selectedRec.priority?.invoice_number)}
+                    </p>
                   </div>
-
-                  <div className="form-group">
-                    <label htmlFor="action-taken">Action Taken / Executed Action</label>
-                    <input 
-                      id="action-taken"
-                      type="text"
-                      className="form-control" 
-                      value={recommendedAction}
-                      onChange={(e) => setRecommendedAction(e.target.value)}
-                    />
+                  <div>
+                    <p style={{ fontSize: '12px', color: 'var(--tt)', margin: '0 0 4px' }}>Outstanding Balance</p>
+                    <p style={{ fontWeight: 700, fontSize: '14px', margin: 0, color: 'var(--tp)' }}>
+                      ₱{selectedRec.priority?.outstanding_balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </p>
                   </div>
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="remarks">Remarks / Validation Notes <span className="required">*</span></label>
-                  <textarea 
-                    id="remarks"
-                    className="textarea-field"
-                    placeholder="Log details of the validation step (e.g. contact logs, account changes)..."
-                    value={remarks}
-                    onChange={(e) => setRemarks(e.target.value)}
-                    required
-                  />
                 </div>
               </div>
-            ) : (
-              <div style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
-                {selectedRec.review_status !== 'Pending Review' ? (
-                  <div style={{ backgroundColor: 'var(--success-bg)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(46, 139, 87, 0.15)' }}>
-                    <p style={{ margin: 0, fontWeight: 600, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <CheckCircle size={16} /> Human review validation logged successfully.
-                    </p>
-                    <p style={{ margin: '4px 0 0 0', fontSize: '13px' }}>
-                      <strong>Validation Action:</strong> {selectedRec.review_status}
-                    </p>
+            </div>
+
+            {/* AI Recommendation */}
+            <div style={{ marginBottom: '16px' }}>
+              <p style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--teal)', fontWeight: 700, margin: '0 0 8px' }}>AI Recommendation</p>
+              <div style={{ background: 'var(--teal-bg)', padding: '16px', borderRadius: '10px', border: '1px solid var(--teal-ring)' }}>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '10px' }}>
+                  <Sparkles size={16} style={{ color: 'var(--teal)' }} />
+                  <span style={{ fontWeight: 700, color: 'var(--teal-dark)', fontSize: '14px' }}>Suggested Action Plan</span>
+                </div>
+                <p style={{ fontWeight: 600, color: 'var(--tp)', fontSize: '14px', margin: '0 0 12px' }}>
+                  {selectedRec.recommended_action}
+                </p>
+                {selectedRec.explanation_basis?.length > 0 && (
+                  <div>
+                    <p style={{ fontSize: '12px', color: 'var(--ts)', margin: '0 0 6px', fontWeight: 600 }}>Supporting Factors:</p>
+                    <ul style={{ paddingLeft: '16px', margin: 0 }}>
+                      {selectedRec.explanation_basis.map((reason: string, idx: number) => (
+                        <li key={idx} style={{ fontSize: '13px', color: 'var(--ts)', marginBottom: '4px' }}>{reason}</li>
+                      ))}
+                    </ul>
                   </div>
-                ) : (
-                  <p style={{ margin: 0, color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <AlertCircle size={16} />
-                    Your role is not authorized to submit validation reviews for collection priorities.
-                  </p>
                 )}
               </div>
-            )}
-          </div>
-        </Modal>
-      )}
+            </div>
 
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="toast-container">
-          <Toast 
-            message={toastMessage} 
-            type={toastType} 
-            onClose={() => setToastMessage(null)} 
-          />
+            {/* Finance Review */}
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+              <p style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--tt)', fontWeight: 700, margin: '0 0 12px' }}>Finance Review</p>
+
+              {canSubmitReviews && selectedRec.review_status === 'Pending Review' ? (
+                <div>
+                  <div className="grid-2" style={{ marginBottom: '16px' }}>
+                    <div>
+                      <label style={{ fontSize: '12px', fontWeight: 600, display: 'block', marginBottom: '6px', color: 'var(--ts)' }}>Review Decision</label>
+                      <select className="input-select" value={decision} onChange={(e) => setDecision(e.target.value)}>
+                        <option value="Accepted as Recommendation">Accept Recommendation</option>
+                        <option value="Reviewed">Reviewed &amp; Closed</option>
+                        <option value="Rejected">Reject Priority Assignment</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '12px', fontWeight: 600, display: 'block', marginBottom: '6px', color: 'var(--ts)' }}>Action Taken</label>
+                      <input type="text" className="form-control" value={recommendedAction} onChange={(e) => setRecommendedAction(e.target.value)} />
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: '16px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, display: 'block', marginBottom: '6px', color: 'var(--ts)' }}>
+                      Remarks / Validation Notes <span style={{ color: 'var(--err)' }}>*</span>
+                    </label>
+                    <textarea
+                      style={{ width: '100%', minHeight: '90px', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', fontFamily: 'var(--fb)', fontSize: '13px', resize: 'vertical' }}
+                      placeholder="Log validation steps (e.g. contact logs, account changes)..."
+                      value={remarks}
+                      onChange={(e) => setRemarks(e.target.value)}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                    <button className="btn btn-outline" onClick={() => setSelectedRec(null)}>Cancel</button>
+                    <button
+                      disabled={modalLoading || !remarks.trim()}
+                      onClick={handleSubmitReview}
+                      style={{
+                        background: 'var(--teal)', color: '#fff', border: 'none', borderRadius: '8px',
+                        padding: '0 20px', height: '40px', fontWeight: 600, cursor: 'pointer',
+                        opacity: (modalLoading || !remarks.trim()) ? 0.6 : 1,
+                      }}
+                    >
+                      {modalLoading ? 'Saving...' : 'Log Decision'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  {selectedRec.review_status !== 'Pending Review' ? (
+                    <div style={{ background: 'var(--ok-bg)', padding: '12px', borderRadius: '8px', border: '1px solid var(--ok-r)' }}>
+                      <p style={{ margin: 0, fontWeight: 600, color: 'var(--ok)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <CheckCircle size={16} /> Human review validation logged successfully.
+                      </p>
+                      <p style={{ margin: '4px 0 0', fontSize: '13px' }}>
+                        <strong>Status:</strong> {selectedRec.review_status}
+                      </p>
+                    </div>
+                  ) : (
+                    <p style={{ margin: 0, color: 'var(--err)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <AlertCircle size={16} /> Your role is not authorized to submit validation reviews.
+                    </p>
+                  )}
+                  <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'flex-end' }}>
+                    <button className="btn btn-outline" onClick={() => setSelectedRec(null)}>Close</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

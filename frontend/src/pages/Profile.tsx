@@ -37,10 +37,9 @@ export const Profile: React.FC = () => {
       <div className="page-container">
         
         {/* Page Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', borderBottom: '1px solid var(--border-soft)', paddingBottom: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', borderBottom: '1px solid var(--border)', paddingBottom: '16px' }}>
           <div>
-            <h1 style={{ fontSize: '24px', fontWeight: 700, margin: 0 }}>Security Profile</h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginTop: '4px' }}>
+            <p style={{ color: 'var(--ts)', fontSize: '14px', margin: 0 }}>
               Inspect your session parameters, assigned security groups, and permission logs.
             </p>
           </div>

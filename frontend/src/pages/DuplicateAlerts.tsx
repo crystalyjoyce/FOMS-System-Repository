@@ -1,513 +1,2257 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { AiHeader } from '../components/AiHeader';
 import { DecisionSupportNotice } from '../components/DecisionSupportNotice';
-import { TableSkeleton } from '../components/Skeletons';
+import DataTable, { ColumnDef, ActionItem } from '../components/DataTable';
+import StatusBadge from '../components/StatusBadge';
+import { useToast } from '../components/ToastContext';
+import { AiHeader } from '../components/AiHeader';
 import { Modal } from '../components/Modal';
-import { Toast } from '../components/Toast';
 import { 
-  AlertOctagon, Eye, Check, ShieldAlert, Search, RefreshCw, SlidersHorizontal 
+  ShieldAlert, AlertOctagon, UploadCloud, AlertTriangle, 
+  CheckCircle, RefreshCw, X, Sparkles, ExternalLink, 
+  History, Eye, ArrowRight, Clipboard, Clock, Info, User, Check, AlertCircle, FileText, Camera, ZoomIn, ZoomOut, Lock
 } from 'lucide-react';
+
+// ==========================================
+// DATA MODELS & STRUCTS
+// ==========================================
+
+export interface UniqueDocument {
+  id: string; // Record ID
+  documentType: 'INVOICE' | 'OFFICIAL_RECEIPT' | 'WAYBILL';
+  documentNumber: string;
+  clientName: string;
+  amount: string;
+  transactionDate: string;
+  source: 'Uploaded' | 'Scanned';
+  aiConfidence: number;
+  reviewedBy: string;
+  reviewerRole: string;
+  reviewedDate: string;
+  status: 'Unique' | 'Cleared for Normal Validation';
+  reviewerNote: string;
+  reason: string;
+}
+
+export interface FlaggedDuplicate {
+  id: string; // Flag ID
+  documentType: 'INVOICE' | 'OFFICIAL_RECEIPT' | 'WAYBILL';
+  uploadedDocumentNumber: string;
+  existingMatchedRecord: string;
+  clientName: string;
+  amount: string;
+  similarityScore: number;
+  duplicateReason: string;
+  handlingAction: string;
+  flaggedBy: string;
+  reviewerRole: string;
+  flaggedDate: string;
+  status: 'Confirmed Duplicate' | 'Submission Blocked' | 'Linked to Existing Record' | 'Returned for Correction' | 'Under Investigation' | 'Closed';
+  reviewerNote: string;
+}
+
+export interface HistoryRecord {
+  id: string; // History ID
+  documentType: 'INVOICE' | 'OFFICIAL_RECEIPT' | 'WAYBILL';
+  documentNumber: string;
+  clientName: string;
+  aiResult: string;
+  finalDecision: 'Marked as Unique' | 'Marked as Duplicate';
+  reviewer: string;
+  reviewerRole: string;
+  decisionReason: string;
+  reviewerNote: string;
+  reviewedDate: string;
+  relatedRecordId: string;
+
+  // compatibility fields
+  review_date?: string;
+  target_type?: string;
+  target_id?: string;
+  reviewer_username?: string;
+  decision?: string;
+  remarks?: string;
+  recommended_action?: string;
+}
+
+export interface AuditEvent {
+  id: string;
+  occurredAt: string;
+  userId: string;
+  role: string;
+  eventType: string;
+  documentId: string;
+  relatedRecordId: string;
+  description: string;
+  previousStatus: string;
+  newStatus: string;
+}
 
 export const DuplicateAlerts: React.FC = () => {
   const { token, user } = useAuth();
-  const [alerts, setAlerts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  
-  // Filtering & Pagination
-  const [statusFilter, setStatusFilter] = useState('Pending Review');
-  const [typeFilter, setTypeFilter] = useState('');
+  const { toast } = useToast();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Tab State: 'scan' | 'unique-docs' | 'flagged-dups' | 'history'
+  const [activeTab, setActiveTab] = useState<'scan' | 'unique-docs' | 'flagged-dups' | 'history'>('scan');
+
+  // Database States
+  const [uniques, setUniques] = useState<UniqueDocument[]>([]);
+  const [duplicates, setDuplicates] = useState<FlaggedDuplicate[]>([]);
+  const [historyList, setHistoryList] = useState<HistoryRecord[]>([]);
+  const [dbLoading, setDbLoading] = useState(true);
+
+  // Filters
   const [searchQuery, setSearchQuery] = useState('');
-  const [minSimilarity, setMinSimilarity] = useState<number>(0);
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 8;
+  const [docTypeFilter, setDocTypeFilter] = useState('');
+  const [dateFilter, setDateFilter] = useState('');
+  const [reviewerFilter, setReviewerFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
 
-  // Review Modal State
-  const [selectedAlert, setSelectedAlert] = useState<any | null>(null);
-  const [modalLoading, setModalLoading] = useState(false);
-  const [decision, setDecision] = useState('Reviewed');
-  const [remarks, setRemarks] = useState('');
-  const [recommendedAction, setRecommendedAction] = useState('ProceedWithManualValidation');
+  // Filtered Uniques (Flow 8)
+  const computedUniques = useMemo(() => {
+    return uniques.filter(doc => {
+      const matchesSearch = 
+        doc.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        doc.documentNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        doc.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (doc.reviewedBy && doc.reviewedBy.toLowerCase().includes(searchQuery.toLowerCase()));
+
+      const matchesType = !docTypeFilter || doc.documentType === docTypeFilter;
+      return matchesSearch && matchesType;
+    });
+  }, [uniques, searchQuery, docTypeFilter]);
+
+  // Filtered Duplicates (Flow 10)
+  const computedDuplicates = useMemo(() => {
+    return duplicates.filter(flag => {
+      const matchesSearch = 
+        flag.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        flag.uploadedDocumentNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        flag.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        flag.flaggedBy.toLowerCase().includes(searchQuery.toLowerCase());
+
+      const matchesType = !docTypeFilter || flag.documentType === docTypeFilter;
+      return matchesSearch && matchesType;
+    });
+  }, [duplicates, searchQuery, docTypeFilter]);
+
+  // Filtered History (Flow 11)
+  const computedHistory = useMemo(() => {
+    return historyList.filter(record => {
+      const matchesSearch = 
+        record.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        record.documentNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        record.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        record.reviewer.toLowerCase().includes(searchQuery.toLowerCase());
+
+      const matchesStatus = !statusFilter || record.finalDecision === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [historyList, searchQuery, statusFilter]);
+
+  // ==========================================
+  // FLOW 1: SCANNING & UPLOAD STATE
+  // ==========================================
+  const [dragActive, setDragActive] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null);
   
-  // Toast notifications
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [toastType, setToastType] = useState<'success' | 'error'>('success');
+  // Camera scan modal
+  const [showCameraModal, setShowCameraModal] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [sourceType, setSourceType] = useState<'Uploaded' | 'Scanned'>('Uploaded');
 
-  const fetchAlerts = async () => {
-    setLoading(true);
-    setError(null);
+  // Load progress
+  const [checkingStep, setCheckingStep] = useState<number>(0); // 0: Idle, 1: Reading, 2: Extracting, 3: Comparing, 4: Results
+  const [checkingProgress, setCheckingProgress] = useState(0);
+
+  // AI OCR extraction state (editable form)
+  const [extractionDone, setExtractionDone] = useState(false);
+  const [extDocType, setExtDocType] = useState<'INVOICE' | 'OFFICIAL_RECEIPT' | 'WAYBILL'>('OFFICIAL_RECEIPT');
+  const [extDocNum, setExtDocNum] = useState('');
+  const [extClient, setExtClient] = useState('');
+  const [extAmount, setExtAmount] = useState('');
+  const [extDate, setExtDate] = useState('');
+  const [extRef, setExtRef] = useState('');
+  const [extWaybill, setExtWaybill] = useState('');
+
+  // Save original OCR backup values
+  const [originalOCR, setOriginalOCR] = useState<any>(null);
+
+  // AI Results view state
+  const [scanResultMode, setScanResultMode] = useState<'NONE' | 'CLEAR' | 'DUPLICATE'>('NONE');
+  const [similarityScore, setSimilarityScore] = useState(0);
+  const [matchedRecordDetails, setMatchedRecordDetails] = useState<any>(null);
+
+  // ==========================================
+  // FLOW 6: INLINE MANUAL REVIEW PANEL
+  // ==========================================
+  const [showManualReviewPanel, setShowManualReviewPanel] = useState(false);
+  const [manualReason, setManualReason] = useState('Document is blurry');
+  const [manualNote, setManualNote] = useState('');
+  const [manualSelectedMatch, setManualSelectedMatch] = useState('FOMS-PAY-99812');
+  const [manualObservation, setManualObservation] = useState('');
+  const [zoomLevel, setZoomLevel] = useState(1.0); // 1.0x to 2.5x
+  const [manualReviewDecision, setManualReviewDecision] = useState<'Mark as Duplicate' | 'Mark as Unique'>('Mark as Duplicate');
+
+  // Modals for confirmation
+  const [showUniqueConfirmModal, setShowUniqueConfirmModal] = useState(false);
+  const [uniqueReason, setUniqueReason] = useState('Different transaction');
+  const [uniqueNote, setUniqueNote] = useState('');
+
+  const [showDuplicateConfirmModal, setShowDuplicateConfirmModal] = useState(false);
+  const [duplicateReason, setDuplicateReason] = useState('Same OR number');
+  const [duplicateNote, setDuplicateNote] = useState('');
+  const [duplicateHandling, setDuplicateHandling] = useState('Flag and Block New Submission');
+
+  // Record History modal states
+  const [showRecordHistoryModal, setShowRecordHistoryModal] = useState(false);
+  const [selectedRecordHistoryNum, setSelectedRecordHistoryNum] = useState('');
+
+  // ==========================================
+  // ROLE-BASED ACCESS CONTROL (RBAC) GUARDS
+  // ==========================================
+  const isFinancialManager = useMemo(() => user?.role === 'Financial Manager', [user]);
+  const isHeadAccountant = useMemo(() => user?.role === 'Head Accountant', [user]);
+  const isAccountant = useMemo(() => user?.role === 'Accountant', [user]);
+  const isCoordinator = useMemo(() => user?.role === 'Coordinator', [user]);
+
+  const canValidate = useMemo(() => {
+    return isFinancialManager || isHeadAccountant || isAccountant;
+  }, [isFinancialManager, isHeadAccountant, isAccountant]);
+
+  const canForceOverride = useMemo(() => {
+    return isFinancialManager || isHeadAccountant;
+  }, [isFinancialManager, isHeadAccountant]);
+
+  // ==========================================
+  // DATABASE LOADING & SEEDING
+  // ==========================================
+  const loadDatabase = () => {
+    setDbLoading(true);
     try {
-      let url = `/api/ai/duplicates?status=${statusFilter}`;
-      if (typeFilter) {
-        url += `&alert_type=${typeFilter}`;
+      const seeded = localStorage.getItem('foms_duplicate_checks_seeded_v3');
+      if (!seeded) {
+        // Mock seed records for Unique documents
+        const seedUniques: UniqueDocument[] = [
+          {
+            id: 'REC-UNI-001',
+            documentType: 'OFFICIAL_RECEIPT',
+            documentNumber: 'OR-2026-0811',
+            clientName: 'ABC Trading Corporation',
+            amount: '12500.00',
+            transactionDate: '2026-07-20',
+            source: 'Uploaded',
+            aiConfidence: 99,
+            reviewedBy: 'Maria Santos',
+            reviewerRole: 'Financial Manager',
+            reviewedDate: new Date(Date.now() - 3 * 86400000).toISOString(),
+            status: 'Cleared for Normal Validation',
+            reviewerNote: 'Checked reference numbers in payment logs, confirmed no duplication.',
+            reason: 'Different transaction'
+          },
+          {
+            id: 'REC-UNI-002',
+            documentType: 'INVOICE',
+            documentNumber: 'INV-2026-4401',
+            clientName: 'Global Logistics Inc.',
+            amount: '31200.00',
+            transactionDate: '2026-07-21',
+            source: 'Scanned',
+            aiConfidence: 100,
+            reviewedBy: 'Juan Dela Cruz',
+            reviewerRole: 'Head Accountant',
+            reviewedDate: new Date(Date.now() - 1 * 86400000).toISOString(),
+            status: 'Unique',
+            reviewerNote: 'Verified with physical invoice manifest copy.',
+            reason: 'Similar document number only'
+          }
+        ];
+
+        // Mock seed records for Confirmed Duplicates
+        const seedDuplicates: FlaggedDuplicate[] = [
+          {
+            id: 'FLG-DUP-001',
+            documentType: 'OFFICIAL_RECEIPT',
+            uploadedDocumentNumber: 'OR-2024-0012345',
+            existingMatchedRecord: 'FOMS-PAY-99812',
+            clientName: 'ABC Trading Corporation',
+            amount: '15250.00',
+            similarityScore: 98,
+            duplicateReason: 'Same OR number',
+            handlingAction: 'Flag and Block New Submission',
+            flaggedBy: 'Maria Santos',
+            reviewerRole: 'Financial Manager',
+            flaggedDate: new Date(Date.now() - 2 * 86400000).toISOString(),
+            status: 'Submission Blocked',
+            reviewerNote: 'Double billing submission blocked. Transaction matches registered invoice.'
+          }
+        ];
+
+        // Seed Review History
+        const seedHistory: any[] = [
+          {
+            id: 'REV-HIS-001',
+            documentType: 'OFFICIAL_RECEIPT',
+            documentNumber: 'OR-2026-0811',
+            clientName: 'ABC Trading Corporation',
+            aiResult: 'No Duplicate Detected',
+            finalDecision: 'Marked as Unique',
+            reviewer: 'Maria Santos',
+            reviewerRole: 'Financial Manager',
+            decisionReason: 'Different transaction',
+            reviewerNote: 'Checked reference numbers in payment logs, confirmed no duplication.',
+            reviewedDate: new Date(Date.now() - 3 * 86400000).toISOString(),
+            relatedRecordId: 'FOMS-PAY-88123',
+            
+            // compatibility fields
+            review_date: new Date(Date.now() - 3 * 86400000).toISOString(),
+            target_type: 'DUPLICATE_ALERT',
+            target_id: 'OR-2026-0811',
+            reviewer_username: 'financial_manager_user',
+            decision: 'Reviewed',
+            remarks: 'Marked as Unique: Different transaction. Note: Checked reference numbers in payment logs, confirmed no duplication.',
+            recommended_action: 'Cleared for FOMS Normal Validation'
+          },
+          {
+            id: 'REV-HIS-002',
+            documentType: 'OFFICIAL_RECEIPT',
+            documentNumber: 'OR-2024-0012345',
+            clientName: 'ABC Trading Corporation',
+            aiResult: 'Possible Duplicate Detected',
+            finalDecision: 'Marked as Duplicate',
+            reviewer: 'Maria Santos',
+            reviewerRole: 'Financial Manager',
+            decisionReason: 'Same OR number',
+            reviewerNote: 'Double billing submission blocked. Transaction matches registered invoice.',
+            reviewedDate: new Date(Date.now() - 2 * 86400000).toISOString(),
+            relatedRecordId: 'FOMS-PAY-99812',
+
+            // compatibility fields
+            review_date: new Date(Date.now() - 2 * 86400000).toISOString(),
+            target_type: 'DUPLICATE_ALERT',
+            target_id: 'OR-2024-0012345',
+            reviewer_username: 'financial_manager_user',
+            decision: 'Reviewed',
+            remarks: 'Marked as Duplicate: Same OR number. Note: Double billing submission blocked. Transaction matches registered invoice.',
+            recommended_action: 'Flag and Block New Submission'
+          }
+        ];
+
+        // Seed Audit Logs
+        const seedAudit: any[] = [
+          {
+            id: 'AUDIT-EVT-001',
+            userId: 'financial_manager_user',
+            role: 'Financial Manager',
+            eventType: 'DOCUMENT_MARKED_UNIQUE',
+            documentId: 'DOC-991',
+            relatedRecordId: 'FOMS-PAY-88123',
+            description: 'Document OR-2026-0811 marked as unique and cleared for normal validation.',
+            previousStatus: 'PENDING_REVIEW',
+            newStatus: 'CLEARED',
+            occurredAt: new Date(Date.now() - 3 * 86400000).toISOString()
+          },
+          {
+            id: 'AUDIT-EVT-002',
+            userId: 'financial_manager_user',
+            role: 'Financial Manager',
+            eventType: 'DOCUMENT_MARKED_DUPLICATE',
+            documentId: 'DOC-992',
+            relatedRecordId: 'FOMS-PAY-99812',
+            description: 'Duplicate receipt OR-2024-0012345 confirmed and submission blocked.',
+            previousStatus: 'PENDING_REVIEW',
+            newStatus: 'CONFIRMED_DUPLICATE',
+            occurredAt: new Date(Date.now() - 2 * 86400000).toISOString()
+          }
+        ];
+
+        localStorage.setItem('foms_unique_documents', JSON.stringify(seedUniques));
+        localStorage.setItem('foms_flagged_duplicates', JSON.stringify(seedDuplicates));
+        localStorage.setItem('foms_review_history', JSON.stringify(seedHistory));
+        localStorage.setItem('foms_audit_trail', JSON.stringify(seedAudit));
+        localStorage.setItem('foms_duplicate_checks_seeded_v3', 'true');
       }
-      const res = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setAlerts(data);
-        setCurrentPage(1); // Reset page on filter change
-      } else {
-        setError("Failed to load duplicate alerts from server.");
-      }
+
+      setUniques(JSON.parse(localStorage.getItem('foms_unique_documents') || '[]'));
+      setDuplicates(JSON.parse(localStorage.getItem('foms_flagged_duplicates') || '[]'));
+      setHistoryList(JSON.parse(localStorage.getItem('foms_review_history') || '[]'));
     } catch (e) {
-      setError("Service connection offline.");
+      console.error(e);
     } finally {
-      setLoading(false);
+      setDbLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchAlerts();
-  }, [token, statusFilter, typeFilter]);
+    loadDatabase();
 
-  const handleOpenReview = async (alertId: number) => {
+    const params = new URLSearchParams(location.search);
+    const tabParam = params.get('tab');
+    if (tabParam === 'scan') setActiveTab('scan');
+    else if (tabParam === 'unique-docs') setActiveTab('unique-docs');
+    else if (tabParam === 'flagged-dups') setActiveTab('flagged-dups');
+    else if (tabParam === 'history') setActiveTab('history');
+  }, [location.search]);
+
+  // ==========================================
+  // PERSISTENCE SAVE WRAPPER FUNCTIONS
+  // ==========================================
+  const saveUniquesToStorage = (list: UniqueDocument[]) => {
+    localStorage.setItem('foms_unique_documents', JSON.stringify(list));
+    setUniques(list);
+  };
+
+  const saveDuplicatesToStorage = (list: FlaggedDuplicate[]) => {
+    localStorage.setItem('foms_flagged_duplicates', JSON.stringify(list));
+    setDuplicates(list);
+  };
+
+  const saveHistoryToStorage = (list: HistoryRecord[]) => {
+    localStorage.setItem('foms_review_history', JSON.stringify(list));
+    setHistoryList(list);
+  };
+
+  // ==========================================
+  // AUDIT TRAIL LOGGER (FLOW 12)
+  // ==========================================
+  const logAuditEvent = (
+    eventType: string,
+    documentId: string,
+    relatedRecordId: string,
+    description: string,
+    prevStatus: string,
+    newStatus: string
+  ) => {
     try {
-      const res = await fetch(`/api/ai/duplicates/${alertId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const detail = await res.json();
-        setSelectedAlert(detail);
-        setDecision('Reviewed');
-        setRemarks('');
-        setRecommendedAction('ProceedWithManualValidation');
-      }
+      const localStr = localStorage.getItem('foms_audit_trail');
+      const logs = localStr ? JSON.parse(localStr) : [];
+      const newLog = {
+        id: `AUD-EVT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        userId: user?.username || 'anonymous_user',
+        fullName: user?.username === 'financial_manager_user' ? 'Maria Santos' : (user?.username === 'head_accountant_user' ? 'Juan Dela Cruz' : (user?.username || 'System Reviewer')),
+        role: user?.role || 'Financial Manager',
+        eventType,
+        documentId,
+        relatedRecordId,
+        description,
+        previousStatus: prevStatus,
+        newStatus,
+        occurredAt: new Date().toISOString(),
+        occurred_at: new Date().toISOString(),
+        action: description,
+        result: 'Success',
+        ipAddress: '192.168.1.104',
+        userAgent: navigator.userAgent
+      };
+      localStorage.setItem('foms_audit_trail', JSON.stringify([newLog, ...logs]));
     } catch (e) {
-      setToastMessage("Error loading alert comparison details.");
-      setToastType("error");
+      console.error(e);
     }
   };
 
-  const handleCloseReview = () => {
-    setSelectedAlert(null);
+  // ==========================================
+  // FLOW 1: DOCUMENT UPLOAD & SIMULATED SCANNING
+  // ==========================================
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") setDragActive(true);
+    else if (e.type === "dragleave") setDragActive(false);
   };
 
-  const handleSubmitReview = async () => {
-    if (!selectedAlert) return;
-    if (!remarks.trim()) {
-      setToastMessage("Remarks and audit notes are required for review.");
-      setToastType("error");
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      processSelectedFile(e.dataTransfer.files[0], 'Uploaded');
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      processSelectedFile(e.target.files[0], 'Uploaded');
+    }
+  };
+
+  const processSelectedFile = (file: File, source: 'Uploaded' | 'Scanned') => {
+    // Validate file size (10 MB)
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      toast.error("File size exceeds 10 MB limit.", "Upload Error");
       return;
     }
-    setModalLoading(true);
-    try {
-      const res = await fetch(`/api/ai/duplicates/${selectedAlert.id}/review`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          decision,
-          remarks,
-          recommendedAction
-        })
-      });
-      if (res.ok) {
-        handleCloseReview();
-        setToastMessage(`Duplicate Alert #${selectedAlert.id} reviewed successfully!`);
-        setToastType("success");
-        fetchAlerts();
-      } else {
-        setToastMessage("Failed to submit review decision.");
-        setToastType("error");
-      }
-    } catch (e) {
-      setToastMessage("Connection issue. Review not submitted.");
-      setToastType("error");
-    } finally {
-      setModalLoading(false);
+
+    // Validate type (JPG, JPEG, PNG only, no PDF)
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("Invalid file format. Upload JPG, JPEG, or PNG only.", "Upload Error");
+      return;
     }
+
+    setUploadFile(file);
+    setSourceType(source);
+    setPreviewDocUrl(URL.createObjectURL(file));
+
+    // Audit Upload Event
+    logAuditEvent('DOCUMENT_UPLOADED', `DOC-${Date.now()}`, 'NONE', `Document ${file.name} uploaded successfully.`, 'NONE', 'UPLOADED');
+
+    // Run AI parameter extraction automatically
+    runExtractionSimulation(file.name);
   };
 
-  const handleResetFilters = () => {
-    setStatusFilter('Pending Review');
-    setTypeFilter('');
-    setSearchQuery('');
-    setMinSimilarity(0);
+  // Simulated Scanning Console (Camera Modal)
+  const handleOpenScanner = () => {
+    setCapturedImage(null);
+    setCameraActive(true);
+    setShowCameraModal(true);
   };
 
-  const getStatusBadgeClass = (status: string) => {
-    switch (status) {
-      case 'Pending Review': return 'badge-pending';
-      case 'Reviewed': return 'badge-reviewed';
-      case 'Dismissed': return 'badge-dismissed';
-      default: return 'badge-dismissed';
+  const handleCaptureScan = () => {
+    setCameraActive(false);
+    // Simulate captured document image (loads mockup receipt/invoice)
+    setCapturedImage('/mock_receipt.png');
+  };
+
+  const handleRetakeScan = () => {
+    setCapturedImage(null);
+    setCameraActive(true);
+  };
+
+  const handleConfirmScan = () => {
+    setShowCameraModal(false);
+    setSourceType('Scanned');
+    setPreviewDocUrl('/mock_receipt.png');
+
+    // Audit Document Scanned Event
+    logAuditEvent('DOCUMENT_SCANNED', `DOC-${Date.now()}`, 'NONE', `Physical document scanned and confirmed by user.`, 'NONE', 'SCANNED');
+
+    // Run AI parameters extraction
+    runExtractionSimulation('scanned_receipt.png');
+  };
+
+  // ==========================================
+  // FLOW 2: AI PARAMETER EXTRACTION
+  // ==========================================
+  const runExtractionSimulation = (fileName: string) => {
+    setCheckingStep(1); // Reading document
+    setCheckingProgress(25);
+
+    setTimeout(() => {
+      setCheckingStep(2); // Extracting information
+      setCheckingProgress(60);
+
+      setTimeout(() => {
+        // Setup initial default extracted fields
+        let mockType: 'INVOICE' | 'OFFICIAL_RECEIPT' | 'WAYBILL' = 'OFFICIAL_RECEIPT';
+        let mockDocNum = 'OR-2024-0012345';
+        let mockClient = 'ABC Trading Corporation';
+        let mockAmt = '15250.00';
+        let mockDate = '2024-05-20';
+        let mockRef = 'REF-88912';
+        let mockWaybill = 'WBL-2024-556677';
+
+        if (fileName.toLowerCase().includes('invoice') || fileName.toLowerCase().includes('inv')) {
+          mockType = 'INVOICE';
+          mockDocNum = 'INV-2026-9011';
+          mockClient = 'Global Logistics Inc.';
+          mockAmt = '42800.00';
+          mockDate = '2026-07-15';
+          mockRef = 'REF-99011';
+          mockWaybill = 'WBL-2026-88012';
+        }
+
+        setExtDocType(mockType);
+        setExtDocNum(mockDocNum);
+        setExtClient(mockClient);
+        setExtAmount(mockAmt);
+        setExtDate(mockDate);
+        setExtRef(mockRef);
+        setExtWaybill(mockWaybill);
+
+        const ocrData = {
+          documentType: mockType,
+          documentNumber: mockDocNum,
+          clientName: mockClient,
+          amount: mockAmt,
+          transactionDate: mockDate,
+          referenceNumber: mockRef,
+          waybillNumber: mockWaybill
+        };
+        setOriginalOCR(ocrData);
+
+        logAuditEvent(
+          'DOCUMENT_INFORMATION_EXTRACTED',
+          'NONE',
+          'NONE',
+          `AI OCR parameter extraction completed for ${fileName}.`,
+          'UPLOADED',
+          'EXTRACTED'
+        );
+
+        setCheckingStep(0);
+        setCheckingProgress(100);
+        setExtractionDone(true);
+      }, 1000);
+    }, 800);
+  };
+
+  const handleRunDuplicateCheck = () => {
+    setCheckingStep(3); // Comparing existing records
+    setCheckingProgress(80);
+
+    logAuditEvent('DUPLICATE_CHECK_STARTED', 'NONE', 'NONE', `Comparison query launched against FOMS database records.`, 'EXTRACTED', 'CHECKING');
+
+    setTimeout(() => {
+      setCheckingStep(4); // Preparing result
+      setCheckingProgress(100);
+
+      setTimeout(() => {
+        // Simple mock match rules
+        const isDuplicateMatch = 
+          extDocNum.includes('OR-2024-0012345') || 
+          extDocNum.includes('INV-2026-9011') || 
+          extDocNum.includes('INV-2026-1044');
+
+        if (isDuplicateMatch) {
+          setScanResultMode('DUPLICATE');
+          setSimilarityScore(extDocNum.includes('9011') ? 100 : (extDocNum.includes('12345') ? 98 : 82));
+          
+          const mockMatch = {
+            record_id: extDocNum.includes('OR-2024') ? 'FOMS-PAY-99812' : (extDocNum.includes('9011') ? 'FOMS-INV-87721' : 'FOMS-INV-88124'),
+            registered_or: extDocNum.includes('OR-2024') ? 'OR-2024-0012345' : undefined,
+            registered_invoice: extDocNum.includes('OR-2024') ? undefined : (extDocNum.includes('9011') ? 'INV-2026-9011' : 'INV-2026-1040'),
+            client_name: extDocNum.includes('OR-2024') ? 'ABC Trading Corporation' : (extDocNum.includes('9011') ? 'Global Logistics Inc.' : 'FastFreight Express'),
+            amount: extDocNum.includes('OR-2024') ? '15250.00' : (extDocNum.includes('9011') ? '42800.00' : '8500.00'),
+            entry_date: extDocNum.includes('OR-2024') ? '2024-05-18' : (extDocNum.includes('9011') ? '2026-07-15' : '2026-07-10'),
+            reference_no: extDocNum.includes('OR-2024') ? 'REF-88912' : (extDocNum.includes('9011') ? 'REF-99011' : 'REF-1044'),
+            waybill_no: extDocNum.includes('OR-2024') ? 'WBL-2024-556677' : (extDocNum.includes('9011') ? 'WBL-2026-88012' : 'WBL-2026-99014'),
+            status: 'Validated'
+          };
+          setMatchedRecordDetails(mockMatch);
+
+          logAuditEvent('POSSIBLE_DUPLICATE_DETECTED', 'NONE', mockMatch.record_id, `AI matched similar parameters in legacy system.`, 'CHECKING', 'DUPLICATE_FLAGGED');
+          toast.warning("Duplicate record match flagged! Audit verification required.", "AI Duplicate Detection");
+        } else {
+          setScanResultMode('CLEAR');
+          setSimilarityScore(0);
+          setMatchedRecordDetails(null);
+
+          logAuditEvent('NO_DUPLICATE_DETECTED', 'NONE', 'NONE', `AI database comparison found 0 matching record conflicts.`, 'CHECKING', 'CLEAR');
+          toast.success("No duplicate record match flagged in database.", "Verification Clear");
+        }
+
+        setCheckingStep(0);
+        setCheckingProgress(0);
+      }, 600);
+    }, 1000);
+  };
+
+  const handleResetScanConsole = () => {
+    setUploadFile(null);
+    setPreviewDocUrl(null);
+    setCapturedImage(null);
+    setExtractionDone(false);
+    setScanResultMode('NONE');
+    setMatchedRecordDetails(null);
+    setShowManualReviewPanel(false);
+    setZoomLevel(1.0);
+  };
+
+  // ==========================================
+  // CONFIRMATION FORM ACTIONS
+  // ==========================================
+
+  // Mark as Unique clearance flow (Flow 7)
+  const handleMarkAsUniqueClick = () => {
+    setUniqueNote('');
+    setUniqueReason('Different transaction');
+    setShowUniqueConfirmModal(true);
+  };
+
+  const submitConfirmUnique = () => {
+    if (!uniqueNote.trim()) {
+      toast.warning("Reviewer notes are required to confirm unique clearance.", "Required Field");
+      return;
     }
-  };
 
-  const canSubmitReviews = user?.role && ["Financial Manager", "Head Accountant", "Accountant"].includes(user.role);
+    const uniqueId = `REC-UNI-00${uniques.length + 1}`;
+    const newUniqueDoc: UniqueDocument = {
+      id: uniqueId,
+      documentType: extDocType,
+      documentNumber: extDocNum,
+      clientName: extClient,
+      amount: extAmount,
+      transactionDate: extDate,
+      source: sourceType,
+      aiConfidence: similarityScore === 0 ? 100 : (100 - similarityScore),
+      reviewedBy: user?.username === 'financial_manager_user' ? 'Maria Santos' : (user?.username === 'head_accountant_user' ? 'Juan Dela Cruz' : 'Reviewer'),
+      reviewerRole: user?.role || 'Financial Manager',
+      reviewedDate: new Date().toISOString(),
+      status: 'Cleared for Normal Validation',
+      reviewerNote: uniqueNote.trim(),
+      reason: uniqueReason
+    };
 
-  // Filtered & Paginated records
-  const filteredAlerts = alerts.filter(alert => {
-    const matchesSearch = searchQuery === '' || 
-      alert.id.toString().includes(searchQuery) ||
-      (alert.matched_field && alert.matched_field.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (alert.alert_type && alert.alert_type.toLowerCase().includes(searchQuery.toLowerCase()));
+    // Save to Unique collection
+    saveUniquesToStorage([newUniqueDoc, ...uniques]);
 
-    const matchesSimilarity = alert.similarity_score >= minSimilarity;
+    // Save history entry
+    const newHistory: HistoryRecord & any = {
+      id: `REV-HIS-${Date.now()}`,
+      documentType: extDocType,
+      documentNumber: extDocNum,
+      clientName: extClient,
+      aiResult: scanResultMode === 'CLEAR' ? 'No Duplicate Detected' : 'Possible Duplicate Detected',
+      finalDecision: 'Marked as Unique',
+      reviewer: newUniqueDoc.reviewedBy,
+      reviewerRole: newUniqueDoc.reviewerRole,
+      decisionReason: uniqueReason,
+      reviewerNote: uniqueNote.trim(),
+      reviewedDate: new Date().toISOString(),
+      relatedRecordId: matchedRecordDetails?.record_id || 'NONE',
+
+      // ReviewHistory.tsx fields compatibility
+      review_date: new Date().toISOString(),
+      target_type: 'DUPLICATE_ALERT',
+      target_id: extDocNum,
+      reviewer_username: user?.username || 'user',
+      decision: 'Reviewed',
+      remarks: `Marked as Unique: ${uniqueReason}. Note: ${uniqueNote.trim()}`,
+      recommended_action: 'Cleared for FOMS Normal Validation'
+    };
+    saveHistoryToStorage([newHistory, ...historyList]);
+
+    // Write audit events
+    logAuditEvent(
+      'DOCUMENT_MARKED_UNIQUE',
+      uniqueId,
+      newHistory.relatedRecordId,
+      `Document cleared as unique. Reason: ${uniqueReason}. Note: ${uniqueNote.trim()}`,
+      'DUPLICATE_FLAGGED',
+      'UNIQUE'
+    );
     
-    return matchesSearch && matchesSimilarity;
-  });
+    logAuditEvent(
+      'UNIQUE_RECORD_CREATED',
+      uniqueId,
+      'NONE',
+      `Cleared unique document reference added to ledger verification path.`,
+      'UNIQUE',
+      'UNIQUE_DOCUMENTS_LEDGER'
+    );
 
-  const totalPages = Math.ceil(filteredAlerts.length / itemsPerPage);
-  const displayedAlerts = filteredAlerts.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+    logAuditEvent(
+      'TRANSACTION_CLEARED_FOR_VALIDATION',
+      uniqueId,
+      'NONE',
+      `Document reference cleared for normal FOMS validation process.`,
+      'UNIQUE',
+      'VALIDATION_LEDGER'
+    );
+
+    toast.success("Document marked as unique and added to Unique Documents.", "Clearance Recorded");
+    setShowUniqueConfirmModal(false);
+    handleResetScanConsole();
+    setActiveTab('unique-docs');
+  };
+
+  // Mark as Duplicate submission flow (Flow 9)
+  const handleMarkAsDuplicateClick = () => {
+    setDuplicateNote('');
+    setDuplicateReason('Same OR number');
+    setDuplicateHandling('Flag and Block New Submission');
+    setShowDuplicateConfirmModal(true);
+  };
+
+  const submitConfirmDuplicate = () => {
+    if (!duplicateNote.trim()) {
+      toast.warning("Reviewer notes are required to confirm duplicate status.", "Required Field");
+      return;
+    }
+
+    const flagId = `FLG-DUP-00${duplicates.length + 1}`;
+    const newFlaggedDup: FlaggedDuplicate = {
+      id: flagId,
+      documentType: extDocType,
+      uploadedDocumentNumber: extDocNum,
+      existingMatchedRecord: matchedRecordDetails?.record_id || 'FOMS-PAY-99812',
+      clientName: extClient,
+      amount: extAmount,
+      similarityScore: similarityScore,
+      duplicateReason: duplicateReason,
+      handlingAction: duplicateHandling,
+      flaggedBy: user?.username === 'financial_manager_user' ? 'Maria Santos' : (user?.username === 'head_accountant_user' ? 'Juan Dela Cruz' : 'Reviewer'),
+      reviewerRole: user?.role || 'Financial Manager',
+      flaggedDate: new Date().toISOString(),
+      status: duplicateHandling === 'Flag and Block New Submission' ? 'Submission Blocked' : 'Under Investigation',
+      reviewerNote: duplicateNote.trim()
+    };
+
+    // Save to Flagged Duplicates collection
+    saveDuplicatesToStorage([newFlaggedDup, ...duplicates]);
+
+    // Save history entry
+    const newHistory: HistoryRecord & any = {
+      id: `REV-HIS-${Date.now()}`,
+      documentType: extDocType,
+      documentNumber: extDocNum,
+      clientName: extClient,
+      aiResult: 'Possible Duplicate Detected',
+      finalDecision: 'Marked as Duplicate',
+      reviewer: newFlaggedDup.flaggedBy,
+      reviewerRole: newFlaggedDup.reviewerRole,
+      decisionReason: duplicateReason,
+      reviewerNote: duplicateNote.trim(),
+      reviewedDate: new Date().toISOString(),
+      relatedRecordId: newFlaggedDup.existingMatchedRecord,
+
+      // ReviewHistory.tsx fields compatibility
+      review_date: new Date().toISOString(),
+      target_type: 'DUPLICATE_ALERT',
+      target_id: extDocNum,
+      reviewer_username: user?.username || 'user',
+      decision: 'Reviewed',
+      remarks: `Marked as Duplicate: ${duplicateReason}. Note: ${duplicateNote.trim()}`,
+      recommended_action: duplicateHandling
+    };
+    saveHistoryToStorage([newHistory, ...historyList]);
+
+    // Write audit events
+    logAuditEvent(
+      'DOCUMENT_MARKED_DUPLICATE',
+      flagId,
+      newFlaggedDup.existingMatchedRecord,
+      `Document flagged as confirmed duplicate. Reason: ${duplicateReason}. Action: ${duplicateHandling}`,
+      'DUPLICATE_FLAGGED',
+      'DUPLICATE'
+    );
+
+    logAuditEvent(
+      'DUPLICATE_RECORD_FLAGGED',
+      flagId,
+      'NONE',
+      `Duplicate transaction cataloged inside flagged duplicate ledger.`,
+      'DUPLICATE',
+      'FLAGGED_DUPLICATES_LEDGER'
+    );
+
+    logAuditEvent(
+      'EXISTING_RECORD_LINKED',
+      flagId,
+      newFlaggedDup.existingMatchedRecord,
+      `Uploaded candidate record linked directly to target FOMS ledger reference.`,
+      'DUPLICATE',
+      'LINKED'
+    );
+
+    if (duplicateHandling === 'Flag and Block New Submission') {
+      logAuditEvent(
+        'TRANSACTION_SUBMISSION_BLOCKED',
+        flagId,
+        'NONE',
+        `New transaction submission blocked. Payout leak prevented.`,
+        'DUPLICATE',
+        'BLOCKED'
+      );
+    }
+
+    toast.success("Document confirmed and flagged as duplicate.", "Validation Blocked");
+    setShowDuplicateConfirmModal(false);
+    handleResetScanConsole();
+    setActiveTab('flagged-dups');
+  };
+
+  const handleManualSubmitReview = () => {
+    if (!manualNote.trim()) {
+      toast.warning("Remarks / Audit Notes are required to submit human review.", "Required Field");
+      return;
+    }
+
+    if (manualReviewDecision === 'Mark as Duplicate') {
+      const flagId = `FLG-DUP-00${duplicates.length + 1}`;
+      const newFlaggedDup: FlaggedDuplicate = {
+        id: flagId,
+        documentType: extDocType,
+        uploadedDocumentNumber: extDocNum,
+        existingMatchedRecord: matchedRecordDetails?.record_id || 'FOMS-PAY-99812',
+        clientName: extClient,
+        amount: extAmount,
+        similarityScore: similarityScore,
+        duplicateReason: duplicateReason,
+        handlingAction: duplicateHandling,
+        flaggedBy: user?.username === 'financial_manager_user' ? 'Maria Santos' : (user?.username === 'head_accountant_user' ? 'Juan Dela Cruz' : 'Reviewer'),
+        reviewerRole: user?.role || 'Financial Manager',
+        flaggedDate: new Date().toISOString(),
+        status: duplicateHandling === 'Flag and Block New Submission' ? 'Submission Blocked' : 'Under Investigation',
+        reviewerNote: manualNote.trim()
+      };
+
+      saveDuplicatesToStorage([newFlaggedDup, ...duplicates]);
+
+      const newHistory: HistoryRecord & any = {
+        id: `REV-HIS-${Date.now()}`,
+        documentType: extDocType,
+        documentNumber: extDocNum,
+        clientName: extClient,
+        aiResult: 'Possible Duplicate Detected',
+        finalDecision: 'Marked as Duplicate',
+        reviewer: newFlaggedDup.flaggedBy,
+        reviewerRole: newFlaggedDup.reviewerRole,
+        decisionReason: duplicateReason,
+        reviewerNote: manualNote.trim(),
+        reviewedDate: new Date().toISOString(),
+        relatedRecordId: newFlaggedDup.existingMatchedRecord,
+
+        // ReviewHistory.tsx fields compatibility
+        review_date: new Date().toISOString(),
+        target_type: 'DUPLICATE_ALERT',
+        target_id: extDocNum,
+        reviewer_username: user?.username || 'user',
+        decision: 'Reviewed',
+        remarks: `Marked as Duplicate: ${duplicateReason}. Note: ${manualNote.trim()}`,
+        recommended_action: duplicateHandling
+      };
+      saveHistoryToStorage([newHistory, ...historyList]);
+
+      logAuditEvent('DOCUMENT_MARKED_DUPLICATE', flagId, newFlaggedDup.existingMatchedRecord, `Flagged as duplicate: ${duplicateReason}`, 'DUPLICATE_FLAGGED', 'DUPLICATE');
+      logAuditEvent('DUPLICATE_RECORD_FLAGGED', flagId, 'NONE', `Duplicate recorded.`, 'DUPLICATE', 'FLAGGED_DUPLICATES_LEDGER');
+      logAuditEvent('EXISTING_RECORD_LINKED', flagId, newFlaggedDup.existingMatchedRecord, `Linked to ledger.`, 'DUPLICATE', 'LINKED');
+      if (duplicateHandling === 'Flag and Block New Submission') {
+        logAuditEvent('TRANSACTION_SUBMISSION_BLOCKED', flagId, 'NONE', `Submission blocked.`, 'DUPLICATE', 'BLOCKED');
+      }
+
+      toast.success("Document confirmed and flagged as duplicate.", "Validation Blocked");
+      setShowManualReviewPanel(false);
+      handleResetScanConsole();
+      setActiveTab('flagged-dups');
+    } else {
+      const uniqueId = `REC-UNI-00${uniques.length + 1}`;
+      const newUniqueDoc: UniqueDocument = {
+        id: uniqueId,
+        documentType: extDocType,
+        documentNumber: extDocNum,
+        clientName: extClient,
+        amount: extAmount,
+        transactionDate: extDate,
+        source: sourceType,
+        aiConfidence: similarityScore === 0 ? 100 : (100 - similarityScore),
+        reviewedBy: user?.username === 'financial_manager_user' ? 'Maria Santos' : (user?.username === 'head_accountant_user' ? 'Juan Dela Cruz' : 'Reviewer'),
+        reviewerRole: user?.role || 'Financial Manager',
+        reviewedDate: new Date().toISOString(),
+        status: 'Cleared for Normal Validation',
+        reviewerNote: manualNote.trim(),
+        reason: uniqueReason
+      };
+
+      saveUniquesToStorage([newUniqueDoc, ...uniques]);
+
+      const newHistory: HistoryRecord & any = {
+        id: `REV-HIS-${Date.now()}`,
+        documentType: extDocType,
+        documentNumber: extDocNum,
+        clientName: extClient,
+        aiResult: 'Possible Duplicate Detected',
+        finalDecision: 'Marked as Unique',
+        reviewer: newUniqueDoc.reviewedBy,
+        reviewerRole: newUniqueDoc.reviewerRole,
+        decisionReason: uniqueReason,
+        reviewerNote: manualNote.trim(),
+        reviewedDate: new Date().toISOString(),
+        relatedRecordId: matchedRecordDetails?.record_id || 'NONE',
+
+        // ReviewHistory.tsx fields compatibility
+        review_date: new Date().toISOString(),
+        target_type: 'DUPLICATE_ALERT',
+        target_id: extDocNum,
+        reviewer_username: user?.username || 'user',
+        decision: 'Reviewed',
+        remarks: `Marked as Unique: ${uniqueReason}. Note: ${manualNote.trim()}`,
+        recommended_action: 'Cleared for FOMS Normal Validation'
+      };
+      saveHistoryToStorage([newHistory, ...historyList]);
+
+      logAuditEvent('DOCUMENT_MARKED_UNIQUE', uniqueId, newHistory.relatedRecordId, `Cleared as unique: ${uniqueReason}`, 'DUPLICATE_FLAGGED', 'UNIQUE');
+      logAuditEvent('UNIQUE_RECORD_CREATED', uniqueId, 'NONE', `Unique record logged.`, 'UNIQUE', 'UNIQUE_DOCUMENTS_LEDGER');
+      logAuditEvent('TRANSACTION_CLEARED_FOR_VALIDATION', uniqueId, 'NONE', `Cleared for normal validation.`, 'UNIQUE', 'VALIDATION_LEDGER');
+
+      toast.success("Document marked as unique and added to Unique Documents.", "Clearance Recorded");
+      setShowManualReviewPanel(false);
+      handleResetScanConsole();
+      setActiveTab('unique-docs');
+    }
+  };
+
+  // Zoom helpers
+  const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.25, 2.5));
+  const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.25, 1.0));
+
+  // Render cells difference matching style (Flow 5)
+  const getCellMatchStyle = (key: string, val1: string, val2: string) => {
+    const v1 = String(val1 || '').trim().toLowerCase();
+    const v2 = String(val2 || '').trim().toLowerCase();
+    if (!v1 || !v2) return { text: 'Missing', style: { color: 'var(--ts)', fontStyle: 'italic' } };
+
+    if (v1 === v2) {
+      return { 
+        text: 'Exact Match', 
+        style: { color: 'var(--err)', backgroundColor: 'var(--err-bg)', fontWeight: 700, padding: '3px 8px', borderRadius: '4px' } 
+      };
+    }
+
+    const isSimilar = v1.includes(v2) || v2.includes(v1) || (key === 'amount' && Math.abs(parseFloat(v1) - parseFloat(v2)) < 500);
+    if (isSimilar) {
+      return { 
+        text: 'Similar Match', 
+        style: { color: 'var(--warn)', backgroundColor: 'var(--warn-bg)', fontWeight: 700, padding: '3px 8px', borderRadius: '4px' } 
+      };
+    }
+
+    return { 
+      text: 'Different', 
+      style: { color: 'var(--ok)', backgroundColor: 'var(--ok-bg)', fontWeight: 600, padding: '3px 8px', borderRadius: '4px' } 
+    };
+  };
 
   return (
     <div className="main-content fade-in">
-      <AiHeader title="Duplicate Check Alerts" />
-      
+      <AiHeader title="Duplicate Detection Center" />
+
       <div className="page-container">
-        
-        {/* Page Header Pattern */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', borderBottom: '1px solid var(--border-soft)', paddingBottom: '16px' }}>
+        {/* Top Header Row with Title, Description, and History Button */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
           <div>
-            <h1 style={{ fontSize: '24px', fontWeight: 700, margin: 0 }}>Duplicate Alerts</h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginTop: '4px' }}>
-              Review possible duplicate finance records detected by the AI Layer.
+            <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#1E293B' }}>
+              {activeTab === 'scan' && "Document Checking & AI Scan Console"}
+              {activeTab === 'unique-docs' && "Unique Ledger Database"}
+              {activeTab === 'flagged-dups' && "Flagged Duplicate Records"}
+              {activeTab === 'history' && "AI Scan Review History"}
+            </h2>
+            <p style={{ margin: '2px 0 0', fontSize: '13px', color: '#64748B' }}>
+              {activeTab === 'scan' && "Upload or scan invoice/receipt files to identify duplicate payments."}
+              {activeTab === 'unique-docs' && "Verified non-duplicate receipts cleared for normal FOMS validation."}
+              {activeTab === 'flagged-dups' && "Flagged exact or highly similar records requiring manager investigation."}
+              {activeTab === 'history' && "Chronological audit trail of all manual and automated AI validation reviews."}
             </p>
-          </div>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button onClick={fetchAlerts} className="btn btn-secondary">
-              <RefreshCw size={14} />
-              <span>Refresh</span>
-            </button>
           </div>
         </div>
 
-        {/* Decision Support Advisory Notice */}
+        {/* Unified Decision Support Notice */}
         <DecisionSupportNotice />
 
-        {/* Filter Bar Pattern */}
-        <div className="filter-bar" style={{ marginBottom: '20px' }}>
-          <div className="filter-item" style={{ flex: 2, minWidth: '220px' }}>
-            <div style={{ position: 'relative', width: '100%' }}>
-              <Search size={16} style={{ position: 'absolute', left: '12px', top: '13px', color: 'var(--text-muted)' }} />
-              <input 
-                type="text" 
-                className="form-control" 
-                placeholder="Search alerts by ID or matched key..."
-                style={{ paddingLeft: '36px' }}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+        {/* ==========================================
+            TAB 1: DOCUMENT CHECKING & AI SCAN PAGE
+            ========================================== */}
+        {activeTab === 'scan' && (
+          <div className="tab-pane fade-in">
+            {/* Scan Step 0: Upload dropzone/Scan button console */}
+            {!extractionDone && checkingStep === 0 && (
+              <div
+                className={`card ${dragActive ? 'drag-active' : ''}`}
+                style={{
+                  padding: '56px 24px', borderRadius: '16px',
+                  border: dragActive ? '2px dashed var(--teal)' : '2px dashed var(--border)',
+                  background: dragActive ? 'var(--teal-bg)' : '#ffffff',
+                  textAlign: 'center', cursor: 'pointer', transition: 'all 0.2s ease',
+                  position: 'relative'
+                }}
+                onDragEnter={handleDrag}
+                onDragOver={handleDrag}
+                onDragLeave={handleDrag}
+                onDrop={handleDrop}
+                onClick={() => document.getElementById('simplified-uploader')?.click()}
+              >
+                <input
+                  type="file"
+                  id="simplified-uploader"
+                  style={{ display: 'none' }}
+                  accept=".jpg,.jpeg,.png"
+                  onChange={handleFileChange}
+                />
+                
+                <div style={{
+                  width: '64px', height: '64px', borderRadius: '50%',
+                  background: 'var(--teal)', color: '#ffffff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  margin: '0 auto 20px', boxShadow: '0 4px 12px rgba(0, 169, 157, 0.25)',
+                }}>
+                  <UploadCloud size={32} />
+                </div>
+                <h3 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 8px', color: 'var(--tp)' }}>
+                  Drag &amp; Drop or Upload Document
+                </h3>
+                <p style={{ fontSize: '13.5px', color: 'var(--ts)', maxWidth: '420px', margin: '0 auto 24px', lineHeight: 1.5 }}>
+                  Support JPG, JPEG, and PNG receipt statements up to 10MB.
+                </p>
+
+                <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }} onClick={(e) => e.stopPropagation()}>
+                  <button className="btn btn-primary" onClick={() => document.getElementById('simplified-uploader')?.click()} style={{ height: '38px', padding: '0 20px', fontWeight: 700 }}>
+                    Choose File
+                  </button>
+                  <button className="btn btn-outline" onClick={handleOpenScanner} style={{ height: '38px', padding: '0 20px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    <Camera size={16} />
+                    <span>Scan Document</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Checking Loader Steps (FLOW 2) */}
+            {checkingStep > 0 && checkingStep < 5 && (
+              <div className="card" style={{ padding: '48px 24px', textAlign: 'center', borderRadius: '16px' }}>
+                <RefreshCw size={36} style={{ animation: 'spin 1.5s linear infinite', color: 'var(--teal)', marginBottom: '16px' }} />
+                <h4 style={{ fontSize: '16.5px', fontWeight: 700, marginBottom: '12px' }}>AI Engine Processing...</h4>
+                
+                <div style={{ width: '280px', height: '6px', background: 'var(--border)', borderRadius: '3px', margin: '0 auto 20px', overflow: 'hidden' }}>
+                  <div style={{ width: `${checkingProgress}%`, height: '100%', background: 'var(--teal)', transition: 'width 0.3s ease' }} />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '13px', color: 'var(--ts)', maxWidth: '280px', margin: '0 auto', textAlign: 'left' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: checkingStep >= 1 ? 'var(--tp)' : 'var(--tt)' }}>
+                    {checkingStep > 1 ? <CheckCircle size={14} style={{ color: 'var(--teal)' }} /> : <Clock size={14} />}
+                    <span>Reading document</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: checkingStep >= 2 ? 'var(--tp)' : 'var(--tt)' }}>
+                    {checkingStep > 2 ? <CheckCircle size={14} style={{ color: 'var(--teal)' }} /> : <Clock size={14} />}
+                    <span>Extracting information</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: checkingStep >= 3 ? 'var(--tp)' : 'var(--tt)' }}>
+                    {checkingStep > 3 ? <CheckCircle size={14} style={{ color: 'var(--teal)' }} /> : <Clock size={14} />}
+                    <span>Comparing existing records</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: checkingStep >= 4 ? 'var(--tp)' : 'var(--tt)' }}>
+                    {checkingStep > 4 ? <CheckCircle size={14} style={{ color: 'var(--teal)' }} /> : <Clock size={14} />}
+                    <span>Preparing result</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Scan Step: OCR Corrections panel (FLOW 2) */}
+            {extractionDone && scanResultMode === 'NONE' && (
+              <div className="grid-2">
+                <div className="card" style={{ padding: '24px', borderRadius: '16px' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: 800, margin: '0 0 16px', borderBottom: '1px solid var(--border)', paddingBottom: '10px' }}>
+                    Verify &amp; Correct OCR Parameters
+                  </h3>
+
+                  <div className="grid-2" style={{ marginBottom: '14px' }}>
+                    <div>
+                      <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--ts)', display: 'block', marginBottom: '6px' }}>Document Type</label>
+                      <select className="input-select" value={extDocType} onChange={(e: any) => setExtDocType(e.target.value)}>
+                        <option value="OFFICIAL_RECEIPT">Official Receipt (OR)</option>
+                        <option value="INVOICE">Invoice</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--ts)', display: 'block', marginBottom: '6px' }}>Document Number</label>
+                      <input type="text" className="form-control" value={extDocNum} onChange={(e) => setExtDocNum(e.target.value)} />
+                    </div>
+                  </div>
+
+                  <div className="grid-2" style={{ marginBottom: '14px' }}>
+                    <div>
+                      <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--ts)', display: 'block', marginBottom: '6px' }}>Client Name</label>
+                      <input type="text" className="form-control" value={extClient} onChange={(e) => setExtClient(e.target.value)} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--ts)', display: 'block', marginBottom: '6px' }}>Amount</label>
+                      <input type="text" className="form-control" value={extAmount} onChange={(e) => setExtAmount(e.target.value)} />
+                    </div>
+                  </div>
+
+                  <div className="grid-2" style={{ marginBottom: '14px' }}>
+                    <div>
+                      <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--ts)', display: 'block', marginBottom: '6px' }}>Transaction Date</label>
+                      <input type="date" className="form-control" value={extDate} onChange={(e) => setExtDate(e.target.value)} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--ts)', display: 'block', marginBottom: '6px' }}>Reference Number</label>
+                      <input type="text" className="form-control" value={extRef} onChange={(e) => setExtRef(e.target.value)} />
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom: '24px' }}>
+                    <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--ts)', display: 'block', marginBottom: '6px' }}>Waybill Number</label>
+                    <input type="text" className="form-control" value={extWaybill} onChange={(e) => setExtWaybill(e.target.value)} />
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                    <button className="btn btn-outline" onClick={handleResetScanConsole}>Remove File</button>
+                    <button className="btn btn-primary" onClick={handleRunDuplicateCheck} disabled={!canValidate}>
+                      Check for Duplicate
+                    </button>
+                  </div>
+                </div>
+
+                {/* Scanned Document Preview Box */}
+                <div className="card" style={{ padding: '16px', borderRadius: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#ffffff', border: '1px solid var(--border)', minHeight: '340px' }}>
+                  <img 
+                    src={previewDocUrl || '/mock_receipt.png'} 
+                    alt="Document Preview" 
+                    style={{ width: '100%', maxHeight: '280px', objectFit: 'contain', borderRadius: '8px', marginBottom: '10px', border: '1px solid var(--border)' }}
+                  />
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--tp)' }}>{uploadFile?.name || 'scanned_document.png'}</div>
+                  <div style={{ fontSize: '11.5px', color: 'var(--ts)' }}>Source: {sourceType}</div>
+                </div>
+              </div>
+            )}
+
+            {/* FLOW 4: NO POSSIBLE DUPLICATE FOUND RESULT (CLEAR) */}
+            {scanResultMode === 'CLEAR' && (
+              <div className="card fade-in" style={{ padding: '32px', borderRadius: '16px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                <div style={{ display: 'flex', gap: '16px', marginBottom: '24px' }}>
+                  <div style={{
+                    width: '48px', height: '48px', borderRadius: '50%',
+                    backgroundColor: 'var(--ok-bg)', color: 'var(--ok)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                  }}>
+                    <Check size={24} />
+                  </div>
+                  <div>
+                    <h3 style={{ margin: '0 0 4px', fontSize: '18px', fontWeight: 800, color: 'var(--ok)' }}>
+                      No Duplicate Detected
+                    </h3>
+                    <p style={{ margin: 0, fontSize: '14px', color: 'var(--ts)' }}>
+                      No matching Official Receipt or Invoice was found in the existing FOMS records.
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '24px', marginBottom: '28px' }}>
+                  {/* Left Column: parameters */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', background: 'var(--s1)', padding: '20px', borderRadius: '12px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
+                      <div><strong>Document Type:</strong> {extDocType.replace(/_/g, ' ')}</div>
+                      <div><strong>Document Number:</strong> {extDocNum}</div>
+                      <div><strong>Client Name:</strong> {extClient}</div>
+                      <div><strong>Amount:</strong> ₱{parseFloat(extAmount || '0').toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
+                      <div><strong>Transaction Date:</strong> {extDate}</div>
+                      <div><strong>Checked Date &amp; Time:</strong> {new Date().toLocaleString()}</div>
+                      <div><strong>Checked By:</strong> AI System</div>
+                      <div><strong>Match Confidence:</strong> 0% Match</div>
+                    </div>
+                  </div>
+
+                  {/* Right Column: preview */}
+                  <div style={{ background: '#ffffff', border: '1px solid var(--border)', borderRadius: '12px', padding: '10px', textAlign: 'center' }}>
+                    <img 
+                      src={previewDocUrl || '/mock_receipt.png'} 
+                      alt="Checked Preview" 
+                      style={{ maxHeight: '140px', maxWidth: '100%', objectFit: 'contain', borderRadius: '6px' }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span className="badge badge-success" style={{ padding: '6px 14px', fontSize: '13px', borderRadius: '20px', fontWeight: 700 }}>
+                    Clear
+                  </span>
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <button className="btn btn-outline" onClick={handleResetScanConsole}>Upload Another Document</button>
+                    <button className="btn btn-primary" onClick={handleMarkAsUniqueClick} disabled={!canValidate}>
+                      Mark as Unique
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* FLOW 5: POSSIBLE DUPLICATE DETECTED RESULT */}
+            {scanResultMode === 'DUPLICATE' && (
+              <div className="tab-pane fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div className="card" style={{ padding: '32px', borderRadius: '16px', border: '1px solid rgba(225, 29, 72, 0.2)' }}>
+                  <div style={{ display: 'flex', gap: '16px', marginBottom: '24px' }}>
+                    <div style={{
+                      width: '48px', height: '48px', borderRadius: '50%',
+                      backgroundColor: 'var(--err-bg)', color: 'var(--err)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                    }}>
+                      <AlertTriangle size={24} />
+                    </div>
+                    <div>
+                      <h3 style={{ margin: '0 0 4px', fontSize: '18px', fontWeight: 800, color: 'var(--err)' }}>
+                        Possible Duplicate Detected
+                      </h3>
+                      <p style={{ margin: 0, fontSize: '14px', color: 'var(--ts)' }}>
+                        A possible matching Official Receipt or Invoice already exists in FOMS.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Document Previews side-by-side */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
+                    {/* Left: Uploaded Preview */}
+                    <div className="card" style={{ padding: '16px', background: 'var(--s1)', borderRadius: '12px', border: '1px solid var(--border)', textAlign: 'center' }}>
+                      <h4 style={{ margin: '0 0 12px', fontSize: '12.5px', fontWeight: 700, color: 'var(--ts)', textTransform: 'uppercase' }}>Uploaded / Scanned Document</h4>
+                      <div style={{ overflow: 'hidden', height: '180px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#ffffff', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                        <img 
+                          src={previewDocUrl || '/mock_receipt.png'} 
+                          alt="Uploaded candidate preview" 
+                          style={{ 
+                            maxHeight: '100%', 
+                            maxWidth: '100%', 
+                            objectFit: 'contain',
+                            transform: `scale(${zoomLevel})`,
+                            transition: 'transform 0.15s ease'
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Right: Existing Match Preview */}
+                    <div className="card" style={{ padding: '16px', background: '#ffffff', borderRadius: '12px', border: '1px solid var(--border)', textAlign: 'center' }}>
+                      <h4 style={{ margin: '0 0 12px', fontSize: '12.5px', fontWeight: 700, color: 'var(--ts)', textTransform: 'uppercase' }}>Existing Matching FOMS Record</h4>
+                      <div style={{ overflow: 'hidden', height: '180px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--s1)', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                        <img 
+                          src={extDocType === 'INVOICE' ? '/mock_invoice.png' : '/mock_receipt.png'} 
+                          alt="Existing database match preview" 
+                          style={{ 
+                            maxHeight: '100%', 
+                            maxWidth: '100%', 
+                            objectFit: 'contain',
+                            opacity: 0.85,
+                            transform: `scale(${zoomLevel})`,
+                            transition: 'transform 0.15s ease'
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Similarity Banner info */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 18px', background: 'var(--warn-bg)', borderRadius: '8px', border: '1px solid rgba(249, 115, 22, 0.2)', marginBottom: '24px', fontSize: '13.5px', fontWeight: 600 }}>
+                    <span style={{ color: 'var(--warn-dark)' }}>Highest Similarity: {similarityScore}% Match Score</span>
+                    <span style={{ color: 'var(--ts)' }}>Checked Date &amp; Time: {new Date().toLocaleString()}</span>
+                  </div>
+
+                  {/* Side-by-side comparison table (Flow 5) */}
+                  <h4 style={{ fontSize: '14px', fontWeight: 700, marginBottom: '12px' }}>Comparison Parameters Matrix</h4>
+                  <div style={{ overflowX: 'auto', marginBottom: '28px' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                      <thead>
+                        <tr style={{ background: 'var(--s1)', borderBottom: '1px solid var(--border)' }}>
+                          <th style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 700, color: 'var(--ts)', textTransform: 'uppercase' }}>Field</th>
+                          <th style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 700, color: 'var(--ts)', textTransform: 'uppercase' }}>Uploaded Document</th>
+                          <th style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 700, color: 'var(--ts)', textTransform: 'uppercase' }}>Existing FOMS Record</th>
+                          <th style={{ padding: '10px 14px', fontSize: '12px', fontWeight: 700, color: 'var(--ts)', textTransform: 'uppercase' }}>Match Result</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                          <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 600 }}>Document Type</td>
+                          <td style={{ padding: '12px 14px', fontSize: '13px' }}>{extDocType.replace(/_/g, ' ')}</td>
+                          <td style={{ padding: '12px 14px', fontSize: '13px' }}>{matchedRecordDetails?.registered_or ? 'Official Receipt' : 'Invoice'}</td>
+                          <td style={{ padding: '12px 14px' }}>
+                            <span style={getCellMatchStyle('type', extDocType, matchedRecordDetails?.registered_or ? 'OFFICIAL_RECEIPT' : 'INVOICE').style}>
+                              {getCellMatchStyle('type', extDocType, matchedRecordDetails?.registered_or ? 'OFFICIAL_RECEIPT' : 'INVOICE').text}
+                            </span>
+                          </td>
+                        </tr>
+                        <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                          <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 600 }}>OR / Invoice Number</td>
+                          <td style={{ padding: '12px 14px', fontSize: '13px', fontFamily: 'var(--fb)' }}>{extDocNum}</td>
+                          <td style={{ padding: '12px 14px', fontSize: '13px', fontFamily: 'var(--fb)' }}>{matchedRecordDetails?.registered_or || matchedRecordDetails?.registered_invoice}</td>
+                          <td style={{ padding: '12px 14px' }}>
+                            <span style={getCellMatchStyle('docNum', extDocNum, matchedRecordDetails?.registered_or || matchedRecordDetails?.registered_invoice).style}>
+                              {getCellMatchStyle('docNum', extDocNum, matchedRecordDetails?.registered_or || matchedRecordDetails?.registered_invoice).text}
+                            </span>
+                          </td>
+                        </tr>
+                        <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                          <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 600 }}>Client Name</td>
+                          <td style={{ padding: '12px 14px', fontSize: '13px' }}>{extClient}</td>
+                          <td style={{ padding: '12px 14px', fontSize: '13px' }}>{matchedRecordDetails?.client_name}</td>
+                          <td style={{ padding: '12px 14px' }}>
+                            <span style={getCellMatchStyle('client', extClient, matchedRecordDetails?.client_name).style}>
+                              {getCellMatchStyle('client', extClient, matchedRecordDetails?.client_name).text}
+                            </span>
+                          </td>
+                        </tr>
+                        <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                          <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 600 }}>Amount</td>
+                          <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 700 }}>₱{parseFloat(extAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                          <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 700 }}>₱{parseFloat(matchedRecordDetails?.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                          <td style={{ padding: '12px 14px' }}>
+                            <span style={getCellMatchStyle('amount', extAmount, matchedRecordDetails?.amount).style}>
+                              {getCellMatchStyle('amount', extAmount, matchedRecordDetails?.amount).text}
+                            </span>
+                          </td>
+                        </tr>
+                        <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                          <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 600 }}>Transaction Date</td>
+                          <td style={{ padding: '12px 14px', fontSize: '13px' }}>{extDate}</td>
+                          <td style={{ padding: '12px 14px', fontSize: '13px' }}>{matchedRecordDetails?.entry_date}</td>
+                          <td style={{ padding: '12px 14px' }}>
+                            <span style={getCellMatchStyle('date', extDate, matchedRecordDetails?.entry_date).style}>
+                              {getCellMatchStyle('date', extDate, matchedRecordDetails?.entry_date).text}
+                            </span>
+                          </td>
+                        </tr>
+                        <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                          <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 600 }}>Reference Number</td>
+                          <td style={{ padding: '12px 14px', fontSize: '13px' }}>{extRef}</td>
+                          <td style={{ padding: '12px 14px', fontSize: '13px' }}>{matchedRecordDetails?.reference_no}</td>
+                          <td style={{ padding: '12px 14px' }}>
+                            <span style={getCellMatchStyle('ref', extRef, matchedRecordDetails?.reference_no).style}>
+                              {getCellMatchStyle('ref', extRef, matchedRecordDetails?.reference_no).text}
+                            </span>
+                          </td>
+                        </tr>
+                        <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                          <td style={{ padding: '12px 14px', fontSize: '13px', fontWeight: 600 }}>Waybill Number</td>
+                          <td style={{ padding: '12px 14px', fontSize: '13px' }}>{extWaybill}</td>
+                          <td style={{ padding: '12px 14px', fontSize: '13px' }}>{matchedRecordDetails?.waybill_no}</td>
+                          <td style={{ padding: '12px 14px' }}>
+                            <span style={getCellMatchStyle('waybill', extWaybill, matchedRecordDetails?.waybill_no).style}>
+                              {getCellMatchStyle('waybill', extWaybill, matchedRecordDetails?.waybill_no).text}
+                            </span>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <button className="btn btn-outline" onClick={handleZoomOut} title="Zoom Out" style={{ padding: '6px' }}><ZoomOut size={16} /></button>
+                      <span style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--ts)' }}>Zoom Preview: {zoomLevel.toFixed(2)}x</span>
+                      <button className="btn btn-outline" onClick={handleZoomIn} title="Zoom In" style={{ padding: '6px' }}><ZoomIn size={16} /></button>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '12px' }}>
+                      <button className="btn btn-outline" onClick={() => setShowManualReviewPanel(true)}>
+                        Need Manual Review
+                      </button>
+                      <button className="btn btn-secondary animate-hover" onClick={handleMarkAsUniqueClick} disabled={!canValidate}>
+                        Mark as Unique
+                      </button>
+                      <button className="btn btn-primary animate-hover" onClick={handleMarkAsDuplicateClick} disabled={!canValidate}>
+                        Mark as Duplicate
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* FLOW 6: COMPREHENSIVE SIDE-BY-SIDE MANUAL REVIEW MODAL OVERLAY (SCREENSHOT MATCHED) */}
+                {showManualReviewPanel && (
+                  <div style={{
+                    position: 'fixed', inset: 0, zIndex: 280,
+                    background: 'rgba(15, 23, 42, 0.65)', display: 'flex',
+                    alignItems: 'center', justifyContent: 'center', padding: '20px',
+                    backdropFilter: 'blur(3.5px)'
+                  }}>
+                    <div className="card fade-in" style={{
+                      background: '#ffffff', borderRadius: '12px',
+                      boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)', width: '100%', maxWidth: '840px',
+                      maxHeight: '94vh', overflowY: 'auto', padding: '32px', border: '1px solid #E2E8F0'
+                    }}>
+                      {/* Modal Header */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '16px', marginBottom: '20px' }}>
+                        <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#1E293B' }}>
+                          Duplicate Record Comparison (Alert #{extDocNum.includes('9011') ? '27' : '28'})
+                        </h3>
+                        <button onClick={() => setShowManualReviewPanel(false)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94A3B8' }}>
+                          <X size={20} />
+                        </button>
+                      </div>
+
+                      {/* Matching Factors Confidence alert box */}
+                      <div style={{ display: 'flex', gap: '12px', padding: '16px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', marginBottom: '24px', alignItems: 'flex-start' }}>
+                        <Info size={18} style={{ color: '#D97706', marginTop: '2px', flexShrink: 0 }} />
+                        <div>
+                          <h5 style={{ margin: '0 0 4px', fontSize: '13.5px', fontWeight: 700, color: '#92400E' }}>
+                            Matching Factors Confidence: {similarityScore}%
+                          </h5>
+                          <p style={{ margin: 0, fontSize: '13px', color: '#B45309', lineHeight: '1.4' }}>
+                            Highly similar {extDocType === 'INVOICE' ? 'invoice' : 'receipt'} numbers: {extDocNum} and {matchedRecordDetails?.registered_or || matchedRecordDetails?.registered_invoice}.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Image Preview with Zoom Controls */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                        <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#64748B' }}>Document Image Comparison View</span>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <button className="btn btn-outline" onClick={handleZoomOut} title="Zoom Out" style={{ padding: '4px 8px', height: '28px', fontSize: '11px' }}><ZoomOut size={12} /></button>
+                          <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748B', minWidth: '40px', textAlign: 'center' }}>{zoomLevel.toFixed(2)}x</span>
+                          <button className="btn btn-outline" onClick={handleZoomIn} title="Zoom In" style={{ padding: '4px 8px', height: '28px', fontSize: '11px' }}><ZoomIn size={12} /></button>
+                        </div>
+                      </div>
+
+                      {/* Side-by-Side Images */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
+                        <div style={{ overflow: 'hidden', height: '140px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                          <img 
+                            src={previewDocUrl || '/mock_receipt.png'} 
+                            alt="Uploaded original doc" 
+                            style={{ 
+                              maxHeight: '100%', 
+                              maxWidth: '100%', 
+                              objectFit: 'contain',
+                              transform: `scale(${zoomLevel})`,
+                              transition: 'transform 0.15s ease'
+                            }}
+                          />
+                        </div>
+                        <div style={{ overflow: 'hidden', height: '140px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                          <img 
+                            src={extDocType === 'INVOICE' ? '/mock_invoice.png' : '/mock_receipt.png'} 
+                            alt="Legar FOMS match doc" 
+                            style={{ 
+                              maxHeight: '100%', 
+                              maxWidth: '100%', 
+                              objectFit: 'contain',
+                              opacity: 0.85,
+                              transform: `scale(${zoomLevel})`,
+                              transition: 'transform 0.15s ease'
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Side-by-Side Columns Parameters (exact matched grid layout from screenshot) */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '28px' }}>
+                        {/* LEFT COLUMN: Original Record details */}
+                        <div style={{ border: '1px solid #E2E8F0', borderRadius: '8px', padding: '16px', background: '#FFFFFF' }}>
+                          <h4 style={{ margin: '0 0 14px', fontSize: '14px', fontWeight: 700, color: '#0F766E', borderBottom: '1px solid #E2E8F0', paddingBottom: '8px' }}>
+                            Original Record details
+                          </h4>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                              <span style={{ color: '#64748B' }}>amount</span>
+                              <span style={{ color: '#0D9488', fontWeight: 700 }}>{parseFloat(extAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                              <span style={{ color: '#64748B' }}>dueDate</span>
+                              <span style={{ color: '#0D9488', fontWeight: 700 }}>{extDate}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                              <span style={{ color: '#64748B' }}>clientId</span>
+                              <span style={{ color: '#0D9488', fontWeight: 700 }}>C-004</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                              <span style={{ color: '#64748B' }}>invoiceId</span>
+                              <span style={{ color: '#0D9488', fontWeight: 700 }}>INV-005</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                              <span style={{ color: '#64748B' }}>updatedAt</span>
+                              <span style={{ color: '#0D9488', fontWeight: 700 }}>2026-07-14T12:00:00Z</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                              <span style={{ color: '#64748B' }}>clientName</span>
+                              <span style={{ color: '#0D9488', fontWeight: 700 }}>{extClient}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                              <span style={{ color: '#64748B' }}>invoiceNumber</span>
+                              <span style={{ color: '#0D9488', fontWeight: 700 }}>{extDocNum}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                              <span style={{ color: '#64748B' }}>invoiceStatus</span>
+                              <span style={{ color: '#0D9488', fontWeight: 700 }}>Sent</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                              <span style={{ color: '#64748B' }}>paymentStatus</span>
+                              <span style={{ color: '#0D9488', fontWeight: 700 }}>Unpaid</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                              <span style={{ color: '#64748B' }}>waybillNumber</span>
+                              <span style={{ color: '#0D9488', fontWeight: 700 }}>{extWaybill || 'WB-2026-004'}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '13px' }}>
+                              <span style={{ color: '#64748B' }}>billingReference</span>
+                              <span style={{ color: '#0D9488', fontWeight: 700 }}>{extRef || 'REF-DELTA-04'}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* RIGHT COLUMN: Possible Matching record */}
+                        <div style={{ border: '1px solid #E2E8F0', borderRadius: '8px', padding: '16px', background: '#FFFFFF' }}>
+                          <h4 style={{ margin: '0 0 14px', fontSize: '14px', fontWeight: 700, color: '#0F766E', borderBottom: '1px solid #E2E8F0', paddingBottom: '8px' }}>
+                            Possible Matching record
+                          </h4>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                              <span style={{ color: '#64748B' }}>amount</span>
+                              <span style={{ color: '#0D9488', fontWeight: 700 }}>{parseFloat(matchedRecordDetails?.amount || '35000').toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                              <span style={{ color: '#64748B' }}>dueDate</span>
+                              <span style={{ color: '#0D9488', fontWeight: 700 }}>{matchedRecordDetails?.entry_date || '2026-07-05'}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                              <span style={{ color: '#64748B' }}>clientId</span>
+                              <span style={{ color: '#0D9488', fontWeight: 700 }}>C-005</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                              <span style={{ color: '#64748B' }}>invoiceId</span>
+                              <span style={{ color: '#0D9488', fontWeight: 700 }}>INV-006</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                              <span style={{ color: '#64748B' }}>updatedAt</span>
+                              <span style={{ color: '#0D9488', fontWeight: 700 }}>2026-07-15T13:00:00Z</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                              <span style={{ color: '#64748B' }}>clientName</span>
+                              <span style={{ color: '#0D9488', fontWeight: 700 }}>{matchedRecordDetails?.client_name || 'Epsilon Corp'}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                              <span style={{ color: '#64748B' }}>invoiceNumber</span>
+                              <span style={{ color: '#0D9488', fontWeight: 700 }}>{matchedRecordDetails?.registered_or || matchedRecordDetails?.registered_invoice || 'INV-2026-005'}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                              <span style={{ color: '#64748B' }}>invoiceStatus</span>
+                              <span style={{ color: '#0D9488', fontWeight: 700 }}>Sent</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                              <span style={{ color: '#64748B' }}>paymentStatus</span>
+                              <span style={{ color: '#0D9488', fontWeight: 700 }}>{matchedRecordDetails?.status === 'Validated' ? 'Paid' : 'Unpaid'}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #F1F5F9', fontSize: '13px' }}>
+                              <span style={{ color: '#64748B' }}>waybillNumber</span>
+                              <span style={{ color: '#0D9488', fontWeight: 700 }}>{matchedRecordDetails?.waybill_no || 'WB-2026-005'}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '13px' }}>
+                              <span style={{ color: '#64748B' }}>billingReference</span>
+                              <span style={{ color: '#0D9488', fontWeight: 700 }}>{matchedRecordDetails?.reference_no || 'REF-EPS-05'}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Log Human Validation Action Section */}
+                      <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: '20px', marginBottom: '14px' }}>
+                        <h4 style={{ margin: '0 0 16px', fontSize: '15px', fontWeight: 800, color: '#1E293B' }}>
+                          Log Human Validation Action
+                        </h4>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '16px' }}>
+                          <div>
+                            <label style={{ fontSize: '12px', fontWeight: 700, display: 'block', marginBottom: '6px', color: '#334155' }}>
+                              Review Decision
+                            </label>
+                            <select 
+                              className="input-select" 
+                              value={manualReviewDecision} 
+                              onChange={(e) => setManualReviewDecision(e.target.value as any)}
+                            >
+                              <option value="Mark as Duplicate">Mark as Duplicate</option>
+                              <option value="Mark as Unique">Mark as Unique</option>
+                            </select>
+                          </div>
+                          <div>
+                            {manualReviewDecision === 'Mark as Duplicate' ? (
+                              <>
+                                <label style={{ fontSize: '12px', fontWeight: 700, display: 'block', marginBottom: '6px', color: '#334155' }}>
+                                  Recommended Legacy Action
+                                </label>
+                                <select 
+                                  className="input-select" 
+                                  value={duplicateHandling} 
+                                  onChange={(e) => setDuplicateHandling(e.target.value)}
+                                >
+                                  <option value="Flag and Block New Submission">Flag and Block New Submission</option>
+                                  <option value="Link to Existing Record">Link to Existing Record</option>
+                                  <option value="Return for Correction">Return for Correction</option>
+                                  <option value="Keep for Investigation">Keep for Investigation</option>
+                                </select>
+                              </>
+                            ) : (
+                              <>
+                                <label style={{ fontSize: '12px', fontWeight: 700, display: 'block', marginBottom: '6px', color: '#334155' }}>
+                                  Reason why the document is unique
+                                </label>
+                                <select 
+                                  className="input-select" 
+                                  value={uniqueReason} 
+                                  onChange={(e) => setUniqueReason(e.target.value)}
+                                >
+                                  <option value="Different transaction">Different transaction</option>
+                                  <option value="Different client">Different client</option>
+                                  <option value="Different amount">Different amount</option>
+                                  <option value="Different date">Different date</option>
+                                  <option value="Different reference number">Different reference number</option>
+                                  <option value="Similar document number only">Similar document number only</option>
+                                  <option value="AI extraction error">AI extraction error</option>
+                                  <option value="Other">Other</option>
+                                </select>
+                              </>
+                            )}
+                          </div>
+                        </div>
+
+                        {manualReviewDecision === 'Mark as Duplicate' && (
+                          <div style={{ marginBottom: '16px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: 700, display: 'block', marginBottom: '6px', color: '#334155' }}>
+                              Duplicate Reason Option
+                            </label>
+                            <select 
+                              className="input-select" 
+                              value={duplicateReason} 
+                              onChange={(e) => setDuplicateReason(e.target.value)}
+                            >
+                              <option value="Same OR number">Same OR number</option>
+                              <option value="Same Invoice number">Same Invoice number</option>
+                              <option value="Same client and amount">Same client and amount</option>
+                              <option value="Same reference number">Same reference number</option>
+                              <option value="Same transaction details">Same transaction details</option>
+                              <option value="Re-uploaded document">Re-uploaded document</option>
+                              <option value="Previously recorded transaction">Previously recorded transaction</option>
+                              <option value="Other">Other</option>
+                            </select>
+                          </div>
+                        )}
+
+                        <div style={{ marginBottom: '16px' }}>
+                          <label style={{ fontSize: '12px', fontWeight: 700, display: 'block', marginBottom: '6px', color: '#334155' }}>
+                            Remarks / Audit Notes <span style={{ color: 'var(--err)' }}>*</span>
+                          </label>
+                          <textarea
+                            className="form-control"
+                            placeholder="Explain matches or safety checks (required for auditor compliance logs)..."
+                            style={{ width: '100%', minHeight: '80px', padding: '10px 12px', borderRadius: '8px', fontSize: '13px' }}
+                            value={manualNote}
+                            onChange={(e) => setManualNote(e.target.value)}
+                          />
+                        </div>
+
+                        {/* Note information box */}
+                        <div style={{ display: 'flex', gap: '10px', padding: '12px 14px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', marginBottom: '20px', alignItems: 'flex-start', fontSize: '12.5px', color: '#64748B' }}>
+                          <Info size={16} style={{ color: '#94A3B8', marginTop: '2px', flexShrink: 0 }} />
+                          <span>Note: Submitting this review records your validation inside the AI audit service database. It does not directly modify transaction data in the legacy FOMS MSSQL tables.</span>
+                        </div>
+                      </div>
+
+                      {/* Footer Buttons */}
+                      <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', borderTop: '1px solid #E2E8F0', paddingTop: '16px' }}>
+                        <button className="btn btn-outline" style={{ height: '36px', minWidth: '90px' }} onClick={() => setShowManualReviewPanel(false)}>
+                          Close
+                        </button>
+                        <button 
+                          className="btn btn-primary" 
+                          style={{ height: '36px', minWidth: '130px', backgroundColor: '#00A99D', borderColor: '#00A99D', color: '#FFFFFF', fontWeight: 700 }}
+                          onClick={handleManualSubmitReview}
+                          disabled={!manualNote.trim() || !canValidate}
+                        >
+                          Submit Review
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ==========================================
+            TAB 2: UNIQUE DOCUMENTS TABLE (FLOW 8)
+            ========================================== */}
+        {activeTab === 'unique-docs' && (
+          <div className="tab-pane fade-in">
+            <div className="card" style={{ padding: '24px', borderRadius: '16px', border: '1px solid var(--border)', boxShadow: 'var(--sh1)' }}>
+              <DataTable<UniqueDocument>
+                title="Unique Documents"
+                rowKey="id"
+                data={uniques}
+                selectable
+                exportable
+                columnToggle
+                densityToggle
+                searchPlaceholder="Search by ID, Doc #, Client..."
+                searchFields={['id', 'documentNumber', 'clientName', 'reviewedBy'] as (keyof UniqueDocument)[]}
+                filters={[
+                  {
+                    key: 'documentType',
+                    label: 'Document Type',
+                    options: [
+                      { label: 'Invoices', value: 'INVOICE' },
+                      { label: 'Official Receipts', value: 'OFFICIAL_RECEIPT' }
+                    ]
+                  }
+                ]}
+                columns={[
+                  { key: 'id', label: 'Record ID', sortable: true, width: '140px' },
+                  {
+                    key: 'documentType', label: 'Type', sortable: true, width: '180px',
+                    render: (row) => <>{row.documentType.replace(/_/g, ' ')}</>
+                  },
+                  { key: 'documentNumber', label: 'OR/Invoice Number', sortable: true, width: '200px' },
+                  { key: 'clientName', label: 'Client Name', sortable: true, width: '240px' },
+                  {
+                    key: 'amount', label: 'Amount', sortable: true, width: '140px', align: 'right',
+                    render: (row) => <>₱{parseFloat(row.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</>
+                  },
+                  { key: 'transactionDate', label: 'Transaction Date', sortable: true, width: '170px' },
+                  {
+                    key: 'source', label: 'Source', sortable: true, width: '120px',
+                    render: (row) => (
+                      <span style={{ backgroundColor: row.source === 'Scanned' ? 'var(--teal-bg)' : 'var(--s2)', color: row.source === 'Scanned' ? 'var(--teal-dark)' : 'var(--tp)', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 700 }}>
+                        {row.source}
+                      </span>
+                    )
+                  },
+                  {
+                    key: 'aiConfidence', label: 'AI Confidence', sortable: true, width: '150px',
+                    render: (row) => <>{row.aiConfidence}%</>
+                  },
+                  {
+                    key: 'reviewedBy', label: 'Reviewed By', sortable: true, width: '180px',
+                    render: (row) => (
+                      <div>
+                        <div>{row.reviewedBy}</div>
+                        <span style={{ fontSize: '10px', color: 'var(--tt)' }}>{row.reviewerRole}</span>
+                      </div>
+                    )
+                  },
+                  {
+                    key: 'reviewedDate', label: 'Reviewed Date', sortable: true, width: '160px',
+                    render: (row) => <>{new Date(row.reviewedDate).toLocaleDateString()}</>
+                  },
+                  {
+                    key: 'status', label: 'Status', sortable: true, width: '160px',
+                    render: (row) => <StatusBadge status="Cleared" />
+                  }
+                ]}
+                actions={[
+                  {
+                    label: 'View History',
+                    icon: 'history',
+                    onClick: (row) => {
+                      setSelectedRecordHistoryNum(row.documentNumber);
+                      setShowRecordHistoryModal(true);
+                    }
+                  },
+                  {
+                    label: 'Details',
+                    icon: 'info',
+                    onClick: (row) => {
+                      toast.info(`Reviewer Notes: "${row.reviewerNote}"`, `Review Details: ${row.reason}`);
+                    }
+                  },
+                  {
+                    label: 'Validate',
+                    icon: 'check-circle',
+                    onClick: () => {
+                      toast.success("Document transaction forwarded to FOMS validation pipeline.", "Pipeline Active");
+                    }
+                  }
+                ]}
+                emptyMessage="No unique documents found."
+                defaultPageSize={10}
               />
             </div>
           </div>
+        )}
 
-          <div className="filter-item">
-            <select 
-              className="input-select" 
-              value={statusFilter} 
-              onChange={(e) => setStatusFilter(e.target.value)}
-              aria-label="Filter by Status"
-            >
-              <option value="Pending Review">Pending Review</option>
-              <option value="Reviewed">Reviewed</option>
-              <option value="Dismissed">Dismissed</option>
-              <option value="">All Statuses</option>
-            </select>
-          </div>
-
-          <div className="filter-item">
-            <select 
-              className="input-select" 
-              value={typeFilter} 
-              onChange={(e) => setTypeFilter(e.target.value)}
-              aria-label="Filter by Type"
-            >
-              <option value="">All Types</option>
-              <option value="WAYBILL">Waybills</option>
-              <option value="INVOICE">Invoices</option>
-              <option value="OFFICIAL_RECEIPT">Receipts (OR)</option>
-              <option value="SPEEDPAY_REFERENCE">SpeedPay Refs</option>
-            </select>
-          </div>
-
-          <div className="filter-item">
-            <select
-              className="input-select"
-              value={minSimilarity}
-              onChange={(e) => setMinSimilarity(Number(e.target.value))}
-              aria-label="Filter by Similarity Score"
-            >
-              <option value="0">Min Confidence</option>
-              <option value="50">&gt; 50% Similarity</option>
-              <option value="80">&gt; 80% Similarity</option>
-              <option value="95">&gt; 95% Similarity</option>
-              <option value="98">&gt; 98% Similarity</option>
-            </select>
-          </div>
-
-          <button onClick={handleResetFilters} className="btn btn-secondary" style={{ height: '40px' }}>
-            <SlidersHorizontal size={14} />
-            <span>Reset</span>
-          </button>
-        </div>
-
-        {/* Registry Table */}
-        <div className="table-card">
-          <div className="table-header">
-            <h3 className="table-title">Suspected Duplicates Registry</h3>
-            <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 500 }}>
-              Showing {filteredAlerts.length} alert records
-            </span>
-          </div>
-
-          {loading ? (
-            <TableSkeleton columns={7} rows={6} />
-          ) : error ? (
-            <div className="state-container" style={{ padding: '60px 20px' }}>
-              <AlertOctagon size={48} color="var(--danger)" style={{ marginBottom: '16px' }} />
-              <p className="state-title">Error Loading Alerts</p>
-              <p className="state-desc">{error}</p>
+        {/* ==========================================
+            TAB 3: FLAGGED DUPLICATE DOCUMENTS TABLE (FLOW 10)
+            ========================================== */}
+        {activeTab === 'flagged-dups' && (
+          <div className="tab-pane fade-in">
+            <div className="card" style={{ padding: '24px', borderRadius: '16px', border: '1px solid var(--border)', boxShadow: 'var(--sh1)' }}>
+              <DataTable<FlaggedDuplicate>
+                title="Flagged Duplicate Documents"
+                rowKey="id"
+                data={duplicates}
+                selectable
+                exportable
+                columnToggle
+                densityToggle
+                searchPlaceholder="Search by ID, Doc #, Client..."
+                searchFields={['id', 'uploadedDocumentNumber', 'clientName', 'flaggedBy'] as (keyof FlaggedDuplicate)[]}
+                filters={[
+                  {
+                    key: 'documentType',
+                    label: 'Document Type',
+                    options: [
+                      { label: 'Invoices', value: 'INVOICE' },
+                      { label: 'Official Receipts', value: 'OFFICIAL_RECEIPT' }
+                    ]
+                  }
+                ]}
+                columns={[
+                  { key: 'id', label: 'Flag ID', sortable: true, width: '140px' },
+                  {
+                    key: 'documentType', label: 'Type', sortable: true, width: '180px',
+                    render: (row) => <>{row.documentType.replace(/_/g, ' ')}</>
+                  },
+                  { key: 'uploadedDocumentNumber', label: 'Uploaded Number', sortable: true, width: '190px' },
+                  {
+                    key: 'existingMatchedRecord', label: 'Existing Record', sortable: true, width: '180px',
+                    render: (row) => <code>{row.existingMatchedRecord}</code>
+                  },
+                  { key: 'clientName', label: 'Client Name', sortable: true, width: '240px' },
+                  {
+                    key: 'amount', label: 'Amount', sortable: true, width: '140px', align: 'right',
+                    render: (row) => <>₱{parseFloat(row.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</>
+                  },
+                  {
+                    key: 'similarityScore', label: 'Similarity', sortable: true, width: '140px',
+                    render: (row) => <span style={{ color: 'var(--err)', fontWeight: 700 }}>{row.similarityScore}%</span>
+                  },
+                  { key: 'duplicateReason', label: 'Duplicate Reason', sortable: true, width: '220px' },
+                  { key: 'handlingAction', label: 'Handling Action', sortable: true, width: '240px' },
+                  {
+                    key: 'flaggedBy', label: 'Flagged By', sortable: true, width: '180px',
+                    render: (row) => (
+                      <div>
+                        <div>{row.flaggedBy}</div>
+                        <span style={{ fontSize: '10px', color: 'var(--tt)' }}>{row.reviewerRole}</span>
+                      </div>
+                    )
+                  },
+                  {
+                    key: 'flaggedDate', label: 'Flagged Date', sortable: true, width: '160px',
+                    render: (row) => <>{new Date(row.flaggedDate).toLocaleDateString()}</>
+                  },
+                  {
+                    key: 'status', label: 'Status', sortable: true, width: '160px',
+                    render: (row) => <StatusBadge status="90+ Days" />
+                  }
+                ]}
+                actions={[
+                  {
+                    label: 'View History',
+                    icon: 'history',
+                    onClick: (row) => {
+                      setSelectedRecordHistoryNum(row.uploadedDocumentNumber);
+                      setShowRecordHistoryModal(true);
+                    }
+                  },
+                  {
+                    label: 'Details',
+                    icon: 'info',
+                    onClick: (row) => {
+                      toast.info(`Reviewer Notes: "${row.reviewerNote}"`, `Review Details: ${row.duplicateReason}`);
+                    }
+                  },
+                  {
+                    label: 'Open Record',
+                    icon: 'external-link',
+                    onClick: (row) => {
+                      toast.success(`Opening linked transaction ledger record ${row.existingMatchedRecord}...`, "FOMS Ledger Link");
+                    }
+                  }
+                ]}
+                emptyMessage="No flagged duplicates cataloged."
+                defaultPageSize={10}
+              />
             </div>
-          ) : filteredAlerts.length === 0 ? (
-            <div className="state-container" style={{ padding: '60px 20px' }}>
-              <Check size={48} style={{ color: 'var(--success)', marginBottom: '16px' }} />
-              <p className="state-title">No Duplicate Suspects Found</p>
-              <p className="state-desc">No evaluated records trigger duplicate alert conditions with the selected filters.</p>
-            </div>
-          ) : (
-            <>
-              <div className="data-table-wrapper">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Alert ID</th>
-                      <th>Alert Type</th>
-                      <th>Matched Field</th>
-                      <th className="num">Similarity</th>
-                      <th>Date Flagged</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {displayedAlerts.map((alert) => (
-                      <tr key={alert.id}>
-                        <td>#{alert.id}</td>
-                        <td>
-                          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{alert.alert_type}</span>
-                        </td>
-                        <td><code>{alert.matched_field}</code></td>
-                        <td className="num">
-                          <span style={{ 
-                            color: alert.similarity_score >= 98 ? 'var(--danger)' : 'var(--warning)',
-                            fontWeight: 700 
-                          }}>
-                            {alert.similarity_score}%
-                          </span>
-                        </td>
-                        <td>{new Date(alert.date_generated).toLocaleDateString()}</td>
-                        <td>
-                          <span className={`badge ${getStatusBadgeClass(alert.review_status)}`}>
-                            {alert.review_status}
-                          </span>
-                        </td>
-                        <td>
-                          <button 
-                            onClick={() => handleOpenReview(alert.id)}
-                            className="btn btn-secondary"
-                            style={{ padding: '0 12px', height: '32px', fontSize: '13px' }}
-                          >
-                            <Eye size={14} />
-                            <span>Compare</span>
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          </div>
+        )}
+
+        {/* ==========================================
+            TAB 4: REVIEW HISTORY LEDGER (FLOW 11)
+            ========================================== */}
+        {activeTab === 'history' && (
+          <div className="tab-pane fade-in">
+            {/* Immutable Ledger Banner */}
+            <div className="advisory-banner" style={{ backgroundColor: 'var(--ok-bg)', borderColor: 'var(--ok-r)', color: 'var(--tp)', marginBottom: '20px' }}>
+              <CheckCircle size={20} style={{ color: 'var(--ok)', flexShrink: 0 }} />
+              <div>
+                <span style={{ fontWeight: 700, textTransform: 'uppercase', fontSize: '11px', display: 'block', marginBottom: '4px', color: 'var(--ok)', letterSpacing: '0.05em' }}>
+                  Immutable Review Ledger
+                </span>
+                <p style={{ margin: 0, fontSize: '13px', color: 'var(--ts)' }}>
+                  All completed duplicate detection human review decisions cataloged in this ledger are write-locked and read-only.
+                </p>
               </div>
+            </div>
 
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="pagination">
-                  <div>
-                    Showing page {currentPage} of {totalPages} ({filteredAlerts.length} items)
-                  </div>
-                  <div className="pagination-buttons">
-                    <button 
-                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                      disabled={currentPage === 1}
-                      className="pagination-btn"
-                    >
-                      Prev
-                    </button>
-                    {Array.from({ length: totalPages }).map((_, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => setCurrentPage(idx + 1)}
-                        className={`pagination-btn ${currentPage === idx + 1 ? 'active' : ''}`}
-                      >
-                        {idx + 1}
-                      </button>
-                    ))}
-                    <button 
-                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                      disabled={currentPage === totalPages}
-                      className="pagination-btn"
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </div>
+            <div className="card" style={{ padding: '24px', borderRadius: '16px', border: '1px solid var(--border)', boxShadow: 'var(--sh1)' }}>
+              <DataTable<HistoryRecord>
+                title="Review History"
+                rowKey="id"
+                data={historyList}
+                selectable
+                exportable
+                columnToggle
+                densityToggle
+                searchPlaceholder="Search by ID, Doc #, Client..."
+                searchFields={['id', 'documentNumber', 'clientName', 'reviewer'] as (keyof HistoryRecord)[]}
+                filters={[
+                  {
+                    key: 'finalDecision',
+                    label: 'Decision',
+                    options: [
+                      { label: 'Marked as Unique', value: 'Marked as Unique' },
+                      { label: 'Marked as Duplicate', value: 'Marked as Duplicate' }
+                    ]
+                  }
+                ]}
+                columns={[
+                  { key: 'id', label: 'History ID', sortable: true, width: '140px' },
+                  {
+                    key: 'documentType', label: 'Type', sortable: true, width: '180px',
+                    render: (row) => <>{row.documentType.replace(/_/g, ' ')}</>
+                  },
+                  { key: 'documentNumber', label: 'Document Number', sortable: true, width: '190px' },
+                  { key: 'clientName', label: 'Client Name', sortable: true, width: '240px' },
+                  { key: 'aiResult', label: 'AI Result', sortable: true, width: '200px' },
+                  {
+                    key: 'finalDecision', label: 'Final Decision', sortable: true, width: '180px',
+                    render: (row) => (
+                      <span style={{
+                        backgroundColor: row.finalDecision === 'Marked as Duplicate' ? 'var(--err-bg)' : 'var(--ok-bg)',
+                        color: row.finalDecision === 'Marked as Duplicate' ? 'var(--err)' : 'var(--ok)',
+                        fontWeight: 700, padding: '3px 8px', borderRadius: '4px', fontSize: '11px'
+                      }}>
+                        {row.finalDecision}
+                      </span>
+                    )
+                  },
+                  {
+                    key: 'reviewer', label: 'Reviewer', sortable: true, width: '180px',
+                    render: (row) => (
+                      <div>
+                        <div>{row.reviewer}</div>
+                        <span style={{ fontSize: '10px', color: 'var(--tt)' }}>{row.reviewerRole}</span>
+                      </div>
+                    )
+                  },
+                  { key: 'decisionReason', label: 'Decision Reason', sortable: true, width: '220px' },
+                  { key: 'reviewerNote', label: 'Reviewer Note', sortable: false, width: '260px' },
+                  {
+                    key: 'reviewedDate', label: 'Reviewed Date', sortable: true, width: '180px',
+                    render: (row) => <>{new Date(row.reviewedDate).toLocaleString()}</>
+                  }
+                ]}
+                emptyMessage="No decisions have been verified yet."
+                defaultPageSize={10}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Review & Comparison Modal */}
-      {selectedAlert && (
-        <Modal
-          isOpen={!!selectedAlert}
-          onClose={handleCloseReview}
-          title={`Duplicate Record Comparison (Alert #${selectedAlert.id})`}
-          footerButtons={
-            <>
-              <button onClick={handleCloseReview} className="btn btn-secondary">
-                Close
-              </button>
-              {canSubmitReviews && selectedAlert.review_status === 'Pending Review' && (
-                <button 
-                  onClick={handleSubmitReview}
-                  disabled={modalLoading || !remarks.trim()} 
-                  className="btn btn-primary"
-                >
-                  {modalLoading ? 'Saving...' : 'Submit Review'}
-                </button>
-              )}
-            </>
-          }
-        >
-          <div className="advisory-banner warning" style={{ marginBottom: '16px' }}>
-            <ShieldAlert size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
-            <div>
-              <h4 style={{ fontWeight: 600, fontSize: '13px' }}>Matching Factors Confidence: {selectedAlert.similarity_score}%</h4>
-              <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>{selectedAlert.reason}</p>
-            </div>
+      {/* ==========================================
+          SCAN VIEWPORT DIALOG VIEW (FLOW 1)
+          ========================================== */}
+      {/* ==========================================
+          SCAN DOCUMENT CAMERA SIMULATOR MODAL
+          ========================================== */}
+      <Modal
+        isOpen={showCameraModal}
+        onClose={() => setShowCameraModal(false)}
+        title="Scan Document Console"
+        footerButtons={
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', width: '100%' }}>
+            <button className="btn btn-outline" onClick={() => setShowCameraModal(false)}>Close</button>
+            {cameraActive ? (
+              <button className="btn btn-primary" onClick={handleCaptureScan}>Capture Scan</button>
+            ) : (
+              <>
+                <button className="btn btn-outline" onClick={handleRetakeScan}>Retake</button>
+                <button className="btn btn-primary" onClick={handleConfirmScan}>Confirm Scan</button>
+              </>
+            )}
           </div>
-
-          <div className="comparison-grid" style={{ marginBottom: '20px' }}>
-            {/* Source Record Details */}
-            <div className="comparison-card">
-              <h4>Original Record details</h4>
-              {selectedAlert.matches?.[0]?.source_details ? (
-                Object.entries(selectedAlert.matches[0].source_details).map(([k, v]: any) => (
-                  <div className="comparison-row" key={k}>
-                    <span className="comparison-label">{k.replace(/_/g, ' ')}</span>
-                    <span className="comparison-value highlight">{String(v)}</span>
-                  </div>
-                ))
-              ) : (
-                <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>No original details found.</p>
-              )}
-            </div>
-
-            {/* Match Record Details */}
-            <div className="comparison-card">
-              <h4>Possible Matching record</h4>
-              {selectedAlert.matches?.[0]?.match_details ? (
-                Object.entries(selectedAlert.matches[0].match_details).map(([k, v]: any) => (
-                  <div className="comparison-row" key={k}>
-                    <span className="comparison-label">{k.replace(/_/g, ' ')}</span>
-                    <span className="comparison-value highlight">{String(v)}</span>
-                  </div>
-                ))
-              ) : (
-                <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>No match details found.</p>
-              )}
-            </div>
+        }
+      >
+        {cameraActive && (
+          <div style={{
+            position: 'relative', width: '100%', height: '300px',
+            background: '#0B0F19', borderRadius: '12px',
+            overflow: 'hidden', display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center', border: '2px solid var(--teal)'
+          }}>
+            <div style={{
+              position: 'absolute', inset: '24px', border: '2px dashed var(--teal)',
+              opacity: 0.6, pointerEvents: 'none', borderRadius: '8px'
+            }} />
+            <div style={{
+              position: 'absolute', width: '100%', height: '2px',
+              background: 'var(--teal)', top: '50%',
+              animation: 'scanLineAnim 2.5s ease-in-out infinite'
+            }} />
+            <Camera size={48} style={{ color: '#ffffff', opacity: 0.8 }} />
+            <span style={{ fontSize: '13px', color: '#ffffff', marginTop: '10px', opacity: 0.8 }}>Live Viewport Camera</span>
           </div>
+        )}
 
-          {/* Action Form */}
-          {canSubmitReviews && selectedAlert.review_status === 'Pending Review' ? (
-            <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '20px' }}>
-              <h4 style={{ fontSize: '14px', fontWeight: 700, marginBottom: '12px', color: 'var(--text-primary)' }}>
-                Log Human Validation Action
-              </h4>
-              
-              <div className="grid-2">
-                <div className="form-group">
-                  <label htmlFor="review-decision">Review Decision</label>
-                  <select 
-                    id="review-decision"
-                    className="input-select" 
-                    value={decision}
-                    onChange={(e) => setDecision(e.target.value)}
-                  >
-                    <option value="Reviewed">Reviewed & Confirmed Duplicate</option>
-                    <option value="Dismissed">Dismiss & Mark Safe</option>
-                  </select>
-                </div>
+        {!cameraActive && capturedImage && (
+          <div style={{ textAlign: 'center', background: 'var(--s1)', padding: '12px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+            <img 
+              src={capturedImage} 
+              alt="Captured Document" 
+              style={{ maxHeight: '280px', maxWidth: '100%', objectFit: 'contain', borderRadius: '8px', border: '1px solid var(--border)' }}
+            />
+          </div>
+        )}
+      </Modal>
 
-                <div className="form-group">
-                  <label htmlFor="recommended-action">Recommended Legacy Action</label>
-                  <select 
-                    id="recommended-action"
-                    className="input-select" 
-                    value={recommendedAction}
-                    onChange={(e) => setRecommendedAction(e.target.value)}
-                  >
-                    <option value="ProceedWithManualValidation">Require manual verification in FOMS</option>
-                    <option value="CancelDuplicateSubmission">Request cancellation of transaction</option>
-                    <option value="DismissAlert">Dismiss alert (safe to ignore)</option>
-                  </select>
-                </div>
-              </div>
+      {/* ==========================================
+          CONFIRM UNIQUE DOCUMENT MODAL (FLOW 7)
+          ========================================== */}
+      <Modal
+        isOpen={showUniqueConfirmModal}
+        onClose={() => setShowUniqueConfirmModal(false)}
+        title="Confirm Unique Document"
+        footerButtons={
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', width: '100%' }}>
+            <button className="btn btn-outline" onClick={() => setShowUniqueConfirmModal(false)}>Cancel</button>
+            <button className="btn btn-secondary animate-hover" onClick={submitConfirmUnique} disabled={!uniqueNote.trim()}>
+              Confirm Unique
+            </button>
+          </div>
+        }
+      >
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{ fontSize: '12px', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
+            Reason the document is unique <span style={{ color: 'var(--err)' }}>*</span>
+          </label>
+          <select className="input-select" value={uniqueReason} onChange={(e) => setUniqueReason(e.target.value)}>
+            <option value="Different transaction">Different transaction</option>
+            <option value="Different client">Different client</option>
+            <option value="Different amount">Different amount</option>
+            <option value="Different date">Different date</option>
+            <option value="Different reference number">Different reference number</option>
+            <option value="Similar document number only">Similar document number only</option>
+            <option value="AI extraction error">AI extraction error</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
 
-              <div className="form-group">
-                <label htmlFor="remarks">Remarks / Audit Notes <span className="required">*</span></label>
-                <textarea 
-                  id="remarks"
-                  className="textarea-field"
-                  placeholder="Explain matches or safety checks (required for auditor compliance logs)..."
-                  value={remarks}
-                  onChange={(e) => setRemarks(e.target.value)}
-                  required
-                />
-              </div>
-              
-              <div className="advisory-banner" style={{ marginTop: '16px', backgroundColor: 'var(--surface-soft)', borderColor: 'var(--border)' }}>
-                <ShieldAlert size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-                <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
-                  Note: Submitting this review records your validation inside the AI audit service database. It does not directly modify transaction data in the legacy FOMS MSSQL tables.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: '16px', color: 'var(--text-secondary)', fontSize: '13px' }}>
-              {selectedAlert.review_status !== 'Pending Review' ? (
-                <p style={{ margin: 0, fontWeight: 500, color: 'var(--success)' }}>
-                  ✓ This duplicate alert has been finalized by an authorized user with status: <strong>{selectedAlert.review_status}</strong>.
-                </p>
-              ) : (
-                <p style={{ margin: 0, color: 'var(--danger)' }}>
-                  ⚠ Your authenticated role ({user?.role}) does not have permissions to submit human reviews for duplicates.
-                </p>
-              )}
-            </div>
-          )}
-        </Modal>
-      )}
-
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="toast-container">
-          <Toast 
-            message={toastMessage} 
-            type={toastType} 
-            onClose={() => setToastMessage(null)} 
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ fontSize: '12px', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
+            Reviewer Note <span style={{ color: 'var(--err)' }}>*</span>
+          </label>
+          <textarea
+            className="form-control"
+            placeholder="Write reviewer remarks to justify clearance..."
+            style={{ width: '100%', minHeight: '80px', padding: '10px 12px', borderRadius: '8px', fontSize: '13.5px' }}
+            value={uniqueNote}
+            onChange={(e) => setUniqueNote(e.target.value)}
           />
         </div>
-      )}
+      </Modal>
+
+      {/* ==========================================
+          CONFIRM DUPLICATE DOCUMENT MODAL (FLOW 9)
+          ========================================== */}
+      <Modal
+        isOpen={showDuplicateConfirmModal}
+        onClose={() => setShowDuplicateConfirmModal(false)}
+        title="Confirm Duplicate Document"
+        footerButtons={
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', width: '100%' }}>
+            <button className="btn btn-outline" onClick={() => setShowDuplicateConfirmModal(false)}>Cancel</button>
+            <button className="btn btn-primary animate-hover" onClick={submitConfirmDuplicate} disabled={!duplicateNote.trim()}>
+              Confirm Duplicate
+            </button>
+          </div>
+        }
+      >
+        <div style={{ marginBottom: '14px' }}>
+          <label style={{ fontSize: '12px', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
+            Duplicate Reason <span style={{ color: 'var(--err)' }}>*</span>
+          </label>
+          <select className="input-select" value={duplicateReason} onChange={(e) => setDuplicateReason(e.target.value)}>
+            <option value="Same OR number">Same OR number</option>
+            <option value="Same Invoice number">Same Invoice number</option>
+            <option value="Same client and amount">Same client and amount</option>
+            <option value="Same reference number">Same reference number</option>
+            <option value="Same transaction details">Same transaction details</option>
+            <option value="Re-uploaded document">Re-uploaded document</option>
+            <option value="Previously recorded transaction">Previously recorded transaction</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+
+        <div style={{ marginBottom: '14px' }}>
+          <label style={{ fontSize: '12px', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
+            Handling Action <span style={{ color: 'var(--err)' }}>*</span>
+          </label>
+          <select className="input-select" value={duplicateHandling} onChange={(e) => setDuplicateHandling(e.target.value)}>
+            <option value="Flag and Block New Submission">Flag and Block New Submission</option>
+            <option value="Link to Existing Record">Link to Existing Record</option>
+            <option value="Return for Correction">Return for Correction</option>
+            <option value="Keep for Investigation">Keep for Investigation</option>
+          </select>
+        </div>
+
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ fontSize: '12px', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
+            Reviewer Note <span style={{ color: 'var(--err)' }}>*</span>
+          </label>
+          <textarea
+            className="form-control"
+            placeholder="Log notes about double submission validation..."
+            style={{ width: '100%', minHeight: '80px', padding: '10px 12px', borderRadius: '8px', fontSize: '13.5px' }}
+            value={duplicateNote}
+            onChange={(e) => setDuplicateNote(e.target.value)}
+          />
+        </div>
+      </Modal>
+
+      {/* ==========================================
+          RECORD ACTION HISTORY TIMELINE MODAL
+          ========================================== */}
+      {/* ==========================================
+          RECORD ACTION HISTORY TIMELINE MODAL
+          ========================================== */}
+      <Modal
+        isOpen={showRecordHistoryModal}
+        onClose={() => setShowRecordHistoryModal(false)}
+        title={`Document History & Review Actions — ${selectedRecordHistoryNum}`}
+        footerButtons={
+          <button className="btn btn-outline" style={{ height: '36px' }} onClick={() => setShowRecordHistoryModal(false)}>
+            Close History
+          </button>
+        }
+      >
+        {/* Chronological Action Timeline */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {historyList.filter(h => h.documentNumber === selectedRecordHistoryNum || h.target_id === selectedRecordHistoryNum).length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '24px', color: '#64748B', fontStyle: 'italic', fontSize: '13px' }}>
+              No recorded action history entries logged for this document number.
+            </div>
+          ) : (
+            historyList
+              .filter(h => h.documentNumber === selectedRecordHistoryNum || h.target_id === selectedRecordHistoryNum)
+              .map((h, i) => (
+                <div key={h.id || i} style={{ display: 'flex', gap: '12px', borderLeft: '2px solid #E2E8F0', paddingLeft: '16px', marginLeft: '6px', position: 'relative' }}>
+                  <div style={{
+                    position: 'absolute', left: '-6px', top: '2px', width: '10px', height: '10px',
+                    borderRadius: '50%', background: h.finalDecision === 'Marked as Duplicate' ? '#EF4444' : '#0D9488'
+                  }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 700, color: '#334155' }}>{h.finalDecision}</span>
+                      <span style={{ fontSize: '11px', color: '#94A3B8' }}>{new Date(h.reviewedDate || h.review_date || '').toLocaleString()}</span>
+                    </div>
+                    <div style={{ fontSize: '12.5px', color: '#475569', marginBottom: '4px' }}>
+                      <strong>Reviewer:</strong> {h.reviewer} ({h.reviewerRole})
+                    </div>
+                    <div style={{ fontSize: '12.5px', color: '#475569', marginBottom: '4px' }}>
+                      <strong>Decision Reason:</strong> {h.decisionReason}
+                    </div>
+                    <div style={{ fontSize: '12.5px', background: '#F8FAFC', padding: '8px 10px', borderRadius: '6px', border: '1px solid #F1F5F9', color: '#64748B', fontStyle: 'italic' }}>
+                      "{h.reviewerNote || h.remarks || 'No notes logged.'}"
+                    </div>
+                  </div>
+                </div>
+              ))
+          )}
+        </div>
+      </Modal>
+
+      {/* Styled Scanner Animation frames */}
+      <style>{`
+        @keyframes scanLineAnim {
+          0% { top: 0%; }
+          50% { top: 100%; }
+          100% { top: 0%; }
+        }
+      `}</style>
     </div>
   );
 };
