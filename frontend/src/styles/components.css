@@ -249,6 +249,61 @@
   color: var(--sidebar-text);
 }
 
+/* ==========================================================================
+   Print Stylesheet — Hide UI noise during browser print (Ctrl+P)
+   ========================================================================== */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  /* Hide app navigation chrome and non-printable elements */
+  .ai-sidebar,
+  .sidebar,
+  .ai-header,
+  .global-header,
+  .global-footer,
+  .decision-support-notice,
+  .btn,
+  button,
+  select,
+  input,
+  .page-header-actions {
+    display: none !important;
+  }
+
+  /* Reset layout containers for full page printing */
+  .main-content,
+  .page-container,
+  .dashboard-layout {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+
+  .card {
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    background: transparent !important;
+  }
+
+  .data-table-wrapper {
+    overflow: visible !important;
+  }
+
+  .data-table th {
+    background-color: #00A99D !important;
+    color: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+
+
 /* Badges */
 .badge {
   display: inline-flex;

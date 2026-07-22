@@ -7,36 +7,60 @@ export const Unauthorized: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const handleBackToLogin = () => {
+  const handleReturn = () => {
+    navigate('/ai/dashboard');
+  };
+
+  const handleSwitchAccount = () => {
     logout();
     navigate('/login');
   };
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', width: '100vw', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--surface-soft)' }}>
-      <div className="card fade-in" style={{ width: '100%', maxWidth: '440px', padding: '40px', textAlign: 'center', border: '1px solid var(--border)', boxShadow: 'var(--shadow-soft)' }}>
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
-          <div style={{ backgroundColor: 'var(--danger-bg)', padding: '16px', borderRadius: '50%', color: 'var(--danger)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <ShieldAlert size={36} />
-          </div>
-        </div>
-        
-        <h2 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '8px' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', width: '100vw', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--s1, #F7F9FF)' }}>
+      <div className="card fade-in" style={{ width: '100%', maxWidth: '480px', padding: '40px', textAlign: 'center', border: '1px solid var(--border, #DDE2EB)', borderRadius: 'var(--r-md, 12px)', boxShadow: 'var(--sh2)' }}>
+        <h1 style={{ fontSize: '72px', fontWeight: 800, color: 'var(--teal, #00A99D)', margin: '0 0 8px', letterSpacing: '-0.02em', fontFamily: 'var(--fh)' }}>
+          403
+        </h1>
+        <p style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--tt, #6B7280)', margin: '0 0 16px' }}>
           Access Restricted
-        </h2>
-        
-        <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '28px' }}>
-          Your current authenticated workspace role <strong>({user?.role || 'Guest'})</strong> does not have authorization to view this financial intelligence workspace.
         </p>
 
-        <button 
-          onClick={handleBackToLogin}
-          className="btn btn-secondary"
-          style={{ width: '100%', height: '42px', fontSize: '14px' }}
-        >
-          <ArrowLeft size={16} />
-          <span>Return to Authentication Screen</span>
-        </button>
+        <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--tp, #0F172A)', margin: '0 0 12px', fontFamily: 'var(--fh)' }}>
+          You do not have permission to view this.
+        </h2>
+
+        <p style={{ fontSize: '14px', color: 'var(--ts, #374151)', lineHeight: 1.5, margin: '0 0 28px' }}>
+          Your current role ({user?.role || 'Guest'}) does not include access to this section. Contact your system administrator if you believe this is an error.
+        </p>
+
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+          <button
+            onClick={handleReturn}
+            className="btn btn-outline"
+            style={{ height: '40px', fontSize: '13px', padding: '0 18px' }}
+          >
+            <ArrowLeft size={16} />
+            <span>Return to Dashboard</span>
+          </button>
+
+          <button
+            onClick={handleSwitchAccount}
+            style={{
+              height: '40px',
+              fontSize: '13px',
+              padding: '0 18px',
+              background: 'var(--teal, #00A99D)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 'var(--r-sm, 8px)',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Log In as Different Role
+          </button>
+        </div>
       </div>
     </div>
   );

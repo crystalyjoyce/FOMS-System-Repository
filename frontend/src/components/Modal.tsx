@@ -54,30 +54,34 @@ export const Modal: React.FC<ModalProps> = ({
       aria-labelledby="modal-title"
     >
       <div 
-        className="modal-content" 
+        className="modal-card" 
         ref={modalRef} 
         tabIndex={-1} 
         style={{ outline: 'none' }}
       >
-        <div className="modal-header">
-          <h3 id="modal-title">{title}</h3>
+        <div className="modal-hd">
+          <h3 id="modal-title" className="modal-hd-title">{title}</h3>
           <button 
             onClick={onClose} 
-            className="close-btn" 
+            className="modal-x-btn" 
             aria-label="Close modal"
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
+        <div className="modal-hd-divider" />
         
-        <div className="modal-body">
+        <div className="modal-bd">
           {children}
         </div>
 
         {footerButtons && (
-          <div className="modal-footer">
-            {footerButtons}
-          </div>
+          <>
+            <div className="modal-ft-divider" />
+            <div className="modal-ft">
+              {footerButtons}
+            </div>
+          </>
         )}
       </div>
     </div>

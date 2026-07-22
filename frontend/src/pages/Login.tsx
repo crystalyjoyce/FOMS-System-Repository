@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Lock, User } from 'lucide-react';
+import { Lock, User, KeyRound, Sparkles, ShieldCheck, HelpCircle, RefreshCw } from 'lucide-react';
 
 export const Login: React.FC = () => {
   const { login } = useAuth();
@@ -21,7 +21,6 @@ export const Login: React.FC = () => {
     "Client"
   ];
 
-  // Helper to map selected role to its Employee ID for simulation autofill
   const handleRoleChange = (role: string) => {
     setSelectedRole(role);
     setPassword('Password@123');
@@ -65,19 +64,25 @@ export const Login: React.FC = () => {
         navigate('/ai/dashboard');
       }
     } catch (e) {
-      setError("Authentication failed. Please verify connection to database.");
+      setError("Authentication failed. Please verify database connection.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="login-split-container" style={{ display: 'flex', minHeight: '100vh', width: '100vw', backgroundColor: '#ffffff', fontFamily: 'Inter, system-ui, sans-serif' }}>
+    <div className="login-split-container" style={{ 
+      display: 'flex', 
+      minHeight: '100vh', 
+      width: '100vw', 
+      backgroundColor: '#f8fafc', 
+      fontFamily: '"Outfit", "Segoe UI", "Roboto", sans-serif' 
+    }}>
       
       {/* Left Panel - Deep Navy Blue branding backdrop */}
       <div className="login-left-panel" style={{ 
-        flex: 1, 
-        backgroundColor: '#0b0f19', 
+        flex: 1.1, 
+        background: 'linear-gradient(145deg, #0b0f19 0%, #1e293b 100%)', 
         color: '#ffffff', 
         display: 'flex', 
         flexDirection: 'column', 
@@ -86,90 +91,116 @@ export const Login: React.FC = () => {
         position: 'relative',
         boxSizing: 'border-box'
       }}>
-        {/* Speedex Logo - Matches white italic text and red subtitle */}
+        {/* Decorative glass container overlay */}
+        <div style={{
+          position: 'absolute',
+          top: '-15%',
+          left: '-15%',
+          width: '400px',
+          height: '400px',
+          borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(0, 169, 157, 0.08) 0%, rgba(0,0,0,0) 70%)',
+          pointerEvents: 'none'
+        }} />
+
+        {/* Speedex Logo */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginBottom: '60px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '32px', fontWeight: 900, color: '#ffffff', letterSpacing: '0.06em', fontStyle: 'italic', fontFamily: '"Arial Black", Gadget, sans-serif' }}>
-              30 SPEEDEX
-            </span>
-          </div>
-          <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--logo-red)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-            COURIER & FORWARDER, INC.
-          </span>
+          <img 
+            src="/logo.png" 
+            alt="30 Speedex Courier & Forwarder, Inc." 
+            style={{ 
+              height: '46px', 
+              width: 'auto',
+              objectFit: 'contain',
+              alignSelf: 'flex-start'
+            }} 
+          />
         </div>
 
         {/* Title */}
-        <h2 style={{ 
-          fontSize: '18px', 
-          fontWeight: 700, 
-          letterSpacing: '0.04em', 
-          textTransform: 'uppercase', 
-          color: 'rgba(255,255,255,0.9)', 
-          marginBottom: '40px', 
-          borderBottom: '1px solid rgba(255,255,255,0.1)', 
-          paddingBottom: '20px',
-          margin: 0
-        }}>
-          FINANCE OPERATIONS MANAGEMENT SYSTEM
-        </h2>
+        <div style={{ marginBottom: '48px' }}>
+          <h2 style={{ 
+            fontSize: '20px', 
+            fontWeight: 800, 
+            letterSpacing: '0.04em', 
+            textTransform: 'uppercase', 
+            color: 'rgba(255,255,255,0.95)', 
+            marginBottom: '12px', 
+            fontFamily: '"Outfit", sans-serif'
+          }}>
+            FINANCE OPERATIONS MANAGEMENT SYSTEM
+          </h2>
+          <div style={{ width: '48px', height: '4px', background: 'var(--teal)', borderRadius: '2px' }} />
+        </div>
 
         {/* Steps timeline list */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
-          <div style={{ display: 'flex', gap: '20px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '32px', position: 'relative', zIndex: 2 }}>
+          <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
             <div style={{ 
-              width: '32px', 
-              height: '32px', 
-              borderRadius: '50%', 
-              backgroundColor: 'rgba(255,255,255,0.06)', 
+              width: '38px', 
+              height: '38px', 
+              borderRadius: '12px', 
+              backgroundColor: 'rgba(0, 169, 157, 0.1)', 
               display: 'flex', 
               alignItems: 'center', 
               justifyContent: 'center', 
-              fontSize: '14px', 
+              fontSize: '15px', 
               fontWeight: 700, 
-              border: '1px solid rgba(255,255,255,0.2)',
+              border: '1px solid rgba(0, 169, 157, 0.3)',
+              color: 'var(--teal)',
               flexShrink: 0
             }}>1</div>
             <div>
-              <h4 style={{ fontSize: '15px', fontWeight: 600, margin: '0 0 4px 0' }}>Enter Credentials</h4>
-              <p style={{ fontSize: '13px', color: '#a0aec0', margin: 0 }}>Use your assigned Employee ID and password to access FOMS.</p>
+              <h4 style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 6px 0', color: '#ffffff' }}>Enter Credentials</h4>
+              <p style={{ fontSize: '13.5px', color: '#cbd5e1', margin: 0, lineHeight: 1.4 }}>
+                Use your assigned Employee ID and password to access the secure portal.
+              </p>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '20px' }}>
+
+          <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
             <div style={{ 
-              width: '32px', 
-              height: '32px', 
-              borderRadius: '50%', 
-              backgroundColor: 'rgba(255,255,255,0.06)', 
+              width: '38px', 
+              height: '38px', 
+              borderRadius: '12px', 
+              backgroundColor: 'rgba(0, 169, 157, 0.1)', 
               display: 'flex', 
               alignItems: 'center', 
               justifyContent: 'center', 
-              fontSize: '14px', 
+              fontSize: '15px', 
               fontWeight: 700, 
-              border: '1px solid rgba(255,255,255,0.2)',
+              border: '1px solid rgba(0, 169, 157, 0.3)',
+              color: 'var(--teal)',
               flexShrink: 0
             }}>2</div>
             <div>
-              <h4 style={{ fontSize: '15px', fontWeight: 600, margin: '0 0 4px 0' }}>Manage Receivables</h4>
-              <p style={{ fontSize: '13px', color: '#a0aec0', margin: 0 }}>Create invoices, record payments, and monitor outstanding balances in real-time.</p>
+              <h4 style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 6px 0', color: '#ffffff' }}>Manage Receivables</h4>
+              <p style={{ fontSize: '13.5px', color: '#cbd5e1', margin: 0, lineHeight: 1.4 }}>
+                Create invoices, track customer accounts, and monitor outstanding balances.
+              </p>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '20px' }}>
+
+          <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
             <div style={{ 
-              width: '32px', 
-              height: '32px', 
-              borderRadius: '50%', 
-              backgroundColor: 'rgba(255,255,255,0.06)', 
+              width: '38px', 
+              height: '38px', 
+              borderRadius: '12px', 
+              backgroundColor: 'rgba(0, 169, 157, 0.1)', 
               display: 'flex', 
               alignItems: 'center', 
               justifyContent: 'center', 
-              fontSize: '14px', 
+              fontSize: '15px', 
               fontWeight: 700, 
-              border: '1px solid rgba(255,255,255,0.2)',
+              border: '1px solid rgba(0, 169, 157, 0.3)',
+              color: 'var(--teal)',
               flexShrink: 0
             }}>3</div>
             <div>
-              <h4 style={{ fontSize: '15px', fontWeight: 600, margin: '0 0 4px 0' }}>Track Collections</h4>
-              <p style={{ fontSize: '13px', color: '#a0aec0', margin: 0 }}>View aging reports and analytics to streamline collection workflows.</p>
+              <h4 style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 6px 0', color: '#ffffff' }}>Track Collections</h4>
+              <p style={{ fontSize: '13.5px', color: '#cbd5e1', margin: 0, lineHeight: 1.4 }}>
+                Review real-time collection aging analytics, duplicates, and AI predictions.
+              </p>
             </div>
           </div>
         </div>
@@ -181,72 +212,87 @@ export const Login: React.FC = () => {
         display: 'flex', 
         alignItems: 'center', 
         justifyContent: 'center', 
-        backgroundColor: '#f0f4f8', 
+        backgroundColor: '#f1f5f9', 
         padding: '40px',
         boxSizing: 'border-box'
       }}>
         <div className="card fade-in" style={{ 
           width: '100%', 
-          maxWidth: '460px', 
-          padding: '40px', 
+          maxWidth: '480px', 
+          padding: '44px 40px', 
           backgroundColor: '#ffffff', 
-          borderRadius: '16px', 
-          boxShadow: '0 10px 30px rgba(0,0,0,0.04)', 
-          border: '1px solid var(--border-soft)',
+          borderRadius: '20px', 
+          boxShadow: '0 15px 35px rgba(15, 23, 42, 0.06)', 
+          border: '1px solid var(--border)',
           boxSizing: 'border-box'
         }}>
           
           {/* Secure Access tag */}
-          <span style={{ fontSize: '10px', fontWeight: 800, color: 'var(--primary)', letterSpacing: '0.1em', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>
-            SECURE ACCESS
-          </span>
-          <h2 style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 8px 0', lineHeight: 1.3 }}>
-            Login to Finance Operations Management System (FOMS)
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'var(--teal-bg)', padding: '4px 10px', borderRadius: '20px', marginBottom: '14px' }}>
+            <ShieldCheck size={13} style={{ color: 'var(--teal)' }} />
+            <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--teal-dark)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+              Secure Access Portal
+            </span>
+          </div>
+
+          <h2 style={{ fontSize: '24px', fontWeight: 800, color: 'var(--tp)', margin: '0 0 8px 0', lineHeight: 1.25, fontFamily: '"Outfit", sans-serif' }}>
+            Login to FOMS
           </h2>
-          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 24px 0' }}>
-            Enter your credentials below to continue.
+          <p style={{ fontSize: '14px', color: 'var(--ts)', margin: '0 0 28px 0' }}>
+            Enter your employee credentials below to connect to Speedex operations.
           </p>
 
           {error && (
-            <div className="badge badge-rejected" style={{ width: '100%', padding: '10px 14px', marginBottom: '20px', borderRadius: '8px', display: 'block', fontSize: '13px', boxSizing: 'border-box' }}>
-              {error}
+            <div className="advisory-banner danger" style={{ padding: '12px 16px', marginBottom: '24px', borderRadius: '10px', fontSize: '13.5px', boxSizing: 'border-box' }}>
+              <strong>Error:</strong> {error}
             </div>
           )}
 
           <form onSubmit={handleLogin}>
             {/* Employee ID */}
-            <div className="form-group" style={{ marginBottom: '16px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+            <div className="form-group" style={{ marginBottom: '18px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--tt)', display: 'block', marginBottom: '8px' }}>
                 EMPLOYEE ID
               </label>
               <div style={{ position: 'relative' }}>
-                <User size={16} style={{ position: 'absolute', left: '14px', top: '13px', color: 'var(--text-muted)' }} />
+                <User size={16} style={{ position: 'absolute', left: '14px', top: '13px', color: 'var(--ts)' }} />
                 <input 
                   type="text" 
                   className="form-control"
-                  style={{ paddingLeft: '40px', height: '42px', borderRadius: '8px', fontSize: '14px' }}
+                  style={{ 
+                    paddingLeft: '42px', 
+                    height: '42px', 
+                    borderRadius: '8px', 
+                    fontSize: '14px', 
+                    fontFamily: 'var(--fb)', 
+                    border: '1px solid var(--border)' 
+                  }}
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="EMP-001"
                   required
                 />
               </div>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginTop: '6px' }}>
-                Try: EMP-001 to EMP-005, Password: Password@123
-              </span>
             </div>
 
             {/* Password */}
             <div className="form-group" style={{ marginBottom: '20px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--tt)', display: 'block', marginBottom: '8px' }}>
                 PASSWORD
               </label>
               <div style={{ position: 'relative' }}>
-                <Lock size={16} style={{ position: 'absolute', left: '14px', top: '13px', color: 'var(--text-muted)' }} />
+                <Lock size={16} style={{ position: 'absolute', left: '14px', top: '13px', color: 'var(--ts)' }} />
                 <input 
                   type="password" 
                   className="form-control"
-                  style={{ paddingLeft: '40px', height: '42px', borderRadius: '8px', fontSize: '14px' }}
+                  style={{ 
+                    paddingLeft: '42px', 
+                    height: '42px', 
+                    borderRadius: '8px', 
+                    fontSize: '14px', 
+                    fontFamily: 'var(--fb)', 
+                    border: '1px solid var(--border)' 
+                  }}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
@@ -255,66 +301,36 @@ export const Login: React.FC = () => {
               </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', fontSize: '13px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)', cursor: 'pointer' }}>
-                <input type="checkbox" defaultChecked style={{ accentColor: 'var(--primary)' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '26px', fontSize: '13.5px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--ts)', cursor: 'pointer', fontWeight: 500 }}>
+                <input type="checkbox" defaultChecked style={{ accentColor: 'var(--teal)' }} />
                 Remember me
               </label>
-              <a href="#forgot" style={{ color: 'var(--primary)', textDecoration: 'none', fontWeight: 600 }}>Forgot password?</a>
+              <a href="#forgot" style={{ color: 'var(--teal)', textDecoration: 'none', fontWeight: 700 }}>Forgot password?</a>
             </div>
 
             {/* Submit Button */}
             <button 
               type="submit"
               disabled={loading}
-              className="btn"
+              className="btn btn-primary"
               style={{ 
                 width: '100%', 
-                height: '44px', 
-                backgroundColor: '#1d2331', 
-                color: '#ffffff', 
-                fontSize: '13px', 
+                height: '46px', 
+                fontSize: '14px', 
                 fontWeight: 700, 
                 borderRadius: '8px', 
-                border: 'none', 
                 letterSpacing: '0.04em',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
               }}
             >
-              {loading ? 'AUTHENTICATING...' : 'LOG IN'}
+              {loading ? <RefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <KeyRound size={16} />}
+              <span>{loading ? 'AUTHENTICATING...' : 'LOG IN TO SYSTEM'}</span>
             </button>
-
-            {/* Role select grid for simulation clearances */}
-            <div style={{ marginTop: '24px', borderTop: '1px solid var(--border-soft)', paddingTop: '16px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>
-                Simulation Helper (Autofill role credentials)
-              </label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
-                {roles.map(role => (
-                  <button
-                    key={role}
-                    type="button"
-                    style={{
-                      padding: '8px 10px',
-                      fontSize: '11px',
-                      backgroundColor: selectedRole === role ? 'var(--primary-light)' : 'var(--surface-soft)',
-                      border: `1px solid ${selectedRole === role ? 'var(--primary)' : 'var(--border-soft)'}`,
-                      color: selectedRole === role ? 'var(--primary-dark)' : 'var(--text-secondary)',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center'
-                    }}
-                    onClick={() => handleRoleChange(role)}
-                  >
-                    <span>{role.replace('Assistant of Financial Manager', 'Asst. FM')}</span>
-                    {selectedRole === role && <span style={{ color: 'var(--primary)', fontSize: '8px' }}>●</span>}
-                  </button>
-                ))}
-              </div>
-            </div>
           </form>
         </div>
       </div>
