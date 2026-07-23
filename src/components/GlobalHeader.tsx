@@ -12,7 +12,7 @@ import {
   ChevronRight,
   Sparkles,
   MoreVertical,
-  Clock
+  Calendar
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -34,29 +34,14 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = () => {
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [bellAnimating, setBellAnimating] = useState(false);
-  const [currentDateTime, setCurrentDateTime] = useState<string>('');
 
-  useEffect(() => {
-    const updateDateTime = () => {
-      const now = new Date();
-      const datePart = now.toLocaleDateString('en-US', {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric'
-      });
-      const timePart = now.toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: true
-      });
-      setCurrentDateTime(`${datePart} • ${timePart}`);
-    };
-
-    updateDateTime();
-    const interval = setInterval(updateDateTime, 1000);
-    return () => clearInterval(interval);
+  const currentDate = useMemo(() => {
+    return new Date().toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
   }, []);
 
   const notificationRef = useRef<HTMLDivElement>(null);
@@ -144,7 +129,7 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = () => {
         
         {/* Right Side: Interactive Controls */}
         <div className="header-controls">
-          {/* DateTime Pill */}
+          {/* Date Pill */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -158,8 +143,8 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = () => {
             fontWeight: 500,
             whiteSpace: 'nowrap'
           }}>
-            <Clock size={15} style={{ color: '#0EA5E9' }} strokeWidth={2.5} />
-            <span>{currentDateTime}</span>
+            <Calendar size={15} style={{ color: '#0EA5E9' }} strokeWidth={2.5} />
+            <span>{currentDate}</span>
           </div>
 
           {/* Notification Button & Dropdown */}

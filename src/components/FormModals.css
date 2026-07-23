@@ -44,7 +44,7 @@
 
 /* Label — ALL CAPS, tight tracking, small */
 .tf-label {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.6px;
@@ -77,7 +77,7 @@
 .tf-input {
   width: 100%;
   padding: 10px 36px 10px 14px;
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 13.5px;
   color: var(--tp, #0F172A);
   background: transparent;
@@ -106,7 +106,7 @@
 
 /* Hint message */
 .tf-hint {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 11.5px;
   font-weight: 500;
   display: flex;
@@ -129,7 +129,7 @@
 
 /* Word counter badge */
 .tf-word-count {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 11px;
   font-weight: 600;
   color: var(--tm, #9CA3AF);
@@ -217,7 +217,7 @@
 .tf-select {
   width: 100%;
   padding: 10px 36px 10px 14px;
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 13.5px;
   color: var(--tp, #0F172A);
   background: transparent;
@@ -246,7 +246,7 @@
 .tf-textarea {
   width: 100%;
   padding: 11px 14px;
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 13.5px;
   color: var(--tp, #0F172A);
   background: transparent;
@@ -303,7 +303,7 @@
   box-shadow: 0 8px 28px rgba(15,23,42,.12);
   z-index: var(--z-dropdown);
   padding: 14px;
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Inter', sans-serif;
   user-select: none;
   animation: calIn var(--motion-standard) var(--ease-standard);
 }
@@ -393,14 +393,14 @@
 
 .fm-page-header { }
 .fm-page-title {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 21px;
   font-weight: 700;
   color: var(--navy, #1B254B);
   margin: 0 0 4px 0;
 }
 .fm-page-desc {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 13.5px;
   color: var(--tt, #6B7280);
   margin: 0;
@@ -443,14 +443,14 @@
 
 .fm-card-body { flex: 1; }
 .fm-card-title {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 15px;
   font-weight: 700;
   color: var(--navy, #1B254B);
   margin: 0 0 5px 0;
 }
 .fm-card-desc {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 13px;
   color: var(--tt, #6B7280);
   margin: 0;
@@ -475,7 +475,7 @@
   flex-wrap: wrap;
 }
 .fm-states-label {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 11px;
   font-weight: 700;
   color: var(--navy, #1B254B);
@@ -493,7 +493,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 11.5px;
   font-weight: 600;
   padding: 4px 11px;
@@ -705,7 +705,7 @@
   margin-top: 2px;
 }
 .warning-text {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 13.5px;
   line-height: 1.55;
   color: var(--ts, #374151);
@@ -714,7 +714,7 @@
 .warning-text strong { font-weight: 700; color: var(--navy, #1B254B); }
 
 .passcode-check-label {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 13px;
   color: var(--ts, #374151);
   font-weight: 600;
@@ -792,7 +792,7 @@
   color: var(--ok, #059669);
   font-size: 11px;
   font-weight: 700;
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Inter', sans-serif;
   padding: 2px 10px;
   border-radius: 999px;
 }
@@ -837,14 +837,14 @@
 
 .toast-body { flex-grow: 1; text-align: left; }
 .toast-title {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 13.5px;
   font-weight: 700;
   color: var(--navy, #1B254B);
   margin: 0;
 }
 .toast-desc {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 12px;
   color: var(--ts, #374151);
   margin: 2px 0 0 0;

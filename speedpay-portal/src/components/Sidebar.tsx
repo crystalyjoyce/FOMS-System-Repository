@@ -1,11 +1,10 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, FileText, CreditCard, History, LogOut } from 'lucide-react';
+import { LayoutDashboard, FileText, CreditCard, History } from 'lucide-react';
 import { useClientContext } from '../context/ClientContext';
-// 
 
 export const Sidebar: React.FC = () => {
-  const { user, logout } = useClientContext();
+  const { user } = useClientContext();
 
   const navItems = [
     { name: 'Dashboard', path: '/', icon: <LayoutDashboard size={20} /> },
@@ -28,8 +27,8 @@ export const Sidebar: React.FC = () => {
       fontFamily: '"Inter", sans-serif',
       borderRight: '1px solid rgba(255, 255, 255, 0.04)'
     }}>
-      <div style={{ padding: '14px 16px', minHeight: '62px', display: 'flex', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <h1 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div style={{ padding: '14px 16px', minHeight: '62px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <h1 style={{ margin: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
           <img src="/logo.png" alt="Speedex" style={{ maxHeight: '38px', maxWidth: '180px', objectFit: 'contain' }} />
         </h1>
       </div>
@@ -87,13 +86,6 @@ export const Sidebar: React.FC = () => {
               <span style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.35)' }}>{user?.companyName}</span>
             </div>
           </div>
-          <button 
-            onClick={logout}
-            style={{ background: 'transparent', border: 'none', color: 'rgba(255, 255, 255, 0.5)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            title="Log out"
-          >
-            <LogOut size={16} />
-          </button>
         </div>
       </div>
     </div>

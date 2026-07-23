@@ -109,9 +109,11 @@ export const SESSION_CONFIG = {
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   'Finance Manager': 'Finance Manager',
+  'Financial Manager': 'Financial Manager',
   'Head Accountant': 'Head Accountant',
   'Accountant': 'Accountant',
   'Assistant of Finance Manager': 'Asst. Finance Manager',
+  'Assistant of Financial Manager': 'Asst. Financial Manager',
   'Coordinator': 'Coordinator',
 };
 
@@ -1605,10 +1607,11 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
         ],
       },
       {
-        label: 'Operations',
+        label: 'Operations & Validation',
         items: [
           { label: 'Client Accounts', path: '/clients', icon: 'ti ti-users' },
           { label: 'Billing Rates', path: '/rate-configuration', icon: 'ti ti-calculator' },
+          { label: 'Waybill / POD Validation', path: '/waybills', icon: 'ti ti-file-check' },
         ],
       },
       {
@@ -1644,11 +1647,12 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
         ],
       },
       {
-        label: 'Auditing & Receivables',
+        label: 'Auditing & Verification',
         items: [
           { label: 'Invoice Review', path: '/invoice-review', icon: 'ti ti-file-check' },
           { label: 'Accounts Receivable', path: '/accounts-receivable', icon: 'ti ti-report-money' },
           { label: 'Payment Validation', path: '/payments', icon: 'ti ti-cash' },
+          { label: 'SpeedPay Validation', path: '/speedpay-validation', icon: 'ti ti-device-mobile-message' },
         ],
       },
       {
@@ -1668,6 +1672,30 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
           { label: 'Dashboard', path: '/dashboard', icon: 'ti ti-layout-dashboard' },
         ],
       },
+      {
+        label: 'Liquidation & Validation',
+        items: [
+          { label: 'Liquidation Reports', path: '/payments', icon: 'ti ti-cash' },
+          { label: 'SpeedPay Validation', path: '/speedpay-validation', icon: 'ti ti-device-mobile-message' },
+        ],
+      },
+    ],
+  },
+  'Assistant of Financial Manager': {
+    groups: [
+      {
+        label: 'Overview',
+        items: [
+          { label: 'Dashboard', path: '/dashboard', icon: 'ti ti-layout-dashboard' },
+        ],
+      },
+      {
+        label: 'Liquidation & Validation',
+        items: [
+          { label: 'Liquidation Reports', path: '/payments', icon: 'ti ti-cash' },
+          { label: 'SpeedPay Validation', path: '/speedpay-validation', icon: 'ti ti-device-mobile-message' },
+        ],
+      },
     ],
   },
   'Finance Manager': {
@@ -1679,9 +1707,38 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
         ],
       },
       {
-        label: 'Receivables',
+        label: 'Review & Receivables',
         items: [
+          { label: 'Invoice Review', path: '/invoice-review', icon: 'ti ti-file-check' },
           { label: 'Accounts Receivable', path: '/accounts-receivable', icon: 'ti ti-report-money' },
+          { label: 'Payments & Cash Flow', path: '/payments', icon: 'ti ti-cash' },
+          { label: 'SpeedPay Validation', path: '/speedpay-validation', icon: 'ti ti-device-mobile-message' },
+        ],
+      },
+      {
+        label: 'Analytics & Control',
+        items: [
+          { label: 'Reports', path: '/reports', icon: 'ti ti-chart-bar' },
+          { label: 'Audit Trail', path: '/audit-trail', icon: 'ti ti-shield-check' },
+        ],
+      },
+    ],
+  },
+  'Financial Manager': {
+    groups: [
+      {
+        label: 'Executive',
+        items: [
+          { label: 'Executive Dashboard', path: '/dashboard', icon: 'ti ti-layout-dashboard' },
+        ],
+      },
+      {
+        label: 'Review & Receivables',
+        items: [
+          { label: 'Invoice Review', path: '/invoice-review', icon: 'ti ti-file-check' },
+          { label: 'Accounts Receivable', path: '/accounts-receivable', icon: 'ti ti-report-money' },
+          { label: 'Payments & Cash Flow', path: '/payments', icon: 'ti ti-cash' },
+          { label: 'SpeedPay Validation', path: '/speedpay-validation', icon: 'ti ti-device-mobile-message' },
         ],
       },
       {

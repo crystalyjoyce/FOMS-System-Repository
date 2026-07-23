@@ -5,9 +5,18 @@ interface CustomDatePickerProps {
   onChange?: (date: string) => void;
   isInvalid?: boolean;
   disabled?: boolean;
+  minDate?: string;
+  maxDate?: string;
 }
 
-export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({ value, onChange, isInvalid, disabled }) => {
+export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({ 
+  value, 
+  onChange, 
+  isInvalid, 
+  disabled,
+  minDate,
+  maxDate
+}) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -108,7 +117,52 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({ value, onCha
             <button onClick={prevMonth} style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
               <i className="ti ti-chevron-left" style={{ color: '#475569' }} />
             </button>
-            <span style={{ fontWeight: 700, fontSize: '0.95rem', color: '#0F172A' }}>{formatMonthYear(viewDate)}</span>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <select
+                value={viewDate.getMonth()}
+                onChange={(e) => {
+                  const newMonth = parseInt(e.target.value, 10);
+                  setViewDate(new Date(viewDate.getFullYear(), newMonth, 1));
+                }}
+                style={{
+                  border: '1px solid #E2E8F0',
+                  borderRadius: 6,
+                  padding: '4px 6px',
+                  fontSize: '0.85rem',
+                  fontWeight: 700,
+                  color: '#0F172A',
+                  background: '#fff',
+                  cursor: 'pointer',
+                  outline: 'none'
+                }}
+              >
+                {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, idx) => (
+                  <option key={m} value={idx}>{m}</option>
+                ))}
+              </select>
+              <select
+                value={viewDate.getFullYear()}
+                onChange={(e) => {
+                  const newYear = parseInt(e.target.value, 10);
+                  setViewDate(new Date(newYear, viewDate.getMonth(), 1));
+                }}
+                style={{
+                  border: '1px solid #E2E8F0',
+                  borderRadius: 6,
+                  padding: '4px 6px',
+                  fontSize: '0.85rem',
+                  fontWeight: 700,
+                  color: '#0F172A',
+                  background: '#fff',
+                  cursor: 'pointer',
+                  outline: 'none'
+                }}
+              >
+                {Array.from({ length: 21 }, (_, i) => 2015 + i).map(year => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </div>
             <button onClick={nextMonth} style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #E2E8F0', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
               <i className="ti ti-chevron-right" style={{ color: '#475569' }} />
             </button>
@@ -133,9 +187,18 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({ value, onCha
                                selectedDateObj.getMonth() === viewDate.getMonth() && 
                                selectedDateObj.getFullYear() === viewDate.getFullYear();
               
+              // Calculate YYYY-MM-DD for this day
+              const d = new Date(viewDate.getFullYear(), viewDate.getMonth(), day);
+              const offset = d.getTimezoneOffset() * 60000;
+              const localDate = new Date(d.getTime() - offset);
+              const dateStr = localDate.toISOString().split('T')[0];
+
+              const isDisabled = (minDate && dateStr < minDate) || (maxDate && dateStr > maxDate);
+              
               return (
                 <button
                   key={day}
+                  disabled={!!isDisabled}
                   onClick={() => handleSelect(day)}
                   style={{
                     height: 36,
@@ -147,15 +210,15 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({ value, onCha
                     background: 'transparent',
                     fontSize: '0.85rem',
                     fontWeight: isSelected ? 700 : 500,
-                    color: isSelected ? '#0F172A' : '#475569',
-                    cursor: 'pointer',
+                    color: isDisabled ? '#CBD5E1' : (isSelected ? '#0F172A' : '#475569'),
+                    cursor: isDisabled ? 'not-allowed' : 'pointer',
                     transition: 'all 0.1s'
                   }}
                   onMouseEnter={e => {
-                    if (!isSelected) e.currentTarget.style.background = '#F1F5F9';
+                    if (!isSelected && !isDisabled) e.currentTarget.style.background = '#F1F5F9';
                   }}
                   onMouseLeave={e => {
-                    if (!isSelected) e.currentTarget.style.background = 'transparent';
+                    if (!isSelected && !isDisabled) e.currentTarget.style.background = 'transparent';
                   }}
                 >
                   {day}

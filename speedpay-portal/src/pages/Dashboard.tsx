@@ -1,7 +1,7 @@
 import React from 'react';
 import { useClientContext } from '../context/ClientContext';
 import { Link, useNavigate } from 'react-router-dom';
-import { AlarmClock, AlertCircle, CheckCircle2, ChevronRight, FileText } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export const Dashboard: React.FC = () => {
@@ -10,10 +10,10 @@ export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
 
   const notifications = [
-    { type: 'due_soon', label: 'Due soon: INV-10231', sub: 'Due on Jul 20, 2026 — ₱184,500.00', icon: <AlarmClock size={20} color="#F59E0B" />, bg: '#FEF3C7' },
-    { type: 'overdue', label: 'Overdue: INV-10198', sub: 'Was due last Jun 20, 2026 — ₱172,300.00', icon: <AlertCircle size={20} color="#EF4444" />, bg: '#FEE2E2' },
-    { type: 'validated', label: 'Payment validated: INV-10099', sub: 'Official Receipt OR-2026-0099 is now available', icon: <CheckCircle2 size={20} color="#10B981" />, bg: '#D1FAE5' },
-    { type: 'validated', label: 'Payment validated: INV-10150', sub: 'Official Receipt OR-2026-0150 is now available', icon: <CheckCircle2 size={20} color="#10B981" />, bg: '#D1FAE5' },
+    { type: 'due_soon', label: 'Due soon: INV-10231', sub: 'Due on Jul 20, 2026 — ₱184,500.00' },
+    { type: 'overdue', label: 'Overdue: INV-10198', sub: 'Was due last Jun 20, 2026 — ₱172,300.00' },
+    { type: 'validated', label: 'Payment validated: INV-10099', sub: 'Official Receipt OR-2026-0099 is now available' },
+    { type: 'validated', label: 'Payment validated: INV-10150', sub: 'Official Receipt OR-2026-0150 is now available' },
   ];
 
   return (
@@ -113,9 +113,6 @@ export const Dashboard: React.FC = () => {
         <div className="kpi">
           <div className="kpi-top">
             <span className="kpi-label">TOTAL OUTSTANDING</span>
-            <div className="kpi-icon-box" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#EF4444' }}>
-              <AlertCircle size={18} />
-            </div>
           </div>
           <div className="kpi-val">₱{summary.totalOutstanding.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto' }}>
@@ -127,9 +124,6 @@ export const Dashboard: React.FC = () => {
         <div className="kpi">
           <div className="kpi-top">
             <span className="kpi-label">NEXT DUE DATE</span>
-            <div className="kpi-icon-box" style={{ background: 'rgba(245, 158, 11, 0.1)', color: '#F59E0B' }}>
-              <AlarmClock size={18} />
-            </div>
           </div>
           <div className="kpi-val">{summary.nextDueDate ? new Date(summary.nextDueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'None'}</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto' }}>
@@ -141,9 +135,6 @@ export const Dashboard: React.FC = () => {
         <div className="kpi">
           <div className="kpi-top">
             <span className="kpi-label">TOTAL PAID (THIS PERIOD)</span>
-            <div className="kpi-icon-box" style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10B981' }}>
-              <CheckCircle2 size={18} />
-            </div>
           </div>
           <div className="kpi-val">₱{summary.totalPaidPeriod.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto' }}>
@@ -190,9 +181,6 @@ export const Dashboard: React.FC = () => {
         {invoices.filter(i => i.status === 'Overdue' || i.status === 'Due Soon').slice(0, 2).map((inv) => (
           <div key={inv.id} style={{ background: '#FFF', padding: '20px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{ width: '48px', height: '48px', borderRadius: '8px', background: '#F8FAFC', border: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <FileText size={24} color="#64748B" />
-              </div>
               <div>
                 <div style={{ fontSize: '15px', fontWeight: 700, color: '#0F172A', marginBottom: '4px' }}>{inv.invoiceNumber}</div>
                 <div style={{ fontSize: '13px', color: '#64748B', fontWeight: 500 }}>₱{inv.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })} • {inv.status}</div>

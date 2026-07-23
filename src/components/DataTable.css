@@ -4,6 +4,7 @@
   position: relative;
 }
 
+
 /* ── Density modes ───────────────────────────────────────────────────────── */
 
 .dt-root--compact .dt-td   { padding: 5px 10px; }
@@ -458,6 +459,7 @@
   border: 1px solid var(--border, #E2E8F0);
   border-radius: 10px;
   box-shadow: var(--sh1, 0 1px 3px rgba(15, 23, 42, 0.04));
+  background: #ffffff;
 }
 
 .dt-table {

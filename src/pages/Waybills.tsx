@@ -370,23 +370,23 @@ export const Waybills: React.FC = () => {
               <form onSubmit={handleRecordSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div>
                   <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '6px' }}>Waybill No. *</label>
-                  <input required type="text" value={newWaybill.waybillNumber} onChange={e => setNewWaybill(p => ({...p, waybillNumber: e.target.value}))} style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', background: '#F8FAFC' }} />
+                  <input required type="text" value={newWaybill.waybillNumber} onChange={e => setNewWaybill(p => ({...p, waybillNumber: e.target.value}))} style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', background: '#F8FAFC', fontFamily: 'inherit', fontSize: '13.5px' }} />
                 </div>
                 <CalendarPicker
-                  label="DELIVERY DATE *"
+                  label="Delivery Date"
                   value={newWaybill.deliveryDate}
                   onChange={v => setNewWaybill(p => ({...p, deliveryDate: v}))}
                   required={true}
                 />
                 <div>
                   <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '6px' }}>Client *</label>
-                  <select required value={newWaybill.clientCode} onChange={e => setNewWaybill(p => ({...p, clientCode: e.target.value}))} style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', background: '#F8FAFC' }}>
+                  <select required value={newWaybill.clientCode} onChange={e => setNewWaybill(p => ({...p, clientCode: e.target.value}))} style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', background: '#F8FAFC', fontFamily: 'inherit', fontSize: '13.5px' }}>
                     {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </div>
                 <div>
                   <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '6px' }}>Upload POD (Scanned/Photo) *</label>
-                  <input required type="file" accept="image/*,.pdf" style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px dashed #CBD5E1', background: '#F8FAFC' }} />
+                  <input required type="file" accept="image/*,.pdf" style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px dashed #CBD5E1', background: '#F8FAFC', fontFamily: 'inherit', fontSize: '13.5px' }} />
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
                   <Button variant="secondary" title="Cancel" type="button" onClick={() => setIsRecording(false)} />

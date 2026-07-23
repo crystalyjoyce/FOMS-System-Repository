@@ -5,7 +5,7 @@ import { useAppData } from '../context/AppDataContext';
 import { createPortal } from 'react-dom';
 import type { Invoice } from '../data/seed';
 import { Card } from '../components/Card';
-import { User, Lock, AlertCircle, Eye, EyeOff, Clock } from 'lucide-react';
+import { User, Lock, AlertCircle, Eye, EyeOff, Calendar } from 'lucide-react';
 import './LoginPage.css';
 
 type SpeedPayStep = 'login' | 'dashboard' | 'summary' | 'payment' | 'upload' | 'submitted';
@@ -48,8 +48,18 @@ export const SpeedPay: React.FC = () => {
   const [clientEmail, setClientEmail] = useState('');
   const [existingSubmission, setExistingSubmission] = useState<any>(null);
   const [showEmailModal, setShowEmailModal] = useState(false);
+
   const [dashTab, setDashTab] = useState<DashTab>('to_pay');
-  const [currentDateTime, setCurrentDateTime] = useState('');
+
+  const currentDate = useMemo(() => {
+    return new Date().toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  }, []);
+
 
   const profileRef = useRef<HTMLDivElement>(null);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -65,18 +75,6 @@ export const SpeedPay: React.FC = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Live clock matching main system format
-  useEffect(() => {
-    const updateDateTime = () => {
-      const now = new Date();
-      const datePart = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-      const timePart = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
-      setCurrentDateTime(`${datePart} • ${timePart}`);
-    };
-    updateDateTime();
-    const interval = setInterval(updateDateTime, 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   useEffect(() => {
     const saved = sessionStorage.getItem('speedpay_client');
@@ -413,8 +411,8 @@ export const SpeedPay: React.FC = () => {
           </div>
           <div className="gh-right">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 9999, color: '#334155', fontSize: '0.85rem', fontWeight: 500, whiteSpace: 'nowrap' }}>
-              <Clock size={15} style={{ color: '#0EA5E9' }} strokeWidth={2.5} />
-              <span>{currentDateTime}</span>
+              <Calendar size={15} style={{ color: '#0EA5E9' }} strokeWidth={2.5} />
+              <span>{currentDate}</span>
             </div>
           </div>
         </header>

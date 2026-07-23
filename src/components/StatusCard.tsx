@@ -128,11 +128,7 @@ export const StatusCard: React.FC<StatusCardProps> = ({
     >
       <div className="kpi-top">
         <span className="kpi-label">{label}</span>
-        {icon && (
-          <div className="kpi-icon-box">
-            <i className={icon} style={{ fontSize: '18px' }} />
-          </div>
-        )}
+
       </div>
       <div className="kpi-val">{value}</div>
       

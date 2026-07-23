@@ -5,9 +5,11 @@
 
 export type UserRole =
   | 'Finance Manager'
+  | 'Financial Manager'
   | 'Head Accountant'
   | 'Accountant'
   | 'Assistant of Finance Manager'
+  | 'Assistant of Financial Manager'
   | 'Coordinator';
 
 export interface User {
