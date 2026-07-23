@@ -141,6 +141,8 @@ export interface CalendarPickerProps {
   required?: boolean;
   id?: string;
   disablePastDates?: boolean;
+  minDate?: string;
+  maxDate?: string;
 }
 
 export const CalendarPicker: React.FC<CalendarPickerProps> = ({
@@ -153,6 +155,8 @@ export const CalendarPicker: React.FC<CalendarPickerProps> = ({
   required = false,
   id: customId,
   disablePastDates = false,
+  minDate,
+  maxDate,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -192,7 +196,12 @@ export const CalendarPicker: React.FC<CalendarPickerProps> = ({
     const yyyy = d.getFullYear();
     const mm = String(d.getMonth() + 1).padStart(2, '0');
     const dd = String(d.getDate()).padStart(2, '0');
-    onChange(`${yyyy}-${mm}-${dd}`);
+    const dateStr = `${yyyy}-${mm}-${dd}`;
+
+    if (minDate && dateStr < minDate) return;
+    if (maxDate && dateStr > maxDate) return;
+
+    onChange(dateStr);
     setIsOpen(false);
   };
 
@@ -255,7 +264,52 @@ export const CalendarPicker: React.FC<CalendarPickerProps> = ({
         <div className="cal-popover">
           <div className="cal-header">
             <button type="button" className="cal-nav-btn" onClick={() => navMonth(-1)}><ChevronLeft size={15} /></button>
-            <span className="cal-month-label">{monthNames[month]} {year}</span>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <select
+                value={month}
+                onChange={(e) => {
+                  const newMonth = parseInt(e.target.value, 10);
+                  setCurrentDate(new Date(year, newMonth, 1));
+                }}
+                style={{
+                  border: '1px solid #E2E8F0',
+                  borderRadius: 6,
+                  padding: '4px 6px',
+                  fontSize: '0.85rem',
+                  fontWeight: 700,
+                  color: '#0F172A',
+                  background: '#fff',
+                  cursor: 'pointer',
+                  outline: 'none'
+                }}
+              >
+                {monthNames.map((m, idx) => (
+                  <option key={m} value={idx}>{m.slice(0, 3)}</option>
+                ))}
+              </select>
+              <select
+                value={year}
+                onChange={(e) => {
+                  const newYear = parseInt(e.target.value, 10);
+                  setCurrentDate(new Date(newYear, month, 1));
+                }}
+                style={{
+                  border: '1px solid #E2E8F0',
+                  borderRadius: 6,
+                  padding: '4px 6px',
+                  fontSize: '0.85rem',
+                  fontWeight: 700,
+                  color: '#0F172A',
+                  background: '#fff',
+                  cursor: 'pointer',
+                  outline: 'none'
+                }}
+              >
+                {Array.from({ length: 21 }, (_, i) => 2015 + i).map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
             <button type="button" className="cal-nav-btn" onClick={() => navMonth(1)}><ChevronRight size={15} /></button>
           </div>
           <div className="cal-weekdays">
@@ -272,8 +326,13 @@ export const CalendarPicker: React.FC<CalendarPickerProps> = ({
               todayDate.setHours(0,0,0,0);
               d.setHours(0,0,0,0);
 
+              const yyyy = d.getFullYear();
+              const mm = String(d.getMonth() + 1).padStart(2, '0');
+              const dd = String(d.getDate()).padStart(2, '0');
+              const dateStr = `${yyyy}-${mm}-${dd}`;
+
               const isPast = d < todayDate;
-              const isDisabled = disablePastDates && isPast;
+              const isDisabled = (disablePastDates && isPast) || (minDate && dateStr < minDate) || (maxDate && dateStr > maxDate);
 
               const isSel = value && new Date(value).getDate() === day &&
                             new Date(value).getMonth() === month &&

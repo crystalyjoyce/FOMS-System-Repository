@@ -32,9 +32,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     Shipments: true,
   });
 
-  const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const profileRef = useRef<HTMLDivElement>(null);
-
   const toggleCollapse = () => {
     setCollapsed((prev) => {
       const next = !prev;
@@ -50,16 +47,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }));
   };
 
-  // Close profile dropdown on outside click
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
-        setShowProfileMenu(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+
 
   return (
     <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
@@ -153,52 +141,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ))}
       </nav>
 
-      {/* Clickable Profile Card / Account Menu */}
+      {/* Profile Card */}
       {user && (
-        <div className="sidebar-footer" ref={profileRef}>
-          <div 
-            className={`profile-card ${showProfileMenu ? "active" : ""}`} 
-            onClick={() => setShowProfileMenu(!showProfileMenu)}
-            role="button"
-            aria-haspopup="true"
-            aria-expanded={showProfileMenu}
-          >
+        <div className="sidebar-footer">
+          <div className="profile-card">
             <div className="profile-av">{user.avatarInitials}</div>
             <div className="profile-info">
               <span className="profile-name">{user.fullName}</span>
               <span className="profile-role">{ROLE_LABELS[user.role]}</span>
             </div>
-            {!collapsed && (
-              <i className="ti ti-selector profile-selector-icon" style={{ marginLeft: "auto", opacity: 0.5, fontSize: "14px" }} />
-            )}
           </div>
-
-          {/* Footer Account Dropdown Popover */}
-          {showProfileMenu && (
-            <div className={`sidebar-profile-dropdown ${collapsed ? "collapsed" : ""}`}>
-              <div className="dropdown-identity">
-                <span className="dropdown-name">{user.fullName}</span>
-                <span className="dropdown-role">{ROLE_LABELS[user.role]}</span>
-              </div>
-              <div className="dropdown-divider" />
-              <button className="dropdown-option" onClick={() => {
-                navigate('/profile');
-                setShowProfileMenu(false);
-              }}>
-                <i className="ti ti-user" />
-                <span>My Profile</span>
-              </button>
-              <button className="dropdown-option" onClick={() => alert("Settings Panel opened")}>
-                <i className="ti ti-settings" />
-                <span>System Settings</span>
-              </button>
-              <div className="dropdown-divider" />
-              <button className="dropdown-option logout" onClick={() => { logout(); }}>
-                <i className="ti ti-logout" />
-                <span>Log Out</span>
-              </button>
-            </div>
-          )}
         </div>
       )}
     </aside>

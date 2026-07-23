@@ -9,6 +9,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { ClientInfoCard } from '../components/ClientInfoCard';
 import { Card } from '../components/Card';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, LineChart, Line, ComposedChart } from 'recharts';
+import { useToast } from '../components/ToastContext';
 
 class ErrorBoundary extends Component<{children: React.ReactNode}, {hasError: boolean, error: Error | null}> {
   constructor(props: {children: React.ReactNode}) {
@@ -56,12 +57,53 @@ const ReportsContent: React.FC = () => {
   const [isGenerated, setIsGenerated] = useState(false);
 
   const activeTab = reportType;
+  const { toast } = useToast();
+
+  const handleGenerateReport = () => {
+    if (!dateFrom) {
+      toast.error("Please select a 'Date From' value.");
+      return;
+    }
+    if (!dateTo) {
+      toast.error("Please select a 'Date To' value.");
+      return;
+    }
+    if (new Date(dateFrom) > new Date(dateTo)) {
+      toast.error("'Date From' cannot be after 'Date To'.");
+      return;
+    }
+    setIsGenerated(true);
+  };
+
+  const getFilteredAR = () => {
+    if (!isGenerated || !dateFrom || !dateTo) return SEEDED_AR_RECORDS;
+    return SEEDED_AR_RECORDS.filter(ar => {
+      const d = ar.invoiceDate.split('T')[0];
+      return d >= dateFrom && d <= dateTo;
+    });
+  };
+
+  const getFilteredInvoices = () => {
+    if (!isGenerated || !dateFrom || !dateTo) return SEEDED_INVOICES;
+    return SEEDED_INVOICES.filter(inv => {
+      const d = inv.createdAt.split('T')[0];
+      return d >= dateFrom && d <= dateTo;
+    });
+  };
+
+  const getFilteredPayments = () => {
+    if (!isGenerated || !dateFrom || !dateTo) return SEEDED_PAYMENTS;
+    return SEEDED_PAYMENTS.filter(p => {
+      const d = p.recordedAt.split('T')[0];
+      return d >= dateFrom && d <= dateTo;
+    });
+  };
 
   let agingRecords: any[] = [];
   if (selectedClientId) {
-    agingRecords = SEEDED_AR_RECORDS.filter(ar => ar.clientId === selectedClientId).map(ar => {
+    agingRecords = getFilteredAR().filter(ar => ar.clientId === selectedClientId).map(ar => {
       const client = SEEDED_CLIENTS.find(c => c.id === ar.clientId);
-      const invoice = SEEDED_INVOICES.find(i => i.id === ar.invoiceId);
+      const invoice = getFilteredInvoices().find(i => i.id === ar.invoiceId);
       return {
         ...ar,
         clientName: client?.name ?? 'Unknown',
@@ -72,7 +114,7 @@ const ReportsContent: React.FC = () => {
     });
   } else {
     const grouped = new Map<string, any[]>();
-    SEEDED_AR_RECORDS.forEach(ar => {
+    getFilteredAR().forEach(ar => {
       if (!grouped.has(ar.clientId)) grouped.set(ar.clientId, []);
       grouped.get(ar.clientId)!.push(ar);
     });
@@ -101,8 +143,8 @@ const ReportsContent: React.FC = () => {
   // For bracket cards always count from ALL AR records (not grouped)
   const getAgingBracketData = (bracket: string) => {
     const base = selectedClientId
-      ? SEEDED_AR_RECORDS.filter(r => r.clientId === selectedClientId)
-      : SEEDED_AR_RECORDS;
+      ? getFilteredAR().filter(r => r.clientId === selectedClientId)
+      : getFilteredAR();
     const recs = base.filter(r => r.agingBracket === bracket);
     return {
       count: recs.length,
@@ -135,7 +177,7 @@ const ReportsContent: React.FC = () => {
   // ── 2. Invoice Summary Tab Data ────────────────────────────────
   let allInvoices: any[] = [];
   if (selectedClientId) {
-    allInvoices = SEEDED_INVOICES.filter(i => i.clientId === selectedClientId).map(i => {
+    allInvoices = getFilteredInvoices().filter(i => i.clientId === selectedClientId).map(i => {
       const client = SEEDED_CLIENTS.find(c => c.id === i.clientId);
       return {
         ...i,
@@ -144,7 +186,7 @@ const ReportsContent: React.FC = () => {
     });
   } else {
     const grouped = new Map<string, any[]>();
-    SEEDED_INVOICES.forEach(inv => {
+    getFilteredInvoices().forEach(inv => {
       if (!grouped.has(inv.clientId)) grouped.set(inv.clientId, []);
       grouped.get(inv.clientId)!.push(inv);
     });
@@ -202,11 +244,11 @@ const ReportsContent: React.FC = () => {
 
   // ── 3. Collection Report Tab Data ──────────────────────────────
   let collections: any[] = [];
-  const baseCollections = SEEDED_PAYMENTS.filter(p => p.status === 'Validated' || p.status === 'Approved');
+  const baseCollections = getFilteredPayments().filter(p => p.status === 'Validated' || p.status === 'Approved');
   if (selectedClientId) {
     collections = baseCollections.filter(p => p.clientId === selectedClientId).map(p => {
       const client = SEEDED_CLIENTS.find(c => c.id === p.clientId);
-      const invoice = SEEDED_INVOICES.find(i => i.id === p.invoiceId);
+      const invoice = getFilteredInvoices().find(i => i.id === p.invoiceId);
       return {
         ...p,
         clientName: client?.name ?? 'Unknown',
@@ -236,9 +278,9 @@ const ReportsContent: React.FC = () => {
     });
   }
 
-  const totalCollected = SEEDED_PAYMENTS.filter(p => p.status === 'Validated' || p.status === 'Approved').reduce((sum, c) => sum + c.amount, 0);
+  const totalCollected = getFilteredPayments().filter(p => p.status === 'Validated' || p.status === 'Approved').reduce((sum, c) => sum + c.amount, 0);
   // Breakdown by method from individual (non-grouped) payments
-  const methodBreakdown = SEEDED_PAYMENTS
+  const methodBreakdown = getFilteredPayments()
     .filter(p => p.status === 'Validated' || p.status === 'Approved')
     .reduce((acc, p) => {
       acc[p.paymentMethod] = (acc[p.paymentMethod] || 0) + p.amount;
@@ -293,15 +335,15 @@ const ReportsContent: React.FC = () => {
         </div>
         <div style={{ width: 220 }}>
           <label style={{ fontSize: '0.82rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: 6 }}>Date From</label>
-          <CustomDatePicker value={dateFrom} onChange={val => { setDateFrom(val); setIsGenerated(false); }} />
+          <CustomDatePicker value={dateFrom} onChange={val => { setDateFrom(val); setIsGenerated(false); }} maxDate={dateTo || undefined} />
         </div>
         <div style={{ width: 220 }}>
           <label style={{ fontSize: '0.82rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: 6 }}>Date To</label>
-          <CustomDatePicker value={dateTo} onChange={val => { setDateTo(val); setIsGenerated(false); }} />
+          <CustomDatePicker value={dateTo} onChange={val => { setDateTo(val); setIsGenerated(false); }} minDate={dateFrom || undefined} />
         </div>
         <div>
           {!selectedClientId && (
-            <button onClick={() => setIsGenerated(true)} style={{ background: '#0F172A', color: '#fff', padding: '10px 24px', borderRadius: 8, border: 'none', fontWeight: 600, fontSize: '0.9rem', cursor: 'pointer' }}>
+            <button onClick={handleGenerateReport} style={{ background: '#0F172A', color: '#fff', padding: '10px 24px', borderRadius: 8, border: 'none', fontWeight: 600, fontSize: '0.9rem', cursor: 'pointer' }}>
               Generate Report
             </button>
           )}

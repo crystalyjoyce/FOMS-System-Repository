@@ -378,7 +378,7 @@ export function DataTable<T>({
 
   const sortIcon = (key: string) => {
     if (sortKey !== key)
-      return <i className="ti ti-selector dt-sort-icon" aria-hidden="true" />;
+      return null;
     if (sortDir === "asc")
       return (
         <i
@@ -551,7 +551,6 @@ export function DataTable<T>({
     relaxed: "dt-root--relaxed",
   }[density];
 
-  // ── Render ─────────────────────────────────────────────────────────────────────
   return (
     <div className={`dt-root ${densityClass} ${className}`}>
       {title && (
@@ -625,77 +624,7 @@ export function DataTable<T>({
         </div>
 
         <div className="dt-toolbar-right">
-          {densityToggle && (
-            <div className="dt-density-group" role="group" aria-label="Row density">
-              {(["compact", "regular", "relaxed"] as DensityMode[]).map((d) => (
-                <button
-                  key={d}
-                  className={`dt-density-btn${
-                    density === d ? " dt-density-btn--active" : ""
-                  }`}
-                  onClick={() => setDensity(d)}
-                  title={d.charAt(0).toUpperCase() + d.slice(1)}
-                  aria-pressed={density === d}
-                >
-                  {d === "compact" && (
-                    <i className="ti ti-layout-list" aria-hidden="true" />
-                  )}
-                  {d === "regular" && (
-                    <i className="ti ti-layout-rows" aria-hidden="true" />
-                  )}
-                  {d === "relaxed" && (
-                    <i className="ti ti-layout-bottombar" aria-hidden="true" />
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
 
-          {columnToggle && (
-            <div className="dt-col-toggle-wrap" ref={colToggleRef}>
-              <button
-                id="dt-col-toggle-btn"
-                className="dt-btn dt-btn--icon"
-                title="Column visibility"
-                aria-haspopup="true"
-                aria-expanded={showColToggle}
-                onClick={() => setShowColToggle((p) => !p)}
-              >
-                <i className="ti ti-columns" aria-hidden="true" />
-              </button>
-              {showColToggle && (
-                <div
-                  className="dt-col-panel"
-                  role="menu"
-                  aria-labelledby="dt-col-toggle-btn"
-                >
-                  <p className="dt-col-panel-title">Show / Hide Columns</p>
-                  {columns.map((col) => {
-                    const isLocked = col.label === 'Client ID' || col.label === 'Client Name';
-                    return (
-                      <label key={col.key} className="dt-col-item" style={{ opacity: isLocked ? 0.5 : 1, cursor: isLocked ? 'not-allowed' : 'pointer', pointerEvents: isLocked ? 'none' : 'auto' }}>
-                        <input
-                          type="checkbox"
-                          className="dt-checkbox"
-                          disabled={isLocked}
-                          checked={!hiddenCols.has(col.key)}
-                          onChange={() =>
-                            setHiddenCols((prev) => {
-                              if (isLocked) return prev;
-                              const n = new Set(prev);
-                              n.has(col.key) ? n.delete(col.key) : n.add(col.key);
-                              return n;
-                            })
-                          }
-                        />
-                        <span>{col.label}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
 
           {exportable && (
             <div style={{ display: 'flex', gap: 8 }}>
@@ -1043,14 +972,7 @@ export function DataTable<T>({
             ))}
           </select>
           <div className="dt-page-btns" role="navigation" aria-label="Pagination">
-            <button
-              className="dt-page-btn"
-              disabled={page === 1}
-              onClick={() => handlePageChange(1)}
-              aria-label="First page"
-            >
-              <i className="ti ti-chevrons-left" aria-hidden="true" />
-            </button>
+
             <button
               className="dt-page-btn"
               disabled={page === 1}
@@ -1059,23 +981,15 @@ export function DataTable<T>({
             >
               <i className="ti ti-chevron-left" aria-hidden="true" />
             </button>
-            {pageRange().map((p, i) =>
-              p === "..." ? (
-                <span key={`ellipsis-${i}`} className="dt-page-ellipsis">
-                  ...
-                </span>
-              ) : (
-                <button
-                  key={p}
-                  className={`dt-page-btn${p === page ? " dt-page-btn--active" : ""}`}
-                  onClick={() => handlePageChange(p)}
-                  aria-label={`Page ${p}`}
-                  aria-current={p === page ? "page" : undefined}
-                >
-                  {p}
-                </button>
-              )
-            )}
+            <button
+              className="dt-page-btn dt-page-btn--active"
+              style={{ cursor: "default" }}
+              aria-label={`Page ${page}`}
+              aria-current="page"
+            >
+              {page}
+            </button>
+
             <button
               className="dt-page-btn"
               disabled={page === totalPages}
@@ -1084,36 +998,9 @@ export function DataTable<T>({
             >
               <i className="ti ti-chevron-right" aria-hidden="true" />
             </button>
-            <button
-              className="dt-page-btn"
-              disabled={page === totalPages}
-              onClick={() => handlePageChange(totalPages)}
-              aria-label="Last page"
-            >
-              <i className="ti ti-chevrons-right" aria-hidden="true" />
-            </button>
+
           </div>
-          <div className="dt-goto-page" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', color: '#64748B', marginLeft: 16 }}>
-            <span>Go to</span>
-            <input 
-              type="number" 
-              className="dt-goto-input" 
-              min={1} 
-              max={totalPages} 
-              value={page}
-              onChange={(e) => {
-                const val = parseInt(e.target.value, 10);
-                if (!isNaN(val) && val >= 1 && val <= totalPages) {
-                  handlePageChange(val);
-                }
-              }}
-              style={{
-                width: 40, height: 28, padding: '0 4px', textAlign: 'center',
-                border: '1px solid #E2E8F0', borderRadius: 6, fontSize: '0.85rem',
-                color: '#0F172A', outline: 'none'
-              }}
-            />
-          </div>
+
         </div>
       </div>
 

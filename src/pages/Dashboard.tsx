@@ -300,12 +300,7 @@ const FinanceManagerDashboard: React.FC = () => {
           <StatusCard label="Cash Inflow (This Month)" value={`₱${cashInflow.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} icon="ti-cash" variant="success" />
         </div>
         
-        {/* Audit Trail KPIs */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-          <StatusCard label="Total System Activities" value={auditLogs.length} icon="ti-activity" variant="new" />
-          <StatusCard label="Active System Users" value={new Set(auditLogs.map(l => l.userId)).size} icon="ti-users" variant="success" />
-          <StatusCard label="Modules Tracked" value={new Set(auditLogs.map(l => l.module)).size} icon="ti-layout-grid" variant="info" />
-        </div>
+
       </div>
 
       {/* Charts Section */}
@@ -440,7 +435,9 @@ const DASHBOARD_MAP: Record<UserRole, React.FC> = {
   'Accountant': AccountantDashboard,
   'Head Accountant': HeadAccountantDashboard,
   'Assistant of Finance Manager': AsstFinanceDashboard,
+  'Assistant of Financial Manager': AsstFinanceDashboard,
   'Finance Manager': FinanceManagerDashboard,
+  'Financial Manager': FinanceManagerDashboard,
 };
 
 export const Dashboard: React.FC = () => {

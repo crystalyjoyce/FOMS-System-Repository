@@ -547,6 +547,7 @@ body.modal-open .app-layout {
   min-height: var(--hh);
   overflow: hidden;
   width: 100%;
+  position: relative;
 }
 
 .collapsed .sidebar-logo {
@@ -557,6 +558,7 @@ body.modal-open .app-layout {
 .logo-img-wrapper {
   display: flex;
   align-items: center;
+  justify-content: center;
   flex: 1;
   overflow: hidden;
   transition: all 0.25s;
@@ -583,10 +585,14 @@ body.modal-open .app-layout {
   color: rgba(255, 255, 255, 0.5);
   cursor: pointer;
   transition: all 0.2s;
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
   flex-shrink: 0;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.03);
-  margin-left: auto;
 }
 
 .sb-toggle-btn:hover {
@@ -596,6 +602,8 @@ body.modal-open .app-layout {
 }
 
 .collapsed .sb-toggle-btn {
+  position: static;
+  transform: none;
   margin: 0 auto;
 }
 
@@ -810,17 +818,10 @@ body.modal-open .app-layout {
   gap: 10px;
   padding: 9px 10px;
   border-radius: var(--r-sm);
-  cursor: pointer;
   transition: background 0.2s;
   overflow: hidden;
   color: rgba(255, 255, 255, 0.85);
   border: 1px solid transparent;
-}
-
-.profile-card:hover,
-.profile-card.active {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.04);
 }
 
 .profile-av {
