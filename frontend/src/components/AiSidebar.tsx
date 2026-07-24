@@ -19,18 +19,9 @@ export const AiSidebar: React.FC = () => {
 
   if (!user) return null;
 
-  // Real-world name mappings matching the mock directory roles
-  const mockNames: Record<string, { name: string; initials: string }> = {
-    financial_manager_user: { name: 'Maria Santos', initials: 'MS' },
-    head_accountant_user: { name: 'Juan Dela Cruz', initials: 'JD' },
-    accountant_user: { name: 'Pedro Penduko', initials: 'PP' },
-    coordinator_user: { name: 'Ana Ramos', initials: 'AR' },
-    assistant_fm_user: { name: 'Miguel Gomez', initials: 'MG' }
-  };
-
-  const currentInfo = mockNames[user.username] || { 
-    name: user.username, 
-    initials: user.username.substring(0, 2).toUpperCase() 
+  const currentInfo = {
+    name: user.username.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+    initials: user.username.split('_').map(w => w[0]?.toUpperCase() || '').join('').slice(0, 2) || 'US'
   };
 
   return (

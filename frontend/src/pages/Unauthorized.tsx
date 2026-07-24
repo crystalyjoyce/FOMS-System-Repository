@@ -1,14 +1,22 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { usePermissions } from '../contexts/PermissionContext';
 import { ShieldAlert, ArrowLeft } from 'lucide-react';
 
 export const Unauthorized: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
+  const { hasPermission } = usePermissions();
+
   const handleReturn = () => {
-    navigate('/ai/dashboard');
+    if (hasPermission('ai.dashboard.view')) {
+      navigate('/ai/dashboard');
+    } else {
+      // If user has no dashboard access (e.g. Client account), navigate to profile
+      navigate('/ai/profile');
+    }
   };
 
   const handleSwitchAccount = () => {
@@ -41,7 +49,7 @@ export const Unauthorized: React.FC = () => {
             style={{ height: '40px', fontSize: '13px', padding: '0 18px' }}
           >
             <ArrowLeft size={16} />
-            <span>Return to Dashboard</span>
+            <span>{hasPermission('ai.dashboard.view') ? 'Return to Dashboard' : 'Go to Profile'}</span>
           </button>
 
           <button

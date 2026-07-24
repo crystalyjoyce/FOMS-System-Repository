@@ -16,18 +16,11 @@ import { Reports } from './pages/Reports';
 import { Profile } from './pages/Profile';
 import { Unauthorized } from './pages/Unauthorized';
 import { AuditTrail } from './pages/AuditTrail';
-import { DocumentCheck } from './pages/DocumentCheck';
+
 import { Sidebar, GlobalHeader, ToastProvider, ToastBar } from './components';
 import type { NavGroup } from './components/Sidebar';
 
-// Map mock usernames to full names
-const mockNames: Record<string, { name: string; initials: string }> = {
-  financial_manager_user: { name: 'Maria Santos', initials: 'MS' },
-  head_accountant_user: { name: 'Juan Dela Cruz', initials: 'JD' },
-  accountant_user: { name: 'Pedro Penduko', initials: 'PP' },
-  coordinator_user: { name: 'Ana Ramos', initials: 'AR' },
-  assistant_fm_user: { name: 'Miguel Gomez', initials: 'MG' },
-};
+// Speedex OneUI App Shell Layout
 
 // Main Speedex OneUI App Shell Layout
 const MainLayout: React.FC = () => {
@@ -65,7 +58,7 @@ const MainLayout: React.FC = () => {
     const tab = params.get('tab');
     
     duplicateItems.push({
-      label: 'Document Checking & AI Scan',
+      label: 'AI Duplicate Scan',
       icon: 'ti ti-scan',
       active: location.pathname === '/ai/duplicate-alerts' && (tab === 'scan' || !tab),
       onClick: () => navigate('/ai/duplicate-alerts?tab=scan'),
@@ -152,7 +145,10 @@ const MainLayout: React.FC = () => {
   });
 
   const currentInfo = user
-    ? mockNames[user.username] || { name: user.username, initials: user.username.substring(0, 2).toUpperCase() }
+    ? {
+        name: user.username.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+        initials: user.username.split('_').map(w => w[0]?.toUpperCase() || '').join('').slice(0, 2) || 'US'
+      }
     : { name: 'User', initials: 'U' };
 
   // Generate dynamic breadcrumbs for GlobalHeader
@@ -181,6 +177,7 @@ const MainLayout: React.FC = () => {
           role: user?.role ?? '',
           avatarInitials: currentInfo.initials,
         }}
+        onLogout={handleLogout}
       />
 
       <div className="main-area">
@@ -212,11 +209,7 @@ const MainLayout: React.FC = () => {
               </PermissionGuard>
             } />
 
-            <Route path="document-check" element={
-              <PermissionGuard permission="ai.duplicate.view" fallbackRedirect="/unauthorized">
-                <DocumentCheck />
-              </PermissionGuard>
-            } />
+
 
             {/* Collection Intelligence Guards */}
             <Route path="collection-priorities" element={

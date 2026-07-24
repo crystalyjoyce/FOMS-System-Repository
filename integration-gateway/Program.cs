@@ -42,43 +42,47 @@ var aiServiceApiKey = builder.Configuration["AI_SERVICE_API_KEY"] ?? "change-me"
 var RolePermissionsMatrix = new Dictionary<string, string[]>
 {
     { "Financial Manager", new[] {
-        "ai.dashboard.view", "ai.duplicate.view", "ai.duplicate.review",
-        "ai.collection.view", "ai.collection.validate", "ai.reports.view", "ai.audit.view"
+        "ai.dashboard.view", "ai.duplicate.view", "ai.duplicate.review", "ai.duplicate.scan",
+        "ai.collection.view", "ai.collection.generate", "ai.collection.validate", 
+        "ai.recommendation.view", "ai.recommendation.decide", "ai.recommendation.export",
+        "ai.reports.view", "ai.reports.export", "ai.audit.view", "ai.system.health.view"
     }},
     { "Head Accountant", new[] {
-        "ai.dashboard.view", "ai.duplicate.view", "ai.duplicate.review",
-        "ai.collection.view", "ai.reports.view"
+        "ai.dashboard.view", "ai.duplicate.view", "ai.duplicate.review", "ai.duplicate.scan",
+        "ai.collection.view", "ai.collection.generate", "ai.recommendation.view", 
+        "ai.recommendation.decide", "ai.reports.view", "ai.audit.view_limited"
     }},
     { "Accountant", new[] {
-        "ai.dashboard.view", "ai.duplicate.view", "ai.duplicate.review",
-        "ai.collection.view", "ai.reports.view"
+        "ai.dashboard.view", "ai.duplicate.view", "ai.duplicate.review", "ai.duplicate.scan",
+        "ai.collection.view", "ai.collection.generate", "ai.recommendation.view", 
+        "ai.reports.view", "ai.audit.view_limited"
     }},
     { "Coordinator", new[] {
-        "ai.dashboard.view_limited", "ai.duplicate.waybill.view"
+        "ai.dashboard.view_limited", "ai.duplicate.waybill.view", "ai.duplicate.view", "ai.duplicate.scan"
     }},
     { "Assistant of Financial Manager", new[] {
-        "ai.dashboard.view_limited", "ai.reports.view_limited"
+        "ai.dashboard.view_limited", "ai.reports.view_limited", "ai.audit.view_limited", "ai.duplicate.view", "ai.duplicate.scan"
     }},
     { "Client", Array.Empty<string>() }
 };
 
 // JWT and local dev token helper mapping roles to explicit usernames & claim arrays
-(string Username, string Role, string[] Permissions) DecodeOrMockToken(string? authHeader)
+(string Username, string Role, string[] Permissions, string ClientId, string AccountType, string PasswordVersion) DecodeOrMockToken(string? authHeader)
 {
     if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
     {
-        return ("anonymous", "Anonymous", Array.Empty<string>());
+        return ("anonymous", "Anonymous", Array.Empty<string>(), "", "", "");
     }
 
     var token = authHeader.Substring(7).Trim();
 
     // Mapping for developer quick simulation tokens
-    if (token == "fm-token") return ("financial_manager_user", "Financial Manager", RolePermissionsMatrix["Financial Manager"]);
-    if (token == "accountant-token") return ("head_accountant_user", "Head Accountant", RolePermissionsMatrix["Head Accountant"]);
-    if (token == "staff-accountant-token") return ("accountant_user", "Accountant", RolePermissionsMatrix["Accountant"]);
-    if (token == "coordinator-token") return ("coordinator_user", "Coordinator", RolePermissionsMatrix["Coordinator"]);
-    if (token == "assistant-token") return ("assistant_fm_user", "Assistant of Financial Manager", RolePermissionsMatrix["Assistant of Financial Manager"]);
-    if (token == "client-token") return ("client_user", "Client", RolePermissionsMatrix["Client"]);
+    if (token == "fm-token") return ("financial_manager_user", "Financial Manager", RolePermissionsMatrix["Financial Manager"], "", "Staff", "2");
+    if (token == "accountant-token") return ("head_accountant_user", "Head Accountant", RolePermissionsMatrix["Head Accountant"], "", "Staff", "2");
+    if (token == "staff-accountant-token") return ("accountant_user", "Accountant", RolePermissionsMatrix["Accountant"], "", "Staff", "2");
+    if (token == "coordinator-token") return ("coordinator_user", "Coordinator", RolePermissionsMatrix["Coordinator"], "", "Staff", "2");
+    if (token == "assistant-token") return ("assistant_fm_user", "Assistant of Financial Manager", RolePermissionsMatrix["Assistant of Financial Manager"], "", "Staff", "2");
+    if (token == "client-token") return ("client_user", "Client", RolePermissionsMatrix["Client"], "JD-001", "Client", "2");
 
     // Standard JWT Base64 Decoding (no external NuGet packages needed)
     try
@@ -108,6 +112,16 @@ var RolePermissionsMatrix = new Dictionary<string, string[]>
             if (root.TryGetProperty("role", out var roleProp)) role = roleProp.GetString() ?? "Client";
             else if (root.TryGetProperty("http://schemas.microsoft.com/ws/2008/06/identity/claims/role", out var urlRoleProp)) role = urlRoleProp.GetString() ?? "Client";
 
+            string clientId = "";
+            if (root.TryGetProperty("client_id", out var clientProp)) clientId = clientProp.GetString() ?? "";
+
+            string accountType = "";
+            if (root.TryGetProperty("account_type", out var accountProp)) accountType = accountProp.GetString() ?? "";
+
+            string passwordVersion = "";
+            if (root.TryGetProperty("password_version", out var pwProp)) passwordVersion = pwProp.GetString() ?? "";
+            else if (root.TryGetProperty("PasswordVersion", out var pwProp2)) passwordVersion = pwProp2.GetString() ?? "";
+
             // Extract explicit permissions from token array if present
             List<string> decodedPermissions = new List<string>();
             if (root.TryGetProperty("permissions", out var permsProp) && permsProp.ValueKind == JsonValueKind.Array)
@@ -124,7 +138,7 @@ var RolePermissionsMatrix = new Dictionary<string, string[]>
                 ? decodedPermissions.ToArray() 
                 : (RolePermissionsMatrix.TryGetValue(role, out var mapVal) ? mapVal : Array.Empty<string>());
 
-            return (username, role, finalPermissions);
+            return (username, role, finalPermissions, clientId, accountType, passwordVersion);
         }
     }
     catch
@@ -132,7 +146,7 @@ var RolePermissionsMatrix = new Dictionary<string, string[]>
         // Fail-safe to anonymous if corrupt JWT
     }
 
-    return ("anonymous", "Anonymous", Array.Empty<string>());
+    return ("anonymous", "Anonymous", Array.Empty<string>(), "", "", "");
 }
 
 // Proxy Endpoint
@@ -152,27 +166,32 @@ app.Map("/{*path}", async (string? path, HttpContext context, IHttpClientFactory
 
     // 1. Authenticate user from Bearer Token
     string? authHeader = context.Request.Headers["Authorization"];
-    var (username, role, permissions) = DecodeOrMockToken(authHeader);
+    var (username, role, permissions, clientId, accountType, passwordVersion) = DecodeOrMockToken(authHeader);
+
+    var pathLower = path.ToLowerInvariant();
 
     // 2. Enforce Authentication check
-    if (role == "Anonymous")
+    if (role == "Anonymous" && !pathLower.StartsWith("auth/login"))
     {
         context.Response.StatusCode = 401;
         await context.Response.WriteAsJsonAsync(new { code = "UNAUTHORIZED", message = "Authentication token is missing or invalid." });
         return;
     }
 
-    // Block Clients completely
-    if (role == "Client")
+    // Block Clients completely from non-data fetching routes, or enforce password flow
+    if (role == "Client" && !pathLower.StartsWith("auth/change-password"))
     {
-        context.Response.StatusCode = 403;
-        await context.Response.WriteAsJsonAsync(new { code = "FORBIDDEN", message = "Access denied: Clients do not have permission to view AI reports." });
-        return;
+        // Require clients to have changed their password (password_version > 1) if they are accessing data.
+        if (passwordVersion == "1")
+        {
+            context.Response.StatusCode = 403;
+            await context.Response.WriteAsJsonAsync(new { code = "MUST_CHANGE_PASSWORD", message = "Access denied: Password must be changed before accessing AI features." });
+            return;
+        }
     }
 
     // 3. Resolve path-based permission checks (RBAC validation)
     string requiredPermission = "";
-    var pathLower = path.ToLowerInvariant();
 
     if (pathLower.StartsWith("dashboard/summary") || 
         pathLower.StartsWith("dashboard/recent-activity") || 
@@ -183,11 +202,28 @@ app.Map("/{*path}", async (string? path, HttpContext context, IHttpClientFactory
     }
     else if (pathLower.StartsWith("dashboard/attention-accounts") || 
              pathLower.StartsWith("collection-priorities") || 
-             pathLower.StartsWith("collection-recommendations"))
+             pathLower.StartsWith("collection-recommendations") ||
+             pathLower.StartsWith("collection/priorities") ||
+             pathLower.StartsWith("collection/readiness"))
     {
         if (pathLower.EndsWith("review") && context.Request.Method == "POST")
         {
-            requiredPermission = pathLower.Contains("recommendations") ? "ai.collection.validate" : "ai.duplicate.review";
+            requiredPermission = "ai.collection.validate";
+        }
+        else
+        {
+            requiredPermission = "ai.collection.view";
+        }
+    }
+    else if (pathLower.StartsWith("recommendations"))
+    {
+        if (pathLower.Contains("decision") && context.Request.Method == "POST")
+        {
+            requiredPermission = "ai.collection.validate";
+        }
+        else if (pathLower.Contains("summary") || pathLower.Contains("export"))
+        {
+            requiredPermission = "ai.reports.view";
         }
         else
         {
@@ -227,7 +263,15 @@ app.Map("/{*path}", async (string? path, HttpContext context, IHttpClientFactory
         // Match specific limited fallbacks as defined by the RBAC matrix
         if (!hasPermission)
         {
-            if (requiredPermission == "ai.dashboard.view" && permissions.Contains("ai.dashboard.view_limited"))
+            if (role == "Client")
+            {
+                // Allow clients to access read-only data endpoints, Python backend will filter by client_id
+                if ((pathLower.StartsWith("collection-priorities") || pathLower.StartsWith("duplicates")) && context.Request.Method == "GET")
+                {
+                    hasPermission = true;
+                }
+            }
+            else if (requiredPermission == "ai.dashboard.view" && permissions.Contains("ai.dashboard.view_limited"))
             {
                 hasPermission = true;
             }
@@ -280,6 +324,9 @@ app.Map("/{*path}", async (string? path, HttpContext context, IHttpClientFactory
     proxyRequest.Headers.Add("X-API-Key", aiServiceApiKey);
     proxyRequest.Headers.Add("X-User-Username", username);
     proxyRequest.Headers.Add("X-User-Role", role);
+    proxyRequest.Headers.Add("X-Client-Id", clientId);
+    proxyRequest.Headers.Add("X-Account-Type", accountType);
+    proxyRequest.Headers.Add("X-Password-Version", passwordVersion);
 
     try
     {

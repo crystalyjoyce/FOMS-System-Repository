@@ -15,27 +15,19 @@ export const ReviewHistory: React.FC = () => {
     setLoading(true);
     setError(null);
 
-    let localHistory: any[] = [];
     try {
-      const localStr = localStorage.getItem('foms_review_history');
-      if (localStr) localHistory = JSON.parse(localStr);
-    } catch (e) {
-      console.error(e);
-    }
-
-    try {
-      const res = await fetch('/api/ai/review-history', {
+      const res = await fetch('/api/ai/duplicates/review-history', {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const serverList = await res.json();
-        const combined = [...localHistory, ...serverList.filter((s: any) => !localHistory.some((l: any) => String(l.id) === String(s.id)))];
-        setHistory(combined);
+        setHistory(Array.isArray(serverList) ? serverList : []);
       } else {
-        setHistory(localHistory);
+        setHistory([]);
       }
-    } catch {
-      setHistory(localHistory);
+    } catch (e: any) {
+      setError(e.message || "Failed to load review history.");
+      setHistory([]);
     } finally {
       setLoading(false);
     }

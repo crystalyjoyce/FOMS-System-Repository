@@ -1,98 +1,133 @@
-from fastapi import FastAPI, Header, HTTPException, status
-from fastapi.middleware.cors import CORSMiddleware
-from app.api.endpoints import router
-from app.core.config import settings
-from app.services.sync import run_synchronization
-from apscheduler.schedulers.background import BackgroundScheduler
-from contextlib import asynccontextmanager
+import os
+import uuid
 import logging
+from contextlib import asynccontextmanager
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("main")
+from fastapi import FastAPI, Request, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
-# Setup Background Scheduler for ETL sync
-scheduler = BackgroundScheduler()
+from app.core.config import settings
+from app.api.routes import (
+    duplicate_routes, collection_routes,
+    recommendation_routes, health_routes, dashboard_routes, auth_routes
+)
+
+logging.basicConfig(level=logging.INFO, handlers=[logging.FileHandler("error.log"), logging.StreamHandler()])
+logger = logging.getLogger(__name__)
+
+from app.core.rate_limit import limiter
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Initialize DB and run initial sync inside scheduler
-    logger.info("Initializing background scheduler...")
-    
-    # Schedule periodic data sync
-    scheduler.add_job(
-        run_synchronization, 
-        'interval', 
-        minutes=settings.SYNC_INTERVAL_MINUTES,
-        id='etl_sync_job',
-        replace_existing=True
-    )
-    scheduler.start()
-    logger.info(f"Sync scheduler started. Will sync every {settings.SYNC_INTERVAL_MINUTES} minutes.")
-    
-    # Run a synchronous initial sync on startup to populate database
-    try:
-        logger.info("Running initial startup synchronization...")
-        run_synchronization()
-    except Exception as e:
-        logger.warning(f"Initial startup synchronization failed (will retry in next scheduler run): {e}")
-
+    logger.info("Initializing AI Service...")
     yield
+    logger.info("Shutting down AI Service...")
 
-    # Shutdown: Clean up scheduler
-    logger.info("Shutting down background scheduler...")
-    scheduler.shutdown()
 
 app = FastAPI(
-    title=settings.PROJECT_NAME, 
+    title=settings.PROJECT_NAME,
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
-# Enable CORS
+# Attach rate limiter to app state
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+# ── §22 CORS Restriction ────────────────────────────────────────────────
+# Only allow known frontend origins — never use "*" in production
+ALLOWED_ORIGINS = os.getenv(
+    "CORS_ALLOWED_ORIGINS",
+    "http://localhost:5174,http://localhost:80,http://localhost,http://127.0.0.1:5174"
+).split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # In production, restrict to gateway / frontend hosts
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-API-Key", "X-User-Role",
+                    "X-User-Username", "X-Client-Id", "X-Account-Type",
+                    "X-Password-Version", "X-Service-Token"],
 )
 
-# API Secret Check Middleware for security
+
+# ── §20 Secure Error Handling ────────────────────────────────────────────
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """
+    Global exception handler — §20 Secure Error Handling.
+    Never expose stack traces, SQL errors, internal paths, connection strings,
+    JWT secrets, API keys, or Gemini credentials to the client.
+    """
+    trace_id = str(uuid.uuid4())
+    logger.error(f"[{trace_id}] Unhandled exception on {request.url.path}: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "success": False,
+            "message": "An internal error occurred. Please contact support if this persists.",
+            "traceId": trace_id,
+            "debug_error": str(exc)
+        },
+    )
+
+
+# ── API Secret Check Middleware (service-to-service) ─────────────────────
 @app.middleware("http")
-async def verify_gateway_api_key(request, call_next):
+async def verify_gateway_api_key(request: Request, call_next):
     # Skip docs and health checks from key requirements
-    if request.url.path in ["/health", "/docs", "/openapi.json", "/redoc"]:
+    if request.url.path in ["/health", "/health/ready", "/docs", "/openapi.json", "/redoc"]:
         return await call_next(request)
-        
+
     api_key = request.headers.get("X-API-Key")
     if not api_key:
-        # Fallback to check Authorization header
         auth_header = request.headers.get("Authorization")
-        if auth_header and auth_header.startswith("Bearer "):
-            # Let Bearer validation pass or handle it in Gateway. 
-            # In our side-car architecture, gateway appends X-API-Key.
-            pass
-        elif auth_header and auth_header.startswith("ApiKey "):
+        if auth_header and auth_header.startswith("ApiKey "):
             api_key = auth_header.split(" ")[1]
-            
+
     if api_key != settings.AI_SERVICE_API_KEY:
-        # For development, allow local calls if no API key is specified and they come from localhost
-        host = request.client.host
+        host = request.client.host if request.client else "unknown"
         if host in ["127.0.0.1", "localhost"] and not api_key:
-            # Let it proceed for easy local tests
-            pass
+            pass  # Allow local dev without key
         else:
-            from fastapi.responses import JSONResponse
             return JSONResponse(
                 status_code=status.HTTP_403_FORBIDDEN,
-                content={"detail": "Access Forbidden: Invalid Service API Key"}
+                content={
+                    "success": False,
+                    "message": "Access Forbidden: Invalid Service API Key",
+                    "traceId": str(uuid.uuid4()),
+                },
             )
-            
-    return await call_next(request)
 
-# Include main router
-app.include_router(router)
+    response = await call_next(request)
+    return response
 
-@app.get("/health")
-def get_health():
-    return {"status": "healthy", "service": "foms-ai-service"}
+
+# ── §22 Security Headers Middleware ──────────────────────────────────────
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    return response
+
+
+# ── Include main routers ────────────────────────────────────────────────
+app.include_router(auth_routes.router, prefix="/api/ai/auth", tags=["auth"])
+app.include_router(dashboard_routes.router, prefix="/api/ai/dashboard", tags=["dashboard"])
+app.include_router(dashboard_routes.router, prefix="/api/ai", tags=["global_ai"])
+app.include_router(duplicate_routes.router, prefix="/api/ai/duplicates", tags=["duplicates"])
+app.include_router(collection_routes.router, prefix="/api/ai/collection", tags=["collection"])
+app.include_router(recommendation_routes.router, prefix="/api/ai/recommendations", tags=["recommendations"])
+app.include_router(health_routes.router, prefix="/health", tags=["health"])

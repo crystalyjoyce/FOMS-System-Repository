@@ -25,17 +25,18 @@ export const Modal: React.FC<ModalProps> = ({
         onClose();
       }
     };
-
-    if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown);
-      // Simple Focus Trap: focus the modal container when it opens
-      modalRef.current?.focus();
-    }
-
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
+    if (isOpen) document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
+
+  // Focus the modal ONLY when it first opens — not on every re-render
+  useEffect(() => {
+    if (isOpen) {
+      // Delay so the modal card is in the DOM first
+      const t = setTimeout(() => modalRef.current?.focus(), 10);
+      return () => clearTimeout(t);
+    }
+  }, [isOpen]); // ← isOpen only, NOT onClose
 
   if (!isOpen) return null;
 
