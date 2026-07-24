@@ -38,7 +38,7 @@ export const CollectionPriorities: React.FC = () => {
     setLoadingPriorities(true);
     setErrorPriorities(null);
     try {
-      const res = await fetch('/api/ai/collection-priorities', {
+      const res = await fetch('/api/ai/collection/priorities', {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -58,7 +58,7 @@ export const CollectionPriorities: React.FC = () => {
     setLoadingRecs(true);
     setErrorRecs(null);
     try {
-      const res = await fetch(`/api/ai/collection-recommendations?status=${statusFilter}`, {
+      const res = await fetch(`/api/ai/collection/recommendations?status=${statusFilter}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -85,7 +85,7 @@ export const CollectionPriorities: React.FC = () => {
 
   const handleOpenPriorityDetail = async (row: any) => {
     try {
-      const res = await fetch(`/api/ai/collection-priorities/${row.id}`, {
+      const res = await fetch(`/api/ai/collection/priorities/${row.id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -113,7 +113,7 @@ export const CollectionPriorities: React.FC = () => {
     }
     setModalLoading(true);
     try {
-      const res = await fetch(`/api/ai/collection-recommendations/${selectedRec.id}/review`, {
+      const res = await fetch(`/api/ai/collection/recommendations/${selectedRec.id}/review`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ decision, remarks, recommendedAction }),
@@ -199,18 +199,18 @@ export const CollectionPriorities: React.FC = () => {
       render: (row: any) => <StatusBadge status={priorityToStatus(row.priority_level)} />,
     },
     {
-      key: 'risk_score',
-      label: 'Predictive Risk Score',
+      key: 'priority_score',
+      label: 'Priority Score',
       sortable: true,
       width: '210px',
       render: (row: any) => {
         const p = String(row.priority_level || '').toUpperCase();
-        const score = row.risk_score || (
+        const score = row.priority_score || row.risk_score || (
           p.includes('CRITICAL') || p.includes('URGENT') ? 95 :
           p.includes('HIGH') ? 82 :
           p.includes('MEDIUM') ? 55 : 15
         );
-        const level = score >= 90 ? 'Critical Risk' : score >= 75 ? 'High Risk' : score >= 40 ? 'Medium Risk' : 'Low Risk';
+        const level = score >= 90 ? 'Critical Priority' : score >= 75 ? 'High Priority' : score >= 40 ? 'Medium Priority' : 'Low Priority';
         const color = score >= 90 ? 'var(--err)' : score >= 75 ? 'var(--warn)' : score >= 40 ? '#D97706' : 'var(--ok)';
         const bg = score >= 90 ? 'var(--err-bg)' : score >= 75 ? 'var(--warn-bg)' : score >= 40 ? '#FEF3C7' : 'var(--ok-bg)';
 
@@ -307,7 +307,7 @@ export const CollectionPriorities: React.FC = () => {
 
   return (
     <div className="main-content fade-in">
-      <AiHeader title="Collection Priorities &amp; Receivable Risk Monitoring" />
+      <AiHeader title="Collection Priorities" />
 
       <div className="page-container">
         <DecisionSupportNotice />

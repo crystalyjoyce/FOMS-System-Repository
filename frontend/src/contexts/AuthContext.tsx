@@ -21,7 +21,7 @@ interface AuthContextType {
   token: string | null;
   permissions: Permissions | null;
   loading: boolean;
-  login: (role: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -88,36 +88,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loadSession();
   }, []);
 
-  const login = async (role: string) => {
+  const login = async (username: string, password: string) => {
     setLoading(true);
-    // Standard mock token mappings to enable simple local testing
-    let mockToken = "fm-token";
-    let username = "financial_manager_user";
-
-    if (role === "Head Accountant") {
-      mockToken = "accountant-token";
-      username = "head_accountant_user";
-    } else if (role === "Accountant") {
-      mockToken = "staff-accountant-token";
-      username = "accountant_user";
-    } else if (role === "Coordinator") {
-      mockToken = "coordinator-token";
-      username = "coordinator_user";
-    } else if (role === "Assistant of Financial Manager") {
-      mockToken = "assistant-token";
-      username = "assistant_fm_user";
-    } else if (role === "Client") {
-      mockToken = "client-token";
-      username = "client_user";
-    }
-
-    const mockUser = { username, role };
-    localStorage.setItem("foms_ai_token", mockToken);
-    localStorage.setItem("foms_ai_user", JSON.stringify(mockUser));
     
-    setToken(mockToken);
-    setUser(mockUser);
-    setPermissions(mapRoleToPermissions(role));
+    try {
+      const res = await fetch("/api/ai/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ username, password })
+      });
+      
+      // Parse body first so we can read the server's error detail
+      const data = await res.json();
+
+      if (!res.ok) {
+        // Map HTTP status codes to human-friendly messages
+        if (res.status === 401) {
+          throw new Error("Invalid Employee ID or password. Please check your credentials and try again.");
+        } else if (res.status === 403) {
+          throw new Error("Your account is inactive. Please contact your administrator.");
+        } else {
+          const detail = data?.detail || data?.message || "An unexpected error occurred.";
+          throw new Error(detail);
+        }
+      }
+
+      // Even a 200 response can contain a server-side error (backend quirk)
+      if (data?.error) {
+        throw new Error("Invalid Employee ID or password. No account found with those credentials.");
+      }
+
+      const { token, user: userData } = data;
+
+      if (!token || !userData) {
+        throw new Error("Invalid Employee ID or password. No account found with those credentials.");
+      }
+      
+      localStorage.setItem("foms_ai_token", token);
+      localStorage.setItem("foms_ai_user", JSON.stringify(userData));
+      
+      setToken(token);
+      setUser(userData);
+      setPermissions(mapRoleToPermissions(userData.role));
+    } catch (e) {
+      setLoading(false);
+      throw e;
+    }
+    
     setLoading(false);
   };
 
@@ -127,6 +146,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setToken(null);
     setUser(null);
     setPermissions(null);
+    setLoading(false);
   };
 
   return (

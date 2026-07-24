@@ -88,28 +88,9 @@ export const AuditTrail: React.FC = () => {
       }
 
       const data = await res.json();
-      let localLogs: any[] = [];
-      try {
-        const localStr = localStorage.getItem('foms_audit_trail');
-        if (localStr) localLogs = JSON.parse(localStr);
-      } catch (err) {
-        console.error(err);
-      }
-      const combined = [...localLogs, ...(data.items || [])];
-      setItems(combined);
+      setItems(data.items || []);
     } catch (e: any) {
-      let localLogs: any[] = [];
-      try {
-        const localStr = localStorage.getItem('foms_audit_trail');
-        if (localStr) localLogs = JSON.parse(localStr);
-      } catch (err) {
-        console.error(err);
-      }
-      if (localLogs.length > 0) {
-        setItems(localLogs);
-      } else {
-        setError(e.message || "Failed to load audit logs.");
-      }
+      setError(e.message || "Failed to load audit logs.");
     } finally {
       setLoading(false);
     }

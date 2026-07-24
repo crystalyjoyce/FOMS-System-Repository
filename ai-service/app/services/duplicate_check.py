@@ -1,10 +1,12 @@
 import re
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 from rapidfuzz import fuzz
 from sqlalchemy.orm import Session
 from app.models.database import AIDuplicateAlert, AIDuplicateMatch, AIOutputLog
+from app.schemas.schemas import WaybillDuplicateRequest, InvoiceDuplicateRequest, OfficialReceiptDuplicateRequest, SpeedPayDuplicateRequest
 from datetime import datetime
 from app.core.normalizer import normalize_reference, normalize_invoice
+from app.services.foms_client import FomsClient
 
 def normalize_string(val: str) -> str:
     """
@@ -12,224 +14,312 @@ def normalize_string(val: str) -> str:
     """
     return normalize_reference(val)
 
-def check_duplicates(
-    db: Session,
-    waybills: List[dict],
-    invoices: List[dict],
-    payments: List[dict],
-    receipts: List[dict],
-    speedpay: List[dict]
-) -> Tuple[int, int]:
-    """
-    Compares records to find duplicates.
-    Saves new AIDuplicateAlerts and AIDuplicateMatches to DB.
-    Returns (scanned_count, generated_alerts_count).
-    """
-    scanned_count = len(waybills) + len(invoices) + len(payments) + len(receipts) + len(speedpay)
-    new_alerts = 0
+def check_waybill_duplicate(db: Session, request: WaybillDuplicateRequest, foms_client: FomsClient) -> Optional[AIDuplicateAlert]:
+    waybills = foms_client.get_waybills()
+    req_norm = normalize_string(request.waybillNumber)
+    
+    best_similarity = 0.0
+    best_match = None
+    reason = ""
 
-    # Retrieve existing alert identifiers to avoid creating duplicates of alerts
-    existing_alerts = db.query(AIDuplicateAlert.source_record_id, AIDuplicateAlert.matched_record_id).all()
-    existing_pairs = set(existing_alerts)
+    for wb in waybills:
+        num = wb.get("waybillNumber", "")
+        norm = normalize_string(num)
+        
+        if req_norm == norm and req_norm != "":
+            best_similarity = 100.0
+            best_match = wb
+            reason = f"Exact match found for normalized waybill number: {request.waybillNumber} and {num}."
+            break
+        else:
+            score = fuzz.ratio(request.waybillNumber.upper(), num.upper())
+            if score >= 90 and score > best_similarity:
+                best_similarity = float(score)
+                best_match = wb
+                reason = f"Fuzzy match found for waybill numbers: {request.waybillNumber} and {num} with high similarity ({best_similarity}%)."
 
-    # Helper to check if alert already exists (either order)
-    def alert_exists(src_id: str, match_id: str) -> bool:
-        return (src_id, match_id) in existing_pairs or (match_id, src_id) in existing_pairs
+    if best_similarity >= 90 and best_match:
+        alert = AIDuplicateAlert(
+            alert_type="WAYBILL",
+            source_record_id="REQ-WAYBILL", # Using a generic ID since this is an external request
+            matched_record_id=best_match["waybillId"],
+            confidence_score=best_similarity,
+            severity="High" if best_similarity == 100 else "Medium",
+            matched_fields={"waybillNumber": request.waybillNumber},
+            match_reason=reason,
+            status="Pending Review",
+        )
+        db.add(alert)
+        db.flush()
+        
+        match_details = AIDuplicateMatch(
+            alert_id=alert.id,
+            source_details=request.dict(),
+            match_details=best_match
+        )
+        db.add(match_details)
+        db.commit()
+        db.refresh(alert)
+        return alert
 
-    # 1. Waybills Duplicate Checking
-    for i in range(len(waybills)):
-        for j in range(i + 1, len(waybills)):
-            wb1 = waybills[i]
-            wb2 = waybills[j]
+    return None
+
+def check_invoice_duplicate(db: Session, request: InvoiceDuplicateRequest, foms_client: FomsClient) -> Optional[AIDuplicateAlert]:
+    invoices = foms_client.get_invoices()
+    req_norm = normalize_string(request.invoiceNumber)
+    
+    best_similarity = 0.0
+    best_match = None
+    reason = ""
+    matched_field = {}
+
+    for inv in invoices:
+        num = inv.get("invoiceNumber", "")
+        norm = normalize_string(num)
+        
+        if req_norm == norm and req_norm != "":
+            best_similarity = 100.0
+            best_match = inv
+            reason = f"Exact duplicate invoice number detected: {request.invoiceNumber} and {num}."
+            matched_field = {"invoiceNumber": request.invoiceNumber}
+            break
+        
+        score = fuzz.ratio(request.invoiceNumber.upper(), num.upper())
+        if score >= 90 and score > best_similarity:
+            best_similarity = float(score)
+            best_match = inv
+            reason = f"Highly similar invoice numbers: {request.invoiceNumber} and {num}."
+            matched_field = {"invoiceNumber": request.invoiceNumber}
             
-            if alert_exists(wb1["waybillId"], wb2["waybillId"]):
-                continue
+        if best_similarity < 90:
+            if request.clientId == inv.get("clientId") and request.amount == inv.get("amount"):
+                if request.waybillBasis and inv.get("waybillNumber"):
+                    w_norm1 = normalize_string(request.waybillBasis)
+                    w_norm2 = normalize_string(inv.get("waybillNumber"))
+                    if w_norm1 == w_norm2:
+                        best_similarity = 95.0
+                        best_match = inv
+                        reason = f"Invoices have matching client, identical amount (PHP {request.amount:,.2f}), and identical waybill association."
+                        matched_field = {"amount": request.amount, "waybillBasis": request.waybillBasis, "clientId": request.clientId}
 
-            num1 = wb1["waybillNumber"]
-            num2 = wb2["waybillNumber"]
-            norm1 = normalize_string(num1)
-            norm2 = normalize_string(num2)
+    if best_similarity >= 90 and best_match:
+        alert = AIDuplicateAlert(
+            alert_type="INVOICE",
+            source_record_id="REQ-INVOICE",
+            matched_record_id=best_match["invoiceId"],
+            confidence_score=best_similarity,
+            severity="High" if best_similarity == 100 else "Medium",
+            matched_fields=matched_field,
+            match_reason=reason,
+            status="Pending Review",
+        )
+        db.add(alert)
+        db.flush()
+        
+        match_details = AIDuplicateMatch(
+            alert_id=alert.id,
+            source_details=request.dict(),
+            match_details=best_match
+        )
+        db.add(match_details)
+        db.commit()
+        db.refresh(alert)
+        return alert
 
-            similarity = 0.0
-            reason = ""
-            matched_field = ""
+    return None
 
-            if norm1 == norm2 and norm1 != "":
-                similarity = 100.0
-                reason = f"Exact match found for normalized waybill number: {num1} and {num2}."
-                matched_field = "waybillNumber"
-            else:
-                # Use RapidFuzz ratio on original strings
-                score = fuzz.ratio(num1.upper(), num2.upper())
-                if score >= 90:
-                    similarity = float(score)
-                    reason = f"Fuzzy match found for waybill numbers: {num1} and {num2} with high similarity ({similarity}%)."
-                    matched_field = "waybillNumber"
+def check_receipt_duplicate(db: Session, request: OfficialReceiptDuplicateRequest, foms_client: FomsClient) -> Optional[AIDuplicateAlert]:
+    receipts = foms_client.get_official_receipts()
+    req_norm = normalize_string(request.receiptNumber)
+    
+    for rec in receipts:
+        num = rec.get("orNumber", "")
+        norm = normalize_string(num)
+        
+        if req_norm == norm and req_norm != "":
+            alert = AIDuplicateAlert(
+                alert_type="OFFICIAL_RECEIPT",
+                source_record_id="REQ-RECEIPT",
+                matched_record_id=rec["orId"],
+                confidence_score=100.0,
+                severity="High",
+                matched_fields={"orNumber": request.receiptNumber},
+                match_reason=f"Duplicate Official Receipt number detected: {request.receiptNumber} and {num}.",
+                status="Pending Review",
+            )
+            db.add(alert)
+            db.flush()
+            
+            match_details = AIDuplicateMatch(
+                alert_id=alert.id,
+                source_details=request.dict(),
+                match_details=rec
+            )
+            db.add(match_details)
+            db.commit()
+            db.refresh(alert)
+            return alert
 
-            if similarity >= 90:
-                alert = AIDuplicateAlert(
-                    alert_type="WAYBILL",
-                    matched_field=matched_field,
-                    source_record_id=wb1["waybillId"],
-                    matched_record_id=wb2["waybillId"],
-                    similarity_score=similarity,
-                    reason=reason,
-                    review_status="Pending Review",
-                    source_reference_value=num1,
-                    normalized_reference_value=normalize_reference(num1)
-                )
-                db.add(alert)
-                db.flush() # populate ID
+    return None
 
-                match_details = AIDuplicateMatch(
-                    alert_id=alert.id,
-                    source_details=wb1,
-                    match_details=wb2
-                )
-                db.add(match_details)
-                new_alerts += 1
-                existing_pairs.add((wb1["waybillId"], wb2["waybillId"]))
+def check_speedpay_duplicate(db: Session, request: SpeedPayDuplicateRequest, foms_client: FomsClient) -> Optional[AIDuplicateAlert]:
+    speedpay = foms_client.get_speedpay_submissions()
+    req_norm = normalize_string(request.referenceNumber)
+    
+    for sp in speedpay:
+        ref = sp.get("referenceNumber", "")
+        norm = normalize_string(ref)
+        
+        if req_norm == norm and req_norm != "":
+            alert = AIDuplicateAlert(
+                alert_type="SPEEDPAY_REFERENCE",
+                source_record_id="REQ-SPEEDPAY",
+                matched_record_id=sp["submissionId"],
+                confidence_score=100.0,
+                severity="High",
+                matched_fields={"referenceNumber": request.referenceNumber},
+                match_reason=f"Duplicate SpeedPay payment reference number detected: {request.referenceNumber} and {ref}.",
+                status="Pending Review",
+            )
+            db.add(alert)
+            db.flush()
+            
+            match_details = AIDuplicateMatch(
+                alert_id=alert.id,
+                source_details=request.dict(),
+                match_details=sp
+            )
+            db.add(match_details)
+            db.commit()
+            db.refresh(alert)
+            return alert
 
-    # 2. Invoices Duplicate Checking
-    for i in range(len(invoices)):
-        for j in range(i + 1, len(invoices)):
-            inv1 = invoices[i]
-            inv2 = invoices[j]
+    return None
 
-            if alert_exists(inv1["invoiceId"], inv2["invoiceId"]):
-                continue
+def process_scanned_document(db: Session, file_bytes: bytes, filename: str, mime_type: str = "image/jpeg") -> Dict:
+    """
+    Process document image using Gemini 2.5 Flash for OCR extraction and RapidFuzz for duplicate checking against PostgreSQL database.
+    """
+    from app.services.ocr_service import extract_document_fields
+    import uuid
 
-            num1 = inv1["invoiceNumber"]
-            num2 = inv2["invoiceNumber"]
-            norm1 = normalize_string(num1)
-            norm2 = normalize_string(num2)
+    # 1. OCR Field Extraction via Gemini 2.0 Flash
+    extracted = extract_document_fields(file_bytes, filename, mime_type)
+    
+    doc_type = extracted.get("documentType", "OFFICIAL_RECEIPT")
+    
+    # Only reject if Gemini explicitly classified the document as non-financial.
+    # Valid financial document types are always accepted, even if is_valid is missing.
+    valid_doc_types = {"OFFICIAL_RECEIPT", "INVOICE", "WAYBILL", "PROOF_OF_PAYMENT"}
+    is_financial_doc = doc_type in valid_doc_types
+    is_explicitly_invalid = (doc_type == "INVALID_DOCUMENT") or (
+        extracted.get("is_valid") is False and not is_financial_doc
+    )
 
-            similarity = 0.0
-            reason = ""
-            matched_field = ""
+    if is_explicitly_invalid:
+        return {
+            "status": "INVALID_DOCUMENT",
+            "is_valid": False,
+            "message": "INVALID DOCUMENT: The uploaded file is not a valid financial receipt, invoice, or waybill. Please upload a clear financial document.",
+            "extracted": {
+                "documentType": "INVALID_DOCUMENT",
+                "documentNumber": "N/A - Non-Financial Image",
+                "clientName": "Unrecognized Document",
+                "amount": "0.00",
+                "transactionDate": datetime.utcnow().strftime("%Y-%m-%d"),
+                "referenceNumber": "N/A"
+            },
+            "duplicate": False,
+            "confidence": 0
+        }
 
-            # Check invoice number
-            if norm1 == norm2 and norm1 != "":
-                similarity = 100.0
-                reason = f"Exact duplicate invoice number detected: {num1} and {num2}."
-                matched_field = "invoiceNumber"
-            else:
-                score = fuzz.ratio(num1.upper(), num2.upper())
-                if score >= 90:
-                    similarity = float(score)
-                    reason = f"Highly similar invoice numbers: {num1} and {num2}."
-                    matched_field = "invoiceNumber"
+    doc_num = extracted.get("documentNumber", f"DOC-{uuid.uuid4().hex[:6].upper()}")
+    client_name = extracted.get("clientName", "Unknown Client")
+    amount = extracted.get("amount", "0.00")
+    tx_date = extracted.get("transactionDate", datetime.utcnow().strftime("%Y-%m-%d"))
 
-            # Check matching details (Same Client + Same Amount + Same Waybill)
-            if similarity < 90:
-                if inv1["clientId"] == inv2["clientId"] and inv1["amount"] == inv2["amount"]:
-                    if inv1["waybillNumber"] and inv2["waybillNumber"]:
-                        w_norm1 = normalize_string(inv1["waybillNumber"])
-                        w_norm2 = normalize_string(inv2["waybillNumber"])
-                        if w_norm1 == w_norm2:
-                            similarity = 95.0
-                            reason = f"Invoices have matching client ({inv1['clientName']}), identical amount (PHP {inv1['amount']:,.2f}), and identical waybill association ({inv1['waybillNumber']})."
-                            matched_field = "amount_and_waybill"
 
-            if similarity >= 90:
-                alert = AIDuplicateAlert(
-                    alert_type="INVOICE",
-                    matched_field=matched_field,
-                    source_record_id=inv1["invoiceId"],
-                    matched_record_id=inv2["invoiceId"],
-                    similarity_score=similarity,
-                    reason=reason,
-                    review_status="Pending Review",
-                    source_reference_value=num1,
-                    normalized_reference_value=normalize_invoice(num1)
-                )
-                db.add(alert)
-                db.flush()
+    # 2. RapidFuzz check against existing matches in PostgreSQL
+    existing_matches = db.query(AIDuplicateMatch).all()
+    
+    highest_score = 0.0
+    matched_record = None
+    reason = "No matching document found."
 
-                match_details = AIDuplicateMatch(
-                    alert_id=alert.id,
-                    source_details=inv1,
-                    match_details=inv2
-                )
-                db.add(match_details)
-                new_alerts += 1
-                existing_pairs.add((inv1["invoiceId"], inv2["invoiceId"]))
+    req_norm = normalize_string(doc_num)
 
-    # 3. Official Receipts Duplicate Checking
-    for i in range(len(receipts)):
-        for j in range(i + 1, len(receipts)):
-            rec1 = receipts[i]
-            rec2 = receipts[j]
+    for record in existing_matches:
+        source = record.source_details or {}
+        existing_num = source.get("documentNumber") or source.get("receiptNumber") or source.get("invoiceNumber") or source.get("waybillNumber") or ""
+        existing_client = source.get("clientName") or ""
+        
+        ex_norm = normalize_string(existing_num)
 
-            if alert_exists(rec1["orId"], rec2["orId"]):
-                continue
+        if req_norm and ex_norm and req_norm == ex_norm:
+            highest_score = 100.0
+            matched_record = record
+            reason = f"Exact match detected for document number: {doc_num}"
+            break
 
-            num1 = rec1["orNumber"]
-            num2 = rec2["orNumber"]
-            norm1 = normalize_string(num1)
-            norm2 = normalize_string(num2)
+        if doc_num and existing_num:
+            score_num = fuzz.ratio(doc_num.upper(), existing_num.upper())
+            score_client = fuzz.token_sort_ratio(client_name.upper(), existing_client.upper()) if existing_client else 0
+            
+            combined_score = (score_num * 0.7) + (score_client * 0.3)
+            if combined_score > highest_score:
+                highest_score = combined_score
+                matched_record = record
+                reason = f"Fuzzy match detected ({highest_score:.1f}%) with document {existing_num}"
 
-            if norm1 == norm2 and norm1 != "":
-                alert = AIDuplicateAlert(
-                    alert_type="OFFICIAL_RECEIPT",
-                    matched_field="orNumber",
-                    source_record_id=rec1["orId"],
-                    matched_record_id=rec2["orId"],
-                    similarity_score=100.0,
-                    reason=f"Duplicate Official Receipt number detected: {num1} and {num2}.",
-                    review_status="Pending Review",
-                    source_reference_value=num1,
-                    normalized_reference_value=normalize_reference(num1)
-                )
-                db.add(alert)
-                db.flush()
+    is_duplicate = highest_score >= 85.0
 
-                match_details = AIDuplicateMatch(
-                    alert_id=alert.id,
-                    source_details=rec1,
-                    match_details=rec2
-                )
-                db.add(match_details)
-                new_alerts += 1
-                existing_pairs.add((rec1["orId"], rec2["orId"]))
+    if is_duplicate:
+        # Create AIDuplicateAlert in PostgreSQL
+        alert = AIDuplicateAlert(
+            alert_type=doc_type,
+            source_record_id=f"SCAN-{uuid.uuid4().hex[:8].upper()}",
+            matched_record_id=str(matched_record.id) if matched_record else "EXISTING-RECORD",
+            confidence_score=highest_score,
+            severity="High" if highest_score >= 95 else "Medium",
+            matched_fields={"documentNumber": doc_num, "clientName": client_name, "amount": amount},
+            match_reason=reason,
+            status="Pending Review"
+        )
+        db.add(alert)
+        db.flush()
 
-    # 4. SpeedPay Reference Duplicate Checking
-    for i in range(len(speedpay)):
-        for j in range(i + 1, len(speedpay)):
-            sp1 = speedpay[i]
-            sp2 = speedpay[j]
+        match_details = AIDuplicateMatch(
+            alert_id=alert.id,
+            source_details=extracted,
+            match_details=matched_record.source_details if matched_record else {"status": "FLAGGED_DUPLICATE"}
+        )
+        db.add(match_details)
+        db.commit()
 
-            if alert_exists(sp1["submissionId"], sp2["submissionId"]):
-                continue
+        return {
+            "status": "FLAGGED_DUPLICATE",
+            "alert_id": alert.id,
+            "confidence_score": highest_score,
+            "extracted": extracted,
+            "reason": reason,
+            "message": f"Duplicate detected ({highest_score:.1f}% similarity). Document flagged for review."
+        }
+    else:
+        # Store as Unique Document in PostgreSQL
+        match_details = AIDuplicateMatch(
+            alert_id=None,
+            source_details=extracted,
+            match_details={"status": "UNIQUE_DOCUMENT", "cleared_at": datetime.utcnow().isoformat()}
+        )
+        db.add(match_details)
+        db.commit()
 
-            ref1 = sp1["referenceNumber"]
-            ref2 = sp2["referenceNumber"]
-            norm1 = normalize_string(ref1)
-            norm2 = normalize_string(ref2)
+        return {
+            "status": "UNIQUE_DOCUMENT",
+            "match_id": match_details.id,
+            "confidence_score": highest_score,
+            "extracted": extracted,
+            "reason": "No duplicate detected. Cleared for FOMS normal validation.",
+            "message": "Document scanned and cataloged as Unique Document."
+        }
 
-            if norm1 == norm2 and norm1 != "":
-                alert = AIDuplicateAlert(
-                    alert_type="SPEEDPAY_REFERENCE",
-                    matched_field="referenceNumber",
-                    source_record_id=sp1["submissionId"],
-                    matched_record_id=sp2["submissionId"],
-                    similarity_score=100.0,
-                    reason=f"Duplicate SpeedPay payment reference number detected: {ref1} and {ref2}.",
-                    review_status="Pending Review",
-                    source_reference_value=ref1,
-                    normalized_reference_value=normalize_reference(ref1)
-                )
-                db.add(alert)
-                db.flush()
-
-                match_details = AIDuplicateMatch(
-                    alert_id=alert.id,
-                    source_details=sp1,
-                    match_details=sp2
-                )
-                db.add(match_details)
-                new_alerts += 1
-                existing_pairs.add((sp1["submissionId"], sp2["submissionId"]))
-
-    db.commit()
-    return scanned_count, new_alerts

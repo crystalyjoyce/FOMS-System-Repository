@@ -120,11 +120,16 @@ CREATE TABLE IF NOT EXISTS role_permissions (
 
 CREATE TABLE IF NOT EXISTS users (
     user_id SERIAL PRIMARY KEY,
+    login_id VARCHAR(100) UNIQUE,
     full_name VARCHAR(150) NOT NULL,
     email VARCHAR(150) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL, -- Hashed Password
     role_name VARCHAR(50) NOT NULL,
-    is_active BOOLEAN DEFAULT TRUE
+    is_active BOOLEAN DEFAULT TRUE,
+    must_change_password BOOLEAN DEFAULT FALSE,
+    is_temporary_password BOOLEAN DEFAULT FALSE,
+    password_changed_at TIMESTAMP,
+    password_version INT DEFAULT 1
 );
 
 -- 9. AI Activity Logs (Dashboard Recent Activity feed)
@@ -243,13 +248,21 @@ WHERE r.role_name = 'AssistantFinancialManager' AND p.permission_name IN (
 
 -- Seed Users with PBKDF2 (SHA256) hash for 'Password@123'
 -- Hash representation: AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==
-INSERT INTO users (full_name, email, password_hash, role_name) VALUES
-('Maria Santos', 'finance.manager@speedex.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'FinancialManager'),
-('Juan Dela Cruz', 'head.accountant@speedex.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'HeadAccountant'),
-('Pedro Penduko', 'staff.accountant@speedex.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'Accountant'),
-('Ana Ramos', 'coordinator@speedex.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'Coordinator'),
-('Miguel Gomez', 'assistant.fm@speedex.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'AssistantFinancialManager'),
-('Client User', 'client@external.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'Client')
+INSERT INTO users (login_id, full_name, email, password_hash, role_name) VALUES
+('EMP-001', 'Maria Santos', 'finance.manager@speedex.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'FinancialManager'),
+('EMP-002', 'Juan Dela Cruz', 'head.accountant@speedex.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'HeadAccountant'),
+('EMP-003', 'Pedro Penduko', 'staff.accountant@speedex.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'Accountant'),
+('EMP-004', 'Ana Ramos', 'coordinator@speedex.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'Coordinator'),
+('EMP-005', 'Miguel Gomez', 'assistant.fm@speedex.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'AssistantFinancialManager'),
+('EMP-006', 'Client User', 'client@external.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'Client')
+ON CONFLICT (email) DO NOTHING;
+
+-- Seed Client Users with BCrypt hash for 'Password@123'
+INSERT INTO users (login_id, full_name, email, password_hash, role_name, must_change_password, is_temporary_password, password_version) VALUES
+('JD-001', 'JD-001 Client', 'jd001@example.com', '$2b$12$Sib5elfB0cG0IwAHcAqJ1uc27zqRN3eNRY5dWl9cxZbGGx5gfRokS', 'Client', TRUE, TRUE, 1),
+('CLIENT-002', 'Client 002', 'client002@example.com', '$2b$12$Sib5elfB0cG0IwAHcAqJ1uc27zqRN3eNRY5dWl9cxZbGGx5gfRokS', 'Client', TRUE, TRUE, 1),
+('ABC-003', 'ABC-003 Client', 'abc003@example.com', '$2b$12$Sib5elfB0cG0IwAHcAqJ1uc27zqRN3eNRY5dWl9cxZbGGx5gfRokS', 'Client', TRUE, TRUE, 1),
+('XYZ-004', 'XYZ-004 Client', 'xyz004@example.com', '$2b$12$Sib5elfB0cG0IwAHcAqJ1uc27zqRN3eNRY5dWl9cxZbGGx5gfRokS', 'Client', TRUE, TRUE, 1)
 ON CONFLICT (email) DO NOTHING;
 
 -- Seed AI Duplicate Alerts (including original inconsistent values and canonical normalizations)

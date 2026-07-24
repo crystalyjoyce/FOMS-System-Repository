@@ -32,7 +32,7 @@ export const Dashboard: React.FC = () => {
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d');
   const [chartMetric, setChartMetric] = useState<'all' | 'outstanding' | 'collected'>('all');
 
-  // Format trend data with smooth dates & fallback mock points for rich visualization
+  // Format trend data with smooth dates
   const formattedTrends = useMemo(() => {
     if (trends && trends.length > 0) {
       return trends.map(t => ({
@@ -41,31 +41,31 @@ export const Dashboard: React.FC = () => {
         flaggedAmount: Math.round((t.totalOutstanding || 0) * 0.15)
       }));
     }
-    // Rich fallback data if trends empty
+    // Zeroed points if database trends empty
     return [
-      { dateStr: 'Jul 1', totalOutstanding: 1450000, collectedAmount: 850000, flaggedAmount: 120000 },
-      { dateStr: 'Jul 5', totalOutstanding: 1380000, collectedAmount: 920000, flaggedAmount: 95000 },
-      { dateStr: 'Jul 10', totalOutstanding: 1520000, collectedAmount: 1040000, flaggedAmount: 140000 },
-      { dateStr: 'Jul 15', totalOutstanding: 1290000, collectedAmount: 1180000, flaggedAmount: 80000 },
-      { dateStr: 'Jul 20', totalOutstanding: 1610000, collectedAmount: 1250000, flaggedAmount: 160000 },
-      { dateStr: 'Jul 22', totalOutstanding: 1420000, collectedAmount: 1310000, flaggedAmount: 110000 }
+      { dateStr: 'Jul 1', totalOutstanding: 0, collectedAmount: 0, flaggedAmount: 0 },
+      { dateStr: 'Jul 5', totalOutstanding: 0, collectedAmount: 0, flaggedAmount: 0 },
+      { dateStr: 'Jul 10', totalOutstanding: 0, collectedAmount: 0, flaggedAmount: 0 },
+      { dateStr: 'Jul 15', totalOutstanding: 0, collectedAmount: 0, flaggedAmount: 0 },
+      { dateStr: 'Jul 20', totalOutstanding: 0, collectedAmount: 0, flaggedAmount: 0 },
+      { dateStr: 'Jul 22', totalOutstanding: 0, collectedAmount: 0, flaggedAmount: 0 }
     ];
   }, [trends]);
 
   // AI Duplicate Detection Categorization Breakdown
   const duplicatePieData = [
-    { name: 'Exact Duplicate Match', value: summary?.exactMatchAlerts ?? 12, color: 'var(--err)' },
-    { name: 'High Similarity Match', value: (summary?.totalDuplicateAlerts ?? 24) - (summary?.exactMatchAlerts ?? 12) - 4, color: 'var(--warn)' },
-    { name: 'Cleared Unique Records', value: 8, color: 'var(--ok)' },
-    { name: 'Pending Review', value: summary?.pendingDuplicateReviews ?? 4, color: 'var(--teal)' }
+    { name: 'Exact Duplicate Match', value: summary?.exactMatchAlerts ?? 0, color: 'var(--err)' },
+    { name: 'High Similarity Match', value: Math.max(0, (summary?.totalDuplicateAlerts ?? 0) - (summary?.exactMatchAlerts ?? 0)), color: 'var(--warn)' },
+    { name: 'Cleared Unique Records', value: 0, color: 'var(--ok)' },
+    { name: 'Pending Review', value: summary?.pendingDuplicateReviews ?? 0, color: 'var(--teal)' }
   ];
 
-  // Accounts Aging Risk Distribution
-  const agingRiskData = [
-    { range: '< 30 Days', amount: 480000, count: 12, risk: 'Low Risk', color: 'var(--ok)' },
-    { range: '30-60 Days', amount: 320000, count: 6, risk: 'Medium Risk', color: 'var(--teal)' },
-    { range: '60-90 Days', amount: 210000, count: 3, risk: 'High Risk', color: 'var(--warn)' },
-    { range: '90+ Days', amount: 145000, count: summary?.urgentCollectionAccounts ?? 4, risk: 'Critical Risk', color: 'var(--err)' }
+  // Accounts Aging Distribution
+  const agingData = [
+    { range: '< 30 Days', amount: 0, count: 0, status: 'Current', color: 'var(--ok)' },
+    { range: '30-60 Days', amount: 0, count: 0, status: 'Overdue', color: 'var(--teal)' },
+    { range: '60-90 Days', amount: 0, count: 0, status: 'Delinquent', color: 'var(--warn)' },
+    { range: '90+ Days', amount: 0, count: summary?.urgentCollectionAccounts ?? 0, status: 'Severely Delinquent', color: 'var(--err)' }
   ];
 
   if (loading) {
@@ -330,7 +330,7 @@ export const Dashboard: React.FC = () => {
               </ResponsiveContainer>
               <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}>
                 <span style={{ fontSize: '20px', fontWeight: 800, color: 'var(--tp)', display: 'block', lineHeight: 1 }}>
-                  {summary?.totalDuplicateAlerts ?? 24}
+                  {summary?.totalDuplicateAlerts ?? 0}
                 </span>
                 <span style={{ fontSize: '10.5px', color: 'var(--tt)', fontWeight: 600, textTransform: 'uppercase' }}>Alerts</span>
               </div>
@@ -360,16 +360,16 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Row 2 Analytics: Aging Risk Distribution Bar Chart & AI Intelligence Summary */}
+        {/* Row 2 Analytics: Aging Distribution Bar Chart */}
         <div className="dashboard-grid" style={{ marginBottom: '24px' }}>
 
-          {/* Accounts Aging Risk Bar Chart */}
+          {/* Accounts Aging Bar Chart */}
           <div className="card" style={{ minHeight: '340px', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
               <div>
-                <h3 style={{ margin: 0, fontFamily: 'var(--fh)', fontSize: '15px', fontWeight: 700 }}>Receivable Aging & Risk Exposure</h3>
+                <h3 style={{ margin: 0, fontFamily: 'var(--fh)', fontSize: '15px', fontWeight: 700 }}>Receivable Aging Distribution</h3>
                 <p style={{ fontSize: '12px', color: 'var(--tt)', marginTop: '2px', margin: 0 }}>
-                  Categorized risk buckets based on payment due dates and AI predictive analysis
+                  Categorized aging buckets based on payment due dates
                 </p>
               </div>
               <BarChart2 size={16} style={{ color: 'var(--teal)' }} />
@@ -377,7 +377,7 @@ export const Dashboard: React.FC = () => {
 
             <div style={{ width: '100%', height: '220px', flex: 1 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={agingRiskData} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
+                <BarChart data={agingData} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
                   <XAxis dataKey="range" stroke="var(--ts)" fontSize={11} tickLine={false} />
                   <YAxis stroke="var(--ts)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(val) => `₱${(val / 1000).toFixed(0)}k`} />
@@ -386,58 +386,12 @@ export const Dashboard: React.FC = () => {
                     formatter={(val: any) => [`₱${Number(val).toLocaleString()}`, 'Balance']}
                   />
                   <Bar dataKey="amount" radius={[6, 6, 0, 0]}>
-                    {agingRiskData.map((entry, index) => (
+                    {agingData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* AI Risk Score Breakdown */}
-          <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
-            <h3 style={{ fontFamily: 'var(--fh)', fontSize: '15px', fontWeight: 700, margin: '0 0 16px' }}>AI Risk Coverage & Health Index</h3>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', flex: 1 }}>
-              <div style={{ padding: '14px', borderRadius: '12px', backgroundColor: 'var(--s1)', border: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', marginBottom: '6px' }}>
-                  <span style={{ fontWeight: 600, color: 'var(--ts)' }}>AI Verification Coverage</span>
-                  <span style={{ fontWeight: 700, color: 'var(--teal-dark)' }}>96.8% Covered</span>
-                </div>
-                <div style={{ width: '100%', height: '8px', backgroundColor: 'var(--s2)', borderRadius: '4px', overflow: 'hidden' }}>
-                  <div style={{ width: '96.8%', height: '100%', backgroundColor: 'var(--teal)' }} />
-                </div>
-              </div>
-
-              <div style={{ padding: '14px', borderRadius: '12px', backgroundColor: 'var(--s1)', border: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', marginBottom: '6px' }}>
-                  <span style={{ fontWeight: 600, color: 'var(--ts)' }}>Duplicate Prevention Score</span>
-                  <span style={{ fontWeight: 700, color: 'var(--ok)' }}>100% Blocked</span>
-                </div>
-                <div style={{ width: '100%', height: '8px', backgroundColor: 'var(--s2)', borderRadius: '4px', overflow: 'hidden' }}>
-                  <div style={{ width: '100%', height: '100%', backgroundColor: 'var(--ok)' }} />
-                </div>
-              </div>
-
-              <div style={{ padding: '14px', borderRadius: '12px', backgroundColor: 'var(--s1)', border: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', marginBottom: '6px' }}>
-                  <span style={{ fontWeight: 600, color: 'var(--ts)' }}>High Aging Account Exposure</span>
-                  <span style={{ fontWeight: 700, color: 'var(--err)' }}>12.4% Overdue</span>
-                </div>
-                <div style={{ width: '100%', height: '8px', backgroundColor: 'var(--s2)', borderRadius: '4px', overflow: 'hidden' }}>
-                  <div style={{ width: '12.4%', height: '100%', backgroundColor: 'var(--err)' }} />
-                </div>
-              </div>
-            </div>
-
-            <div style={{ marginTop: '16px', borderTop: '1px solid var(--border)', paddingTop: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '12px', color: 'var(--ts)' }}>
-                Monitored Total: <strong>₱1,155,000.00</strong>
-              </span>
-              <a href="/ai/collection-priorities" className="btn btn-outline" style={{ height: '30px', fontSize: '11.5px', padding: '0 10px', fontWeight: 600, textDecoration: 'none' }}>
-                View Aging Breakdown
-              </a>
             </div>
           </div>
         </div>
@@ -448,7 +402,7 @@ export const Dashboard: React.FC = () => {
           {/* Collection Accounts Requiring Attention */}
           <div className="card" style={{ display: 'flex', flexDirection: 'column', minHeight: '320px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontFamily: 'var(--fh)', fontSize: '15px', fontWeight: 700, margin: 0 }}>High-Risk Accounts Requiring Attention</h3>
+              <h3 style={{ fontFamily: 'var(--fh)', fontSize: '15px', fontWeight: 700, margin: 0 }}>Priority Accounts Requiring Attention</h3>
               <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--err)', backgroundColor: 'var(--err-bg)', padding: '2px 8px', borderRadius: '4px' }}>
                 {attentionAccounts.length} High Priority
               </span>

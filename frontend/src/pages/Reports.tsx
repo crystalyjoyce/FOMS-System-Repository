@@ -35,9 +35,9 @@ export const Reports: React.FC = () => {
       } else if (reportType === 'review-history') {
         endpoint = '/api/ai/review-history';
       } else if (reportType === 'collection-priority') {
-        endpoint = '/api/ai/collection-priorities';
+        endpoint = '/api/ai/collection/priorities';
       } else if (reportType === 'collection-recommendations') {
-        endpoint = '/api/ai/collection-recommendations';
+        endpoint = '/api/ai/collection/recommendations';
       }
 
       const res = await fetch(endpoint, {
@@ -267,7 +267,7 @@ export const Reports: React.FC = () => {
       }));
     } else if (reportType === 'collection-priority') {
       title = "Collection Priorities Aging Queue";
-      subtitle = "AI risk-scored priority queue for overdue accounts receivables.";
+      subtitle = "AI priority queue for overdue accounts receivables.";
       pdfColumns = [
         { header: 'Invoice Number', dataKey: 'invoice_number' },
         { header: 'Client Name', dataKey: 'client_name' },

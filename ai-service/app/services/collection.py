@@ -1,21 +1,18 @@
 from typing import List, Dict, Tuple
 from sqlalchemy.orm import Session
-from app.models.database import AICollectionPriority, AICollectionRecommendation
+from app.models.database import AICollectionRun, AICollectionPriority, AIPriorityFactor, AIRecommendation
 from datetime import datetime, date
 import json
-from app.core.normalizer import normalize_invoice
+from app.services.foms_client import FomsClient
 
-def calculate_collection_priorities(
-    db: Session,
-    accounts_receivable: List[dict],
-    collection_history: List[dict]
-) -> Tuple[int, int]:
+def calculate_collection_priorities(db: Session, foms_client: FomsClient, trace_id: str = None) -> Tuple[int, int]:
     """
-    Ranks invoices in Accounts Receivable and updates AICollectionPriority and AICollectionRecommendation tables.
-    Returns (processed_count, updated_count).
+    On-demand generation of collection priorities.
+    Fetches latest aging data, accounts receivable, and collection history from FOMS.
+    Generates a new AICollectionRun and ranks invoices.
     """
-    processed_count = 0
-    updated_count = 0
+    ar_data = foms_client.get_accounts_receivable()
+    collection_history = foms_client.get_collection_history()
     
     # Map collection history by invoiceId
     history_map = {}
@@ -25,19 +22,29 @@ def calculate_collection_priorities(
             if inv_id not in history_map:
                 history_map[inv_id] = []
             history_map[inv_id].append(hist)
+            
+    # Create the run
+    run = AICollectionRun(
+        as_of_date=datetime.utcnow(),
+        model_version="1.0.0",
+        status="IN_PROGRESS",
+        record_count=len(ar_data),
+        trace_id=trace_id
+    )
+    db.add(run)
+    db.flush()
 
+    processed_count = 0
+    updated_count = 0
     current_date = date(2026, 7, 20) # Current simulated system date
 
-    for ar in accounts_receivable:
+    for ar in ar_data:
         invoice_id = ar["invoiceId"]
-        invoice_number = ar["invoiceNumber"]
         client_id = ar["clientId"]
-        client_name = ar["clientName"]
-        amount = ar["amount"]
-        outstanding_balance = ar["outstandingBalance"]
+        outstanding_balance = ar.get("outstandingBalance", 0)
         
         # Parse due date
-        due_date_str = ar["dueDate"]
+        due_date_str = ar.get("dueDate", current_date.strftime("%Y-%m-%d"))
         try:
             due_date = datetime.strptime(due_date_str, "%Y-%m-%d").date()
         except ValueError:
@@ -45,101 +52,97 @@ def calculate_collection_priorities(
 
         days_overdue = (current_date - due_date).days
         
-        # Calculate level and basis
-        priority_level = "Low"
-        basis = []
-        recommended_action = "No active follow-up required (within payment term)."
+        # Explainable Rule-Based Scoring
+        score = 0.0
+        priority_level = "LOW"
+        explanation = []
+        factors = []
 
-        # Outstanding threshold
+        # Factor 1: High Balance
         is_large_amount = outstanding_balance >= 50000.00
         if is_large_amount:
-            basis.append(f"Outstanding balance is high (PHP {outstanding_balance:,.2f})")
+            score += 40.0
+            factors.append({"name": "High Outstanding Balance", "value": f"PHP {outstanding_balance:,.2f}", "contribution": 40.0})
+            explanation.append(f"High outstanding balance of PHP {outstanding_balance:,.2f}.")
+        else:
+            factors.append({"name": "Outstanding Balance", "value": f"PHP {outstanding_balance:,.2f}", "contribution": 0.0})
 
-        # History checks
-        inv_history = history_map.get(invoice_id, [])
-        unresolved_history = False
-        for hist in inv_history:
-            if hist.get("outcome") == "Unresolved" or "not received" in hist.get("outcome", "").lower():
-                unresolved_history = True
-                basis.append(f"Unresolved previous follow-up: {hist['actionTaken']} on {hist['contactDate']}.")
-                break
-
-        # Priority categorization logic
+        # Factor 2: Overdue Status
         if days_overdue > 30:
-            priority_level = "Urgent" if is_large_amount else "High"
-            basis.append(f"Invoice is severely overdue ({days_overdue} days).")
-            recommended_action = "Initiate formal collection reminder and escalate to client finance head."
+            score += 50.0
+            factors.append({"name": "Severely Overdue", "value": f"{days_overdue} days", "contribution": 50.0})
+            explanation.append(f"Invoice is severely overdue by {days_overdue} days.")
+            priority_level = "HIGH"
         elif days_overdue > 0:
-            priority_level = "High"
-            basis.append(f"Invoice is overdue ({days_overdue} days).")
-            recommended_action = "Send official overdue warning email and follow up by phone."
+            score += 30.0
+            factors.append({"name": "Overdue", "value": f"{days_overdue} days", "contribution": 30.0})
+            explanation.append(f"Invoice is overdue by {days_overdue} days.")
+            priority_level = "HIGH" if score >= 70 else "MEDIUM"
         elif 0 <= (due_date - current_date).days <= 7:
-            priority_level = "High" if is_large_amount else "Medium"
-            days_left = (due_date - current_date).days
-            basis.append(f"Invoice is due soon in {days_left} days.")
-            recommended_action = "Send pre-due courtesy reminder email."
+            score += 10.0
+            factors.append({"name": "Due Soon", "value": f"{(due_date - current_date).days} days left", "contribution": 10.0})
+            explanation.append(f"Invoice is due soon.")
+            priority_level = "MEDIUM" if score >= 40 else "LOW"
         else:
-            # Not due yet
-            if unresolved_history:
-                priority_level = "Medium"
-                recommended_action = "Verify SpeedPay submissions and validate client payment status."
-            else:
-                priority_level = "Low"
-                recommended_action = "Monitor invoice aging and payment submission status."
+            factors.append({"name": "Not Due", "value": f"{(due_date - current_date).days} days left", "contribution": 0.0})
 
-        # Fetch existing priority record
-        existing = db.query(AICollectionPriority).filter(AICollectionPriority.invoice_id == invoice_id).first()
+        # Factor 3: Collection History (Unresolved)
+        inv_history = history_map.get(invoice_id, [])
+        unresolved = any(h.get("outcome") == "Unresolved" for h in inv_history)
+        if unresolved:
+            score += 15.0
+            factors.append({"name": "Unresolved History", "value": "Yes", "contribution": 15.0})
+            explanation.append("Previous follow-up was unresolved.")
+            priority_level = "HIGH" if score >= 60 else priority_level
+
+        # Ensure score is capped
+        score = min(score, 100.0)
         
-        if existing:
-            existing.outstanding_balance = outstanding_balance
-            existing.priority_level = priority_level
-            existing.explanation_basis = basis
-            existing.source_invoice_number = invoice_number
-            existing.normalized_invoice_number = normalize_invoice(invoice_number)
-            db.flush()
-            
-            # Update recommendation
-            rec = db.query(AICollectionRecommendation).filter(AICollectionRecommendation.priority_id == existing.id).first()
-            if rec:
-                # If review status is not pending, we only update if details changed, or we keep it
-                rec.recommended_action = recommended_action
-                rec.explanation_basis = basis
-            else:
-                new_rec = AICollectionRecommendation(
-                    priority_id=existing.id,
-                    recommended_action=recommended_action,
-                    explanation_basis=basis,
-                    review_status="Pending Review"
-                )
-                db.add(new_rec)
-            
-            updated_count += 1
+        # Recommendations
+        if priority_level == "HIGH":
+            rec_text = "Initiate formal collection reminder and escalate."
+            notice = "Priority: HIGH based on overdue status and balance."
+        elif priority_level == "MEDIUM":
+            rec_text = "Send official overdue warning email."
+            notice = "Priority: MEDIUM. Monitor closely."
         else:
-            new_priority = AICollectionPriority(
-                invoice_id=invoice_id,
-                invoice_number=invoice_number,
-                client_id=client_id,
-                client_name=client_name,
-                outstanding_balance=outstanding_balance,
-                due_date=due_date,
-                priority_level=priority_level,
-                explanation_basis=basis,
-                source_invoice_number=invoice_number,
-                normalized_invoice_number=normalize_invoice(invoice_number)
+            rec_text = "Monitor invoice aging."
+            notice = "Priority: LOW. No immediate action required."
+
+        # Save Priority Result
+        priority = AICollectionPriority(
+            run_id=run.id,
+            invoice_id=invoice_id,
+            client_id=client_id,
+            score=score,
+            priority=priority_level,
+            explanation=" ".join(explanation) if explanation else "Invoice is current and in good standing."
+        )
+        db.add(priority)
+        db.flush()
+        
+        # Save Factors
+        for f in factors:
+            factor_rec = AIPriorityFactor(
+                priority_result_id=priority.id,
+                factor_name=f["name"],
+                factor_value=str(f["value"]),
+                contribution=f["contribution"]
             )
-            db.add(new_priority)
-            db.flush() # get ID
+            db.add(factor_rec)
             
-            new_rec = AICollectionRecommendation(
-                priority_id=new_priority.id,
-                recommended_action=recommended_action,
-                explanation_basis=basis,
-                review_status="Pending Review"
-            )
-            db.add(new_rec)
-            updated_count += 1
+        # Save Recommendation
+        recommendation = AIRecommendation(
+            priority_result_id=priority.id,
+            recommendation_text=rec_text,
+            decision_support_notice=notice,
+            status="Pending Review"
+        )
+        db.add(recommendation)
 
         processed_count += 1
+        updated_count += 1
 
+    run.status = "COMPLETED"
     db.commit()
     return processed_count, updated_count

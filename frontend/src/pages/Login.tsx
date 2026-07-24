@@ -57,37 +57,41 @@ export const Login: React.FC = () => {
     setError(null);
     setLoading(true);
     try {
-      await login(selectedRole);
+      await login(username, password);
       if (selectedRole === 'Client') {
         navigate('/unauthorized');
       } else {
         navigate('/ai/dashboard');
       }
     } catch (e) {
-      setError("Authentication failed. Please verify database connection.");
+      if (e instanceof Error) {
+        setError(e.message);
+      } else {
+        setError("Invalid Employee ID or password. No account found with those credentials.");
+      }
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="login-split-container" style={{ 
-      display: 'flex', 
-      minHeight: '100vh', 
-      width: '100vw', 
-      backgroundColor: '#f8fafc', 
-      fontFamily: '"Outfit", "Segoe UI", "Roboto", sans-serif' 
+    <div className="login-split-container" style={{
+      display: 'flex',
+      minHeight: '100vh',
+      width: '100vw',
+      backgroundColor: '#f8fafc',
+      fontFamily: '"Outfit", "Segoe UI", "Roboto", sans-serif'
     }}>
-      
+
       {/* Left Panel - Deep Navy Blue branding backdrop */}
-      <div className="login-left-panel" style={{ 
-        flex: 1.1, 
-        background: 'linear-gradient(145deg, #0b0f19 0%, #1e293b 100%)', 
-        color: '#ffffff', 
-        display: 'flex', 
-        flexDirection: 'column', 
-        justifyContent: 'center', 
-        padding: '60px 80px', 
+      <div className="login-left-panel" style={{
+        flex: 1.1,
+        background: 'linear-gradient(145deg, #0b0f19 0%, #1e293b 100%)',
+        color: '#ffffff',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        padding: '60px 80px',
         position: 'relative',
         boxSizing: 'border-box'
       }}>
@@ -105,27 +109,27 @@ export const Login: React.FC = () => {
 
         {/* Speedex Logo */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginBottom: '60px' }}>
-          <img 
-            src="/logo.png" 
-            alt="30 Speedex Courier & Forwarder, Inc." 
-            style={{ 
-              height: '46px', 
+          <img
+            src="/logo.png"
+            alt="30 Speedex Courier & Forwarder, Inc."
+            style={{
+              height: '46px',
               width: 'auto',
               objectFit: 'contain',
               alignSelf: 'flex-start'
-            }} 
+            }}
           />
         </div>
 
         {/* Title */}
         <div style={{ marginBottom: '48px' }}>
-          <h2 style={{ 
-            fontSize: '20px', 
-            fontWeight: 800, 
-            letterSpacing: '0.04em', 
-            textTransform: 'uppercase', 
-            color: 'rgba(255,255,255,0.95)', 
-            marginBottom: '12px', 
+          <h2 style={{
+            fontSize: '20px',
+            fontWeight: 800,
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+            color: 'rgba(255,255,255,0.95)',
+            marginBottom: '12px',
             fontFamily: '"Outfit", sans-serif'
           }}>
             FINANCE OPERATIONS MANAGEMENT SYSTEM
@@ -136,16 +140,16 @@ export const Login: React.FC = () => {
         {/* Steps timeline list */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '32px', position: 'relative', zIndex: 2 }}>
           <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
-            <div style={{ 
-              width: '38px', 
-              height: '38px', 
-              borderRadius: '12px', 
-              backgroundColor: 'rgba(0, 169, 157, 0.1)', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
-              fontSize: '15px', 
-              fontWeight: 700, 
+            <div style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '12px',
+              backgroundColor: 'rgba(0, 169, 157, 0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '15px',
+              fontWeight: 700,
               border: '1px solid rgba(0, 169, 157, 0.3)',
               color: 'var(--teal)',
               flexShrink: 0
@@ -159,16 +163,16 @@ export const Login: React.FC = () => {
           </div>
 
           <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
-            <div style={{ 
-              width: '38px', 
-              height: '38px', 
-              borderRadius: '12px', 
-              backgroundColor: 'rgba(0, 169, 157, 0.1)', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
-              fontSize: '15px', 
-              fontWeight: 700, 
+            <div style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '12px',
+              backgroundColor: 'rgba(0, 169, 157, 0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '15px',
+              fontWeight: 700,
               border: '1px solid rgba(0, 169, 157, 0.3)',
               color: 'var(--teal)',
               flexShrink: 0
@@ -182,16 +186,16 @@ export const Login: React.FC = () => {
           </div>
 
           <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
-            <div style={{ 
-              width: '38px', 
-              height: '38px', 
-              borderRadius: '12px', 
-              backgroundColor: 'rgba(0, 169, 157, 0.1)', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
-              fontSize: '15px', 
-              fontWeight: 700, 
+            <div style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '12px',
+              backgroundColor: 'rgba(0, 169, 157, 0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '15px',
+              fontWeight: 700,
               border: '1px solid rgba(0, 169, 157, 0.3)',
               color: 'var(--teal)',
               flexShrink: 0
@@ -207,26 +211,26 @@ export const Login: React.FC = () => {
       </div>
 
       {/* Right Panel - Floating white login card */}
-      <div className="login-right-panel" style={{ 
-        flex: 1.2, 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center', 
-        backgroundColor: '#f1f5f9', 
+      <div className="login-right-panel" style={{
+        flex: 1.2,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#f1f5f9',
         padding: '40px',
         boxSizing: 'border-box'
       }}>
-        <div className="card fade-in" style={{ 
-          width: '100%', 
-          maxWidth: '480px', 
-          padding: '44px 40px', 
-          backgroundColor: '#ffffff', 
-          borderRadius: '20px', 
-          boxShadow: '0 15px 35px rgba(15, 23, 42, 0.06)', 
+        <div className="card fade-in" style={{
+          width: '100%',
+          maxWidth: '480px',
+          padding: '44px 40px',
+          backgroundColor: '#ffffff',
+          borderRadius: '20px',
+          boxShadow: '0 15px 35px rgba(15, 23, 42, 0.06)',
           border: '1px solid var(--border)',
           boxSizing: 'border-box'
         }}>
-          
+
           {/* Secure Access tag */}
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'var(--teal-bg)', padding: '4px 10px', borderRadius: '20px', marginBottom: '14px' }}>
             <ShieldCheck size={13} style={{ color: 'var(--teal)' }} />
@@ -256,16 +260,16 @@ export const Login: React.FC = () => {
               </label>
               <div style={{ position: 'relative' }}>
                 <User size={16} style={{ position: 'absolute', left: '14px', top: '13px', color: 'var(--ts)' }} />
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   className="form-control"
-                  style={{ 
-                    paddingLeft: '42px', 
-                    height: '42px', 
-                    borderRadius: '8px', 
-                    fontSize: '14px', 
-                    fontFamily: 'var(--fb)', 
-                    border: '1px solid var(--border)' 
+                  style={{
+                    paddingLeft: '42px',
+                    height: '42px',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    fontFamily: 'var(--fb)',
+                    border: '1px solid var(--border)'
                   }}
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
@@ -282,16 +286,16 @@ export const Login: React.FC = () => {
               </label>
               <div style={{ position: 'relative' }}>
                 <Lock size={16} style={{ position: 'absolute', left: '14px', top: '13px', color: 'var(--ts)' }} />
-                <input 
-                  type="password" 
+                <input
+                  type="password"
                   className="form-control"
-                  style={{ 
-                    paddingLeft: '42px', 
-                    height: '42px', 
-                    borderRadius: '8px', 
-                    fontSize: '14px', 
-                    fontFamily: 'var(--fb)', 
-                    border: '1px solid var(--border)' 
+                  style={{
+                    paddingLeft: '42px',
+                    height: '42px',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    fontFamily: 'var(--fb)',
+                    border: '1px solid var(--border)'
                   }}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -310,16 +314,16 @@ export const Login: React.FC = () => {
             </div>
 
             {/* Submit Button */}
-            <button 
+            <button
               type="submit"
               disabled={loading}
               className="btn btn-primary"
-              style={{ 
-                width: '100%', 
-                height: '46px', 
-                fontSize: '14px', 
-                fontWeight: 700, 
-                borderRadius: '8px', 
+              style={{
+                width: '100%',
+                height: '46px',
+                fontSize: '14px',
+                fontWeight: 700,
+                borderRadius: '8px',
                 letterSpacing: '0.04em',
                 cursor: 'pointer',
                 display: 'inline-flex',

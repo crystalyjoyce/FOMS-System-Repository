@@ -4,15 +4,38 @@ from datetime import datetime, date
 
 # Generic Response
 class MessageResponse(BaseModel):
+    success: bool
     message: str
+    data: Optional[Any] = None
+    traceId: Optional[str] = None
 
-# Review Request
-class ReviewRequest(BaseModel):
-    decision: str = Field(..., description="Decision made (e.g. Reviewed, Dismissed, Accepted as Recommendation, Rejected)")
-    remarks: Optional[str] = Field(None, description="Detailed remarks")
-    recommendedAction: Optional[str] = Field(None, description="Recommended action to proceed")
+# Duplicate Requests
+class WaybillDuplicateRequest(BaseModel):
+    waybillNumber: str
+    clientId: str
 
-# Duplicate Alert Detail Response
+class InvoiceDuplicateRequest(BaseModel):
+    invoiceNumber: str
+    clientId: str
+    billingReference: Optional[str] = None
+    waybillBasis: Optional[str] = None
+    amount: float
+
+class OfficialReceiptDuplicateRequest(BaseModel):
+    receiptNumber: str
+
+class SpeedPayDuplicateRequest(BaseModel):
+    referenceNumber: str
+    clientId: str
+    invoiceId: Optional[str] = None
+    amount: float
+    submissionDate: Optional[str] = None
+
+class DuplicateReviewRequest(BaseModel):
+    decision: str = Field(..., description="CANCEL, REVISE, PROCEED")
+    justification: Optional[str] = Field(None, description="Required if PROCEED")
+
+# Duplicate Response
 class DuplicateMatchSchema(BaseModel):
     source_details: dict
     match_details: dict
@@ -23,62 +46,69 @@ class DuplicateMatchSchema(BaseModel):
 class DuplicateAlertSchema(BaseModel):
     id: int
     alert_type: str
-    matched_field: str
     source_record_id: str
     matched_record_id: str
-    similarity_score: float
-    date_generated: datetime
-    reason: str
-    review_status: str
-    source_reference_value: Optional[str] = None
-    normalized_reference_value: Optional[str] = None
+    confidence_score: float
+    severity: Optional[str] = None
+    matched_fields: Optional[Any] = None
+    match_reason: str
+    status: str
+    created_at: datetime
+    output_version: Optional[str] = None
+    trace_id: Optional[str] = None
     matches: Optional[List[DuplicateMatchSchema]] = []
 
     class Config:
         from_attributes = True
 
-# Collection Priority Response
+# Collection Priorities
+class ReadinessResponse(BaseModel):
+    retrieval_time: datetime
+    total_record_count: int
+    ready_count: int
+    incomplete_count: int
+    invalid_count: int
+
+class PriorityFactorSchema(BaseModel):
+    name: str
+    value: Any
+    contribution: float
+
 class CollectionPrioritySchema(BaseModel):
-    id: int
-    invoice_id: str
-    invoice_number: str
-    client_id: str
-    client_name: str
-    outstanding_balance: float
-    due_date: date
-    priority_level: str
-    explanation_basis: List[str]
-    updated_at: datetime
-    source_invoice_number: Optional[str] = None
-    normalized_invoice_number: Optional[str] = None
+    priority: str
+    score: float
+    factors: List[PriorityFactorSchema]
+    explanation: str
+    source_references: List[str] = []
+    generated_time: datetime
+    rules_version: str
 
-    class Config:
-        from_attributes = True
+# Recommendation Requests & Responses
+class RecommendationDecisionRequest(BaseModel):
+    decision: str = Field(..., description="APPROVED or REJECTED")
+    remarks: Optional[str] = Field(None, description="Required for REJECTED")
 
-# Collection Recommendation Response
-class CollectionRecommendationSchema(BaseModel):
-    id: int
-    priority_id: int
-    recommended_action: str
-    explanation_basis: List[str]
-    review_status: str
-    updated_at: datetime
-    priority: Optional[CollectionPrioritySchema] = None
-
-    class Config:
-        from_attributes = True
+class RecommendationDashboardSummary(BaseModel):
+    total_recommendations: int
+    high_priority_count: int
+    medium_priority_count: int
+    low_priority_count: int
+    total_outstanding_amount: float
+    pending_validation_count: int
+    approved_count: int
+    rejected_count: int
+    priority_distribution: dict
 
 # Audit Review Decision Response
 class ReviewDecisionSchema(BaseModel):
     id: int
-    target_type: str
-    target_id: int
-    reviewer_username: str
-    reviewer_role: str
+    alert_id: int
     decision: str
-    remarks: Optional[str]
-    recommended_action: Optional[str]
-    review_date: datetime
+    justification: Optional[str]
+    reviewed_by: str
+    reviewed_role: str
+    reviewed_at: datetime
+    trace_id: Optional[str]
 
     class Config:
         from_attributes = True
@@ -92,3 +122,36 @@ class TrendSnapshotSchema(BaseModel):
     overdueInvoiceCount: int
     collectedAmount: float
     averageCollectionDays: int
+
+# Persistence Schemas for Frontend Database Sync
+class UniqueDocumentCreateRequest(BaseModel):
+    documentType: str
+    documentNumber: str
+    clientName: Optional[str] = None
+    amount: Optional[float] = 0.0
+    transactionDate: Optional[str] = None
+    referenceNumber: Optional[str] = None
+    waybillNumber: Optional[str] = None
+    sourceType: Optional[str] = "Uploaded"
+    scannedBy: Optional[str] = None
+    scannedRole: Optional[str] = None
+    aiResult: Optional[str] = "No Duplicate Detected"
+    similarityScore: Optional[float] = 0.0
+
+class ReviewHistoryCreateRequest(BaseModel):
+    targetType: Optional[str] = "DUPLICATE_ALERT"
+    targetId: str
+    reviewerUsername: Optional[str] = None
+    reviewerRole: Optional[str] = None
+    decision: str
+    remarks: Optional[str] = None
+    recommendedAction: Optional[str] = None
+
+class AuditEventCreateRequest(BaseModel):
+    eventType: str
+    actionDescription: str
+    result: Optional[str] = "SUCCESS"
+    relatedRecordType: Optional[str] = None
+    sourceReference: Optional[str] = None
+    normalizedReference: Optional[str] = None
+    details: Optional[dict] = None

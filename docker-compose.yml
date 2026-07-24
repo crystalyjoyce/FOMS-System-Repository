@@ -1,53 +1,6 @@
 services:
-  # 1. PostgreSQL Database for AI metadata & logs
-  foms-ai-postgres:
-    image: pgvector/pgvector:pg15
-    container_name: foms-ai-postgres
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: foms_ai_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-      - ./database/postgresql/init.sql:/docker-entrypoint-initdb.d/init.sql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d foms_ai_db"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
 
-  # 2. MongoDB for Trend Snapshot time-series data
-  foms-ai-mongodb:
-    image: mongo:6.0
-    container_name: foms-ai-mongodb
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongodb-data:/data/db
-      - ./database/mongodb/init.js:/docker-entrypoint-initdb.d/init.js:ro
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
 
-  # 3. Mock Legacy FOMS Service (Capstone 1 simulator)
-  foms-legacy-mock:
-    build:
-      context: ./mock-legacy
-      dockerfile: Dockerfile
-    container_name: foms-legacy-mock
-    ports:
-      - "8001:8001"
-    environment:
-      - PORT=8001
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/health')\""]
-      interval: 10s
-      timeout: 5s
-      retries: 3
 
   # 4. Python FastAPI AI Service Backend
   foms-ai-service:
@@ -57,20 +10,35 @@ services:
     container_name: foms-ai-service
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
-      - POSTGRES_CONNECTION_STRING=postgresql://postgres:postgres@foms-ai-postgres:5432/foms_ai_db
-      - MONGODB_URI=mongodb://foms-ai-mongodb:27017/
-      - FOMS_READ_API_URL=http://foms-legacy-mock:8001
-      - FOMS_AI_SERVICE_API_KEY=change-me
-      - AI_SERVICE_API_KEY=change-me
-      - SYNC_INTERVAL_MINUTES=10
-    depends_on:
-      foms-ai-postgres:
-        condition: service_healthy
-      foms-ai-mongodb:
-        condition: service_healthy
-      foms-legacy-mock:
-        condition: service_healthy
+      - POSTGRES_CONNECTION_STRING=${POSTGRES_CONNECTION_STRING}
+      - MONGODB_URI=${MONGODB_URI}
+      - FOMS_READ_API_URL=${FOMS_READ_API_URL}
+      - FOMS_AI_SERVICE_API_KEY=${FOMS_AI_SERVICE_API_KEY}
+      - AI_SERVICE_API_KEY=${AI_SERVICE_API_KEY}
+      - SYNC_INTERVAL_MINUTES=${SYNC_INTERVAL_MINUTES}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL}
+      # §7 JWT Security
+      - FOMS_JWT_PUBLIC_KEY=${FOMS_JWT_PUBLIC_KEY}
+      - FOMS_JWT_ISSUER=${FOMS_JWT_ISSUER}
+      - FOMS_JWT_AUDIENCE=${FOMS_JWT_AUDIENCE}
+      # §11 Service-to-Service Auth
+      - SERVICE_JWT_SECRET=${SERVICE_JWT_SECRET}
+      - SERVICE_API_KEY=${SERVICE_API_KEY}
+      # §17 Rate Limiting
+      - RATE_LIMIT_DEFAULT=${RATE_LIMIT_DEFAULT}
+      - RATE_LIMIT_UPLOAD=${RATE_LIMIT_UPLOAD}
+      # §22 CORS
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
+      # §21 Audit Logging
+      - AUDIT_RETENTION_YEARS=${AUDIT_RETENTION_YEARS}
+      - LOG_ROTATION_MAX_SIZE_MB=${LOG_ROTATION_MAX_SIZE_MB}
+      - LOG_ROTATION_DAILY=${LOG_ROTATION_DAILY}
+
+
 
   # 5. ASP.NET Core 10 Integration Gateway
   foms-ai-gateway:
@@ -107,6 +75,3 @@ services:
       - foms-ai-frontend
       - foms-ai-gateway
 
-volumes:
-  postgres-data:
-  mongodb-data:

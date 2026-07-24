@@ -34,6 +34,7 @@ export interface SidebarProps {
     role: string;
     avatarInitials: string;
   };
+  onLogout?: () => void;
 }
 
 const defaultNavGroups: NavGroup[] = [
@@ -74,6 +75,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   logoText = "SPEEDEX",
   navGroups = defaultNavGroups,
   profile = defaultProfile,
+  onLogout,
 }) => {
   const { toast } = useToast();
   // Persist collapse preference
@@ -366,7 +368,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <span>System Settings</span>
               </button>
               <div className="dropdown-divider" />
-              <button className="dropdown-option logout" onClick={() => toast.success("Logging out of Speedex SSO System...", "Log Out")}>
+              <button className="dropdown-option logout" onClick={() => { setShowProfileMenu(false); if (onLogout) onLogout(); else toast.success("Logging out...", "Log Out"); }}>
                 <i className="ti ti-logout" />
                 <span>Log Out</span>
               </button>

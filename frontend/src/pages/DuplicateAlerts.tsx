@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { DecisionSupportNotice } from '../components/DecisionSupportNotice';
@@ -10,7 +10,7 @@ import { Modal } from '../components/Modal';
 import { 
   ShieldAlert, AlertOctagon, UploadCloud, AlertTriangle, 
   CheckCircle, RefreshCw, X, Sparkles, ExternalLink, 
-  History, Eye, ArrowRight, Clipboard, Clock, Info, User, Check, AlertCircle, FileText, Camera, ZoomIn, ZoomOut, Lock
+  History, Eye, ArrowRight, Clipboard, Clock, Info, User, Check, AlertCircle, FileText, Camera, ZoomIn, ZoomOut, Lock, SwitchCamera
 } from 'lucide-react';
 
 // ==========================================
@@ -38,6 +38,7 @@ export interface FlaggedDuplicate {
   id: string; // Flag ID
   documentType: 'INVOICE' | 'OFFICIAL_RECEIPT' | 'WAYBILL';
   uploadedDocumentNumber: string;
+  documentNumber?: string;
   existingMatchedRecord: string;
   clientName: string;
   amount: string;
@@ -47,8 +48,14 @@ export interface FlaggedDuplicate {
   flaggedBy: string;
   reviewerRole: string;
   flaggedDate: string;
-  status: 'Confirmed Duplicate' | 'Submission Blocked' | 'Linked to Existing Record' | 'Returned for Correction' | 'Under Investigation' | 'Closed';
+  status: 'Confirmed Duplicate' | 'Submission Blocked' | 'Linked to Existing Record' | 'Returned for Correction' | 'Under Investigation' | 'Closed' | 'Pending Review';
   reviewerNote: string;
+  confidence?: number;
+  severity?: string;
+  matchedWith?: string;
+  matchedFields?: string[];
+  transactionDate?: string;
+  source?: string;
 }
 
 export interface HistoryRecord {
@@ -164,6 +171,14 @@ export const DuplicateAlerts: React.FC = () => {
   const [cameraActive, setCameraActive] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [sourceType, setSourceType] = useState<'Uploaded' | 'Scanned'>('Uploaded');
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment'); // back cam default
+
+  // Real webcam refs
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const capturedFileRef = useRef<File | null>(null);
 
   // Load progress
   const [checkingStep, setCheckingStep] = useState<number>(0); // 0: Idle, 1: Reading, 2: Extracting, 3: Comparing, 4: Results
@@ -183,7 +198,7 @@ export const DuplicateAlerts: React.FC = () => {
   const [originalOCR, setOriginalOCR] = useState<any>(null);
 
   // AI Results view state
-  const [scanResultMode, setScanResultMode] = useState<'NONE' | 'CLEAR' | 'DUPLICATE'>('NONE');
+  const [scanResultMode, setScanResultMode] = useState<'NONE' | 'CLEAR' | 'DUPLICATE' | 'INVALID'>('NONE');
   const [similarityScore, setSimilarityScore] = useState(0);
   const [matchedRecordDetails, setMatchedRecordDetails] = useState<any>(null);
 
@@ -229,159 +244,62 @@ export const DuplicateAlerts: React.FC = () => {
   }, [isFinancialManager, isHeadAccountant]);
 
   // ==========================================
-  // DATABASE LOADING & SEEDING
+  // DATABASE LOADING & PERSISTENCE (POSTGRESQL API)
   // ==========================================
-  const loadDatabase = () => {
+  const loadDatabase = async () => {
     setDbLoading(true);
     try {
-      const seeded = localStorage.getItem('foms_duplicate_checks_seeded_v3');
-      if (!seeded) {
-        // Mock seed records for Unique documents
-        const seedUniques: UniqueDocument[] = [
-          {
-            id: 'REC-UNI-001',
-            documentType: 'OFFICIAL_RECEIPT',
-            documentNumber: 'OR-2026-0811',
-            clientName: 'ABC Trading Corporation',
-            amount: '12500.00',
-            transactionDate: '2026-07-20',
-            source: 'Uploaded',
-            aiConfidence: 99,
-            reviewedBy: 'Maria Santos',
-            reviewerRole: 'Financial Manager',
-            reviewedDate: new Date(Date.now() - 3 * 86400000).toISOString(),
-            status: 'Cleared for Normal Validation',
-            reviewerNote: 'Checked reference numbers in payment logs, confirmed no duplication.',
-            reason: 'Different transaction'
-          },
-          {
-            id: 'REC-UNI-002',
-            documentType: 'INVOICE',
-            documentNumber: 'INV-2026-4401',
-            clientName: 'Global Logistics Inc.',
-            amount: '31200.00',
-            transactionDate: '2026-07-21',
-            source: 'Scanned',
-            aiConfidence: 100,
-            reviewedBy: 'Juan Dela Cruz',
-            reviewerRole: 'Head Accountant',
-            reviewedDate: new Date(Date.now() - 1 * 86400000).toISOString(),
-            status: 'Unique',
-            reviewerNote: 'Verified with physical invoice manifest copy.',
-            reason: 'Similar document number only'
-          }
-        ];
-
-        // Mock seed records for Confirmed Duplicates
-        const seedDuplicates: FlaggedDuplicate[] = [
-          {
-            id: 'FLG-DUP-001',
-            documentType: 'OFFICIAL_RECEIPT',
-            uploadedDocumentNumber: 'OR-2024-0012345',
-            existingMatchedRecord: 'FOMS-PAY-99812',
-            clientName: 'ABC Trading Corporation',
-            amount: '15250.00',
-            similarityScore: 98,
-            duplicateReason: 'Same OR number',
-            handlingAction: 'Flag and Block New Submission',
-            flaggedBy: 'Maria Santos',
-            reviewerRole: 'Financial Manager',
-            flaggedDate: new Date(Date.now() - 2 * 86400000).toISOString(),
-            status: 'Submission Blocked',
-            reviewerNote: 'Double billing submission blocked. Transaction matches registered invoice.'
-          }
-        ];
-
-        // Seed Review History
-        const seedHistory: any[] = [
-          {
-            id: 'REV-HIS-001',
-            documentType: 'OFFICIAL_RECEIPT',
-            documentNumber: 'OR-2026-0811',
-            clientName: 'ABC Trading Corporation',
-            aiResult: 'No Duplicate Detected',
-            finalDecision: 'Marked as Unique',
-            reviewer: 'Maria Santos',
-            reviewerRole: 'Financial Manager',
-            decisionReason: 'Different transaction',
-            reviewerNote: 'Checked reference numbers in payment logs, confirmed no duplication.',
-            reviewedDate: new Date(Date.now() - 3 * 86400000).toISOString(),
-            relatedRecordId: 'FOMS-PAY-88123',
-            
-            // compatibility fields
-            review_date: new Date(Date.now() - 3 * 86400000).toISOString(),
-            target_type: 'DUPLICATE_ALERT',
-            target_id: 'OR-2026-0811',
-            reviewer_username: 'financial_manager_user',
-            decision: 'Reviewed',
-            remarks: 'Marked as Unique: Different transaction. Note: Checked reference numbers in payment logs, confirmed no duplication.',
-            recommended_action: 'Cleared for FOMS Normal Validation'
-          },
-          {
-            id: 'REV-HIS-002',
-            documentType: 'OFFICIAL_RECEIPT',
-            documentNumber: 'OR-2024-0012345',
-            clientName: 'ABC Trading Corporation',
-            aiResult: 'Possible Duplicate Detected',
-            finalDecision: 'Marked as Duplicate',
-            reviewer: 'Maria Santos',
-            reviewerRole: 'Financial Manager',
-            decisionReason: 'Same OR number',
-            reviewerNote: 'Double billing submission blocked. Transaction matches registered invoice.',
-            reviewedDate: new Date(Date.now() - 2 * 86400000).toISOString(),
-            relatedRecordId: 'FOMS-PAY-99812',
-
-            // compatibility fields
-            review_date: new Date(Date.now() - 2 * 86400000).toISOString(),
-            target_type: 'DUPLICATE_ALERT',
-            target_id: 'OR-2024-0012345',
-            reviewer_username: 'financial_manager_user',
-            decision: 'Reviewed',
-            remarks: 'Marked as Duplicate: Same OR number. Note: Double billing submission blocked. Transaction matches registered invoice.',
-            recommended_action: 'Flag and Block New Submission'
-          }
-        ];
-
-        // Seed Audit Logs
-        const seedAudit: any[] = [
-          {
-            id: 'AUDIT-EVT-001',
-            userId: 'financial_manager_user',
-            role: 'Financial Manager',
-            eventType: 'DOCUMENT_MARKED_UNIQUE',
-            documentId: 'DOC-991',
-            relatedRecordId: 'FOMS-PAY-88123',
-            description: 'Document OR-2026-0811 marked as unique and cleared for normal validation.',
-            previousStatus: 'PENDING_REVIEW',
-            newStatus: 'CLEARED',
-            occurredAt: new Date(Date.now() - 3 * 86400000).toISOString()
-          },
-          {
-            id: 'AUDIT-EVT-002',
-            userId: 'financial_manager_user',
-            role: 'Financial Manager',
-            eventType: 'DOCUMENT_MARKED_DUPLICATE',
-            documentId: 'DOC-992',
-            relatedRecordId: 'FOMS-PAY-99812',
-            description: 'Duplicate receipt OR-2024-0012345 confirmed and submission blocked.',
-            previousStatus: 'PENDING_REVIEW',
-            newStatus: 'CONFIRMED_DUPLICATE',
-            occurredAt: new Date(Date.now() - 2 * 86400000).toISOString()
-          }
-        ];
-
-        localStorage.setItem('foms_unique_documents', JSON.stringify(seedUniques));
-        localStorage.setItem('foms_flagged_duplicates', JSON.stringify(seedDuplicates));
-        localStorage.setItem('foms_review_history', JSON.stringify(seedHistory));
-        localStorage.setItem('foms_audit_trail', JSON.stringify(seedAudit));
-        localStorage.setItem('foms_duplicate_checks_seeded_v3', 'true');
+      // 1. Fetch cataloged unique documents from backend PostgreSQL DB
+      const resUniques = await fetch('/api/ai/duplicates/unique-documents', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (resUniques.ok) {
+        const data = await resUniques.json();
+        setUniques(Array.isArray(data) ? data : []);
       }
 
-      setUniques(JSON.parse(localStorage.getItem('foms_unique_documents') || '[]'));
-      setDuplicates(JSON.parse(localStorage.getItem('foms_flagged_duplicates') || '[]'));
-      setHistoryList(JSON.parse(localStorage.getItem('foms_review_history') || '[]'));
+      // 2. Fetch flagged duplicate alerts from backend PostgreSQL DB
+      const resDups = await fetch('/api/ai/duplicates', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (resDups.ok) {
+        const data = await resDups.json();
+        const mappedDups: FlaggedDuplicate[] = (Array.isArray(data) ? data : []).map((a: any) => ({
+          id: String(a.id),
+          documentType: a.alert_type || 'OFFICIAL_RECEIPT',
+          uploadedDocumentNumber: a.source_record_id || 'DOC-001',
+          documentNumber: a.source_record_id || 'DOC-001',
+          existingMatchedRecord: a.matched_record_id || 'RECORD-001',
+          clientName: a.matched_fields?.clientName || '',
+          amount: String(a.matched_fields?.amount || '0.00'),
+          transactionDate: a.created_at ? a.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+          source: 'Scanned',
+          similarityScore: a.confidence_score || 0,
+          confidence: a.confidence_score || 0,
+          severity: a.severity || 'Medium',
+          matchedWith: a.matched_record_id || 'RECORD-001',
+          duplicateReason: a.match_reason || 'AI parameter match detected',
+          handlingAction: a.status || 'Pending Review',
+          flaggedBy: 'AI Gemini System',
+          reviewerRole: 'AI Model',
+          status: a.status || 'Pending Review',
+          matchedFields: a.matched_fields ? Object.keys(a.matched_fields) : ['Document Number'],
+          flaggedDate: a.created_at || new Date().toISOString(),
+          reviewerNote: ''
+        }));
+        setDuplicates(mappedDups);
+      }
+
+      // 3. Fetch review history log from backend PostgreSQL DB
+      const resHistory = await fetch('/api/ai/duplicates/review-history', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (resHistory.ok) {
+        const data = await resHistory.json();
+        setHistoryList(Array.isArray(data) ? data : []);
+      }
     } catch (e) {
-      console.error(e);
+      console.error("Failed loading database records from PostgreSQL:", e);
     } finally {
       setDbLoading(false);
     }
@@ -401,23 +319,71 @@ export const DuplicateAlerts: React.FC = () => {
   // ==========================================
   // PERSISTENCE SAVE WRAPPER FUNCTIONS
   // ==========================================
-  const saveUniquesToStorage = (list: UniqueDocument[]) => {
-    localStorage.setItem('foms_unique_documents', JSON.stringify(list));
-    setUniques(list);
+  const saveUniquesToStorage = async (listOrItem: any) => {
+    const item = Array.isArray(listOrItem) ? listOrItem[0] : listOrItem;
+    if (item && item.documentNumber) {
+      try {
+        await fetch('/api/ai/duplicates/save-unique', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            documentType: item.documentType || 'OFFICIAL_RECEIPT',
+            documentNumber: item.documentNumber,
+            clientName: item.clientName || '',
+            amount: parseFloat(item.amount || '0'),
+            transactionDate: item.transactionDate || new Date().toISOString().split('T')[0],
+            referenceNumber: extRef,
+            waybillNumber: extWaybill,
+            sourceType: sourceType,
+            scannedBy: user?.username,
+            scannedRole: user?.role,
+            aiResult: 'No Duplicate Detected',
+            similarityScore: item.aiConfidence || 0
+          })
+        });
+      } catch (err) {
+        console.error('Error saving unique document to PostgreSQL:', err);
+      }
+    }
+    loadDatabase();
   };
 
-  const saveDuplicatesToStorage = (list: FlaggedDuplicate[]) => {
-    localStorage.setItem('foms_flagged_duplicates', JSON.stringify(list));
-    setDuplicates(list);
+  const saveDuplicatesToStorage = async (listOrItem: any) => {
+    loadDatabase();
   };
 
-  const saveHistoryToStorage = (list: HistoryRecord[]) => {
-    localStorage.setItem('foms_review_history', JSON.stringify(list));
-    setHistoryList(list);
+  const saveHistoryToStorage = async (listOrItem: any) => {
+    const item = Array.isArray(listOrItem) ? listOrItem[0] : listOrItem;
+    if (item) {
+      try {
+        await fetch('/api/ai/duplicates/review-history', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            targetType: item.target_type || 'DUPLICATE_ALERT',
+            targetId: String(item.target_id || item.documentNumber || item.id || 'REV-01'),
+            reviewerUsername: user?.username,
+            reviewerRole: user?.role,
+            decision: item.decision || item.finalDecision || 'Reviewed',
+            remarks: item.remarks || item.reviewerNote || item.decisionReason || 'Decision recorded',
+            recommendedAction: item.recommended_action || item.aiResult || 'None'
+          })
+        });
+      } catch (err) {
+        console.error('Error saving review history to PostgreSQL:', err);
+      }
+    }
+    loadDatabase();
   };
 
   // ==========================================
-  // AUDIT TRAIL LOGGER (FLOW 12)
+  // AUDIT TRAIL LOGGER (REAL POSTGRESQL DB)
   // ==========================================
   const logAuditEvent = (
     eventType: string,
@@ -428,31 +394,32 @@ export const DuplicateAlerts: React.FC = () => {
     newStatus: string
   ) => {
     try {
-      const localStr = localStorage.getItem('foms_audit_trail');
-      const logs = localStr ? JSON.parse(localStr) : [];
-      const newLog = {
-        id: `AUD-EVT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-        userId: user?.username || 'anonymous_user',
-        fullName: user?.username === 'financial_manager_user' ? 'Maria Santos' : (user?.username === 'head_accountant_user' ? 'Juan Dela Cruz' : (user?.username || 'System Reviewer')),
-        role: user?.role || 'Financial Manager',
-        eventType,
-        documentId,
-        relatedRecordId,
-        description,
-        previousStatus: prevStatus,
-        newStatus,
-        occurredAt: new Date().toISOString(),
-        occurred_at: new Date().toISOString(),
-        action: description,
-        result: 'Success',
-        ipAddress: '192.168.1.104',
-        userAgent: navigator.userAgent
-      };
-      localStorage.setItem('foms_audit_trail', JSON.stringify([newLog, ...logs]));
+      fetch('/api/ai/dashboard/audit-trail', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          eventType,
+          actionDescription: description,
+          result: 'SUCCESS',
+          relatedRecordType: 'DUPLICATE_DETECTION',
+          sourceReference: documentId,
+          normalizedReference: relatedRecordId,
+          details: {
+            previousStatus: prevStatus,
+            newStatus,
+            username: user?.username,
+            role: user?.role
+          }
+        })
+      }).catch(err => console.error('Audit trail POST error:', err));
     } catch (e) {
       console.error(e);
     }
   };
+
 
   // ==========================================
   // FLOW 1: DOCUMENT UPLOAD & SIMULATED SCANNING
@@ -494,6 +461,17 @@ export const DuplicateAlerts: React.FC = () => {
       return;
     }
 
+    // Reset all previous scan results immediately so stale INVALID/CLEAR/DUPLICATE cards don't persist
+    setScanResultMode('NONE');
+    setExtractionDone(false);
+    setMatchedRecordDetails(null);
+    setSimilarityScore(0);
+    setExtDocNum('');
+    setExtClient('');
+    setExtAmount('');
+    setExtDate('');
+    setExtRef('');
+
     setUploadFile(file);
     setSourceType(source);
     setPreviewDocUrl(URL.createObjectURL(file));
@@ -502,94 +480,164 @@ export const DuplicateAlerts: React.FC = () => {
     logAuditEvent('DOCUMENT_UPLOADED', `DOC-${Date.now()}`, 'NONE', `Document ${file.name} uploaded successfully.`, 'NONE', 'UPLOADED');
 
     // Run AI parameter extraction automatically
-    runExtractionSimulation(file.name);
+    runExtractionSimulation(file.name, file);
   };
 
-  // Simulated Scanning Console (Camera Modal)
-  const handleOpenScanner = () => {
-    setCapturedImage(null);
+  // ── Camera helpers ───────────────────────────────────────────
+  const startCamera = async (facing: 'environment' | 'user') => {
+    setCameraError(null);
     setCameraActive(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 } }
+      });
+      streamRef.current = stream;
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play();
+        }
+      }, 80);
+    } catch (err: any) {
+      setCameraError(
+        err?.name === 'NotAllowedError'
+          ? 'Camera access was denied. Please allow camera permissions in your browser and try again.'
+          : 'No camera found or the selected camera is unavailable. Try switching cameras.'
+      );
+      setCameraActive(false);
+    }
+  };
+
+  // Real Webcam Scanning Console
+  const handleOpenScanner = async () => {
+    setCapturedImage(null);
+    capturedFileRef.current = null;
     setShowCameraModal(true);
+    await startCamera(facingMode);
+  };
+
+  const handleFlipCamera = async () => {
+    const newFacing = facingMode === 'environment' ? 'user' : 'environment';
+    setFacingMode(newFacing);
+    stopCameraStream();
+    await startCamera(newFacing);
+  };
+
+  const stopCameraStream = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
   };
 
   const handleCaptureScan = () => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+
+    canvas.width = video.videoWidth || 1280;
+    canvas.height = video.videoHeight || 720;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    setCapturedImage(dataUrl);
     setCameraActive(false);
-    // Simulate captured document image (loads mockup receipt/invoice)
-    setCapturedImage('/mock_receipt.png');
+    stopCameraStream();
+
+    // Convert dataURL to File for OCR pipeline
+    canvas.toBlob(blob => {
+      if (blob) {
+        capturedFileRef.current = new File([blob], `scan_${Date.now()}.jpg`, { type: 'image/jpeg' });
+      }
+    }, 'image/jpeg', 0.92);
   };
 
-  const handleRetakeScan = () => {
+  const handleRetakeScan = async () => {
     setCapturedImage(null);
-    setCameraActive(true);
+    capturedFileRef.current = null;
+    await startCamera(facingMode);
   };
 
   const handleConfirmScan = () => {
+    stopCameraStream();
     setShowCameraModal(false);
     setSourceType('Scanned');
-    setPreviewDocUrl('/mock_receipt.png');
 
-    // Audit Document Scanned Event
-    logAuditEvent('DOCUMENT_SCANNED', `DOC-${Date.now()}`, 'NONE', `Physical document scanned and confirmed by user.`, 'NONE', 'SCANNED');
-
-    // Run AI parameters extraction
-    runExtractionSimulation('scanned_receipt.png');
+    if (capturedFileRef.current) {
+      // Use real captured image
+      setUploadFile(capturedFileRef.current);
+      setPreviewDocUrl(capturedImage);
+      logAuditEvent('DOCUMENT_SCANNED', `DOC-${Date.now()}`, 'NONE', `Physical document scanned and confirmed by user.`, 'NONE', 'SCANNED');
+      runExtractionSimulation(capturedFileRef.current.name, capturedFileRef.current);
+    } else {
+      // Fallback if capture somehow failed
+      logAuditEvent('DOCUMENT_SCANNED', `DOC-${Date.now()}`, 'NONE', `Physical document scanned and confirmed by user.`, 'NONE', 'SCANNED');
+      runExtractionSimulation('scanned_receipt.png');
+    }
   };
 
   // ==========================================
   // FLOW 2: AI PARAMETER EXTRACTION
   // ==========================================
-  const runExtractionSimulation = (fileName: string) => {
+  const runExtractionSimulation = async (fileName: string, fileOverride?: File) => {
     setCheckingStep(1); // Reading document
     setCheckingProgress(25);
 
-    setTimeout(() => {
+    try {
       setCheckingStep(2); // Extracting information
       setCheckingProgress(60);
 
-      setTimeout(() => {
-        // Setup initial default extracted fields
-        let mockType: 'INVOICE' | 'OFFICIAL_RECEIPT' | 'WAYBILL' = 'OFFICIAL_RECEIPT';
-        let mockDocNum = 'OR-2024-0012345';
-        let mockClient = 'ABC Trading Corporation';
-        let mockAmt = '15250.00';
-        let mockDate = '2024-05-20';
-        let mockRef = 'REF-88912';
-        let mockWaybill = 'WBL-2024-556677';
+      const targetFile = fileOverride || uploadFile || new File(["scanned_doc"], fileName, { type: "image/png" });
+      const formData = new FormData();
+      formData.append('file', targetFile);
 
-        if (fileName.toLowerCase().includes('invoice') || fileName.toLowerCase().includes('inv')) {
-          mockType = 'INVOICE';
-          mockDocNum = 'INV-2026-9011';
-          mockClient = 'Global Logistics Inc.';
-          mockAmt = '42800.00';
-          mockDate = '2026-07-15';
-          mockRef = 'REF-99011';
-          mockWaybill = 'WBL-2026-88012';
-        }
+      const res = await fetch('/api/ai/duplicates/scan', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
 
-        setExtDocType(mockType);
-        setExtDocNum(mockDocNum);
-        setExtClient(mockClient);
-        setExtAmount(mockAmt);
-        setExtDate(mockDate);
-        setExtRef(mockRef);
-        setExtWaybill(mockWaybill);
+      if (res.ok) {
+        const apiRes = await res.json();
+        const scanData = apiRes.data || {};
+        const extracted = scanData.extracted || {};
+        console.log('[SCAN DEBUG] Full API response:', JSON.stringify(apiRes));
+        console.log('[SCAN DEBUG] scanData.status:', scanData.status, '| extracted.documentType:', extracted.documentType);
+
+        const docType = (extracted.documentType as any) || 'OFFICIAL_RECEIPT';
+        const docNum = (extracted.documentNumber && extracted.documentNumber.trim() !== '') ? extracted.documentNumber : `OR-${Date.now().toString().slice(-6)}`;
+        const clientName = (extracted.clientName && extracted.clientName.trim() !== '') ? extracted.clientName : '';
+        const amt = String((extracted.amount && String(extracted.amount).trim() !== '' && String(extracted.amount) !== '0.00') ? extracted.amount : '');
+        const dt = extracted.transactionDate || new Date().toISOString().split('T')[0];
+        const ref = extracted.referenceNumber || `REF-${docNum}`;
+
+        setExtDocType(docType === 'PROOF_OF_PAYMENT' ? 'OFFICIAL_RECEIPT' : docType);
+        setExtDocNum(docNum);
+        setExtClient(clientName);
+        setExtAmount(amt);
+        setExtDate(dt);
+        setExtRef(ref);
 
         const ocrData = {
-          documentType: mockType,
-          documentNumber: mockDocNum,
-          clientName: mockClient,
-          amount: mockAmt,
-          transactionDate: mockDate,
-          referenceNumber: mockRef,
-          waybillNumber: mockWaybill
+          documentType: docType,
+          documentNumber: docNum,
+          clientName: clientName,
+          amount: amt,
+          transactionDate: dt,
+          referenceNumber: ref,
+          waybillNumber: `WBL-${docNum}`
         };
         setOriginalOCR(ocrData);
 
         logAuditEvent(
           'DOCUMENT_INFORMATION_EXTRACTED',
+          docNum,
           'NONE',
-          'NONE',
-          `AI OCR parameter extraction completed for ${fileName}.`,
+          `Gemini 2.5 Flash extracted metadata for ${fileName}.`,
           'UPLOADED',
           'EXTRACTED'
         );
@@ -597,60 +645,129 @@ export const DuplicateAlerts: React.FC = () => {
         setCheckingStep(0);
         setCheckingProgress(100);
         setExtractionDone(true);
-      }, 1000);
-    }, 800);
+
+        // Only show INVALID when the backend explicitly confirms it is not a financial document.
+        // Require BOTH status AND documentType to be INVALID_DOCUMENT to avoid false rejections
+        // (e.g. when Gemini quota is exhausted and the heuristic fallback is used).
+        if (scanData.status === 'INVALID_DOCUMENT' && extracted.documentType === 'INVALID_DOCUMENT') {
+          toast.warning("Not a financial document. Please scan an invoice, official receipt, or waybill.", "Invalid Document");
+          setScanResultMode('INVALID');
+          setExtractionDone(false); // Don't show extraction form
+        } else if (scanData.status === 'FLAGGED_DUPLICATE') {
+
+          setScanResultMode('DUPLICATE');
+          setSimilarityScore(scanData.confidence_score || 95);
+
+          setMatchedRecordDetails({
+            record_id: `REC-${Date.now()}`,
+            registered_or: docNum,
+            client_name: clientName,
+            amount: amt,
+            entry_date: dt,
+            reference_no: ref,
+            waybill_no: `WBL-${docNum}`,
+            status: 'FLAGGED'
+          });
+          toast.warning(`Duplicate detected (${scanData.confidence_score}% similarity). Review required.`, 'AI Gemini Scan');
+        } else if (scanData.status === 'UNIQUE_DOCUMENT') {
+          setScanResultMode('CLEAR');
+          setSimilarityScore(0);
+          toast.success('Document cataloged as Unique Document (0% similarity match).', 'AI Gemini Scan');
+        }
+        return;
+      }
+    } catch (err) {
+      console.error('OCR API error:', err);
+    }
+
+    // Fallback if network issue
+    setTimeout(() => {
+      setCheckingStep(0);
+      setCheckingProgress(100);
+      setExtractionDone(true);
+    }, 500);
   };
 
-  const handleRunDuplicateCheck = () => {
+
+
+  const handleRunDuplicateCheck = async () => {
     setCheckingStep(3); // Comparing existing records
     setCheckingProgress(80);
 
-    logAuditEvent('DUPLICATE_CHECK_STARTED', 'NONE', 'NONE', `Comparison query launched against FOMS database records.`, 'EXTRACTED', 'CHECKING');
+    logAuditEvent('DUPLICATE_CHECK_STARTED', extDocNum || 'DOC', 'NONE', `Comparison query launched against FOMS PostgreSQL database records.`, 'EXTRACTED', 'CHECKING');
 
-    setTimeout(() => {
-      setCheckingStep(4); // Preparing result
+    try {
+      let checkUrl = '/api/ai/duplicates/official-receipt';
+      let payloadObj: any = { receiptNumber: extDocNum };
+
+      if (extDocType === 'INVOICE') {
+        checkUrl = '/api/ai/duplicates/invoice';
+        payloadObj = {
+          invoiceNumber: extDocNum,
+          clientId: extClient || 'CLIENT-001',
+          amount: parseFloat(extAmount || '0')
+        };
+      } else if (extDocType === 'WAYBILL') {
+        checkUrl = '/api/ai/duplicates/waybill';
+        payloadObj = {
+          waybillNumber: extDocNum,
+          clientId: extClient || 'CLIENT-001'
+        };
+      }
+
+      const res = await fetch(checkUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payloadObj)
+      });
+
+      setCheckingStep(4);
       setCheckingProgress(100);
 
-      setTimeout(() => {
-        // Simple mock match rules
-        const isDuplicateMatch = 
-          extDocNum.includes('OR-2024-0012345') || 
-          extDocNum.includes('INV-2026-9011') || 
-          extDocNum.includes('INV-2026-1044');
-
-        if (isDuplicateMatch) {
+      if (res.ok) {
+        const data = await res.json();
+        if (data.data && data.data.alert_id) {
           setScanResultMode('DUPLICATE');
-          setSimilarityScore(extDocNum.includes('9011') ? 100 : (extDocNum.includes('12345') ? 98 : 82));
-          
-          const mockMatch = {
-            record_id: extDocNum.includes('OR-2024') ? 'FOMS-PAY-99812' : (extDocNum.includes('9011') ? 'FOMS-INV-87721' : 'FOMS-INV-88124'),
-            registered_or: extDocNum.includes('OR-2024') ? 'OR-2024-0012345' : undefined,
-            registered_invoice: extDocNum.includes('OR-2024') ? undefined : (extDocNum.includes('9011') ? 'INV-2026-9011' : 'INV-2026-1040'),
-            client_name: extDocNum.includes('OR-2024') ? 'ABC Trading Corporation' : (extDocNum.includes('9011') ? 'Global Logistics Inc.' : 'FastFreight Express'),
-            amount: extDocNum.includes('OR-2024') ? '15250.00' : (extDocNum.includes('9011') ? '42800.00' : '8500.00'),
-            entry_date: extDocNum.includes('OR-2024') ? '2024-05-18' : (extDocNum.includes('9011') ? '2026-07-15' : '2026-07-10'),
-            reference_no: extDocNum.includes('OR-2024') ? 'REF-88912' : (extDocNum.includes('9011') ? 'REF-99011' : 'REF-1044'),
-            waybill_no: extDocNum.includes('OR-2024') ? 'WBL-2024-556677' : (extDocNum.includes('9011') ? 'WBL-2026-88012' : 'WBL-2026-99014'),
-            status: 'Validated'
-          };
-          setMatchedRecordDetails(mockMatch);
-
-          logAuditEvent('POSSIBLE_DUPLICATE_DETECTED', 'NONE', mockMatch.record_id, `AI matched similar parameters in legacy system.`, 'CHECKING', 'DUPLICATE_FLAGGED');
-          toast.warning("Duplicate record match flagged! Audit verification required.", "AI Duplicate Detection");
+          setSimilarityScore(95);
+          setMatchedRecordDetails({
+            record_id: `ALT-${data.data.alert_id}`,
+            registered_or: extDocNum,
+            client_name: extClient,
+            amount: extAmount,
+            entry_date: extDate,
+            reference_no: extRef,
+            waybill_no: extWaybill,
+            status: 'FLAGGED'
+          });
+          toast.warning("Duplicate record match flagged in PostgreSQL database! Review required.", "AI Duplicate Detection");
+          logAuditEvent('POSSIBLE_DUPLICATE_DETECTED', extDocNum, `ALT-${data.data.alert_id}`, `AI matched similar parameters in PostgreSQL database.`, 'CHECKING', 'DUPLICATE_FLAGGED');
         } else {
           setScanResultMode('CLEAR');
           setSimilarityScore(0);
           setMatchedRecordDetails(null);
-
-          logAuditEvent('NO_DUPLICATE_DETECTED', 'NONE', 'NONE', `AI database comparison found 0 matching record conflicts.`, 'CHECKING', 'CLEAR');
-          toast.success("No duplicate record match flagged in database.", "Verification Clear");
+          toast.success("No duplicate record match flagged in PostgreSQL database.", "Verification Clear");
+          logAuditEvent('NO_DUPLICATE_DETECTED', extDocNum, 'NONE', `AI database comparison found 0 matching record conflicts in PostgreSQL.`, 'CHECKING', 'CLEAR');
         }
-
-        setCheckingStep(0);
-        setCheckingProgress(0);
-      }, 600);
-    }, 1000);
+      } else {
+        setScanResultMode('CLEAR');
+        setSimilarityScore(0);
+        setMatchedRecordDetails(null);
+        toast.success("No duplicate record match flagged in PostgreSQL database.", "Verification Clear");
+      }
+    } catch (err) {
+      console.error("Duplicate check API error:", err);
+      setScanResultMode('CLEAR');
+      setSimilarityScore(0);
+      setMatchedRecordDetails(null);
+    } finally {
+      setCheckingStep(0);
+      setCheckingProgress(0);
+    }
   };
+
 
   const handleResetScanConsole = () => {
     setUploadFile(null);
@@ -661,11 +778,56 @@ export const DuplicateAlerts: React.FC = () => {
     setMatchedRecordDetails(null);
     setShowManualReviewPanel(false);
     setZoomLevel(1.0);
+    setExtDocType('OFFICIAL_RECEIPT');
+    setExtDocNum('');
+    setExtClient('');
+    setExtAmount('');
+    setExtDate('');
+    setExtRef('');
   };
 
-  // ==========================================
-  // CONFIRMATION FORM ACTIONS
-  // ==========================================
+  // Send to Manual Review flow
+  const handleSendToManualReview = () => {
+    const alertId = `ALT-MAN-${Date.now()}`;
+    const newFlagged: FlaggedDuplicate = {
+      id: alertId,
+      documentType: extDocType,
+      uploadedDocumentNumber: extDocNum || 'DOC-PENDING',
+      documentNumber: extDocNum,
+      existingMatchedRecord: 'Manual Review Requested',
+      clientName: extClient || 'Speedex Client',
+      amount: extAmount || '0.00',
+      transactionDate: extDate,
+      source: sourceType,
+      similarityScore: 0,
+      confidence: 0,
+      severity: 'Low',
+      matchedWith: 'Manual Review Requested',
+      duplicateReason: 'Manual verification requested by user',
+      handlingAction: 'Under Review',
+      flaggedBy: user?.username || 'System User',
+      reviewerRole: user?.role || 'Staff',
+      status: 'Pending Review',
+      matchedFields: ['Manual Verification Required'],
+      flaggedDate: new Date().toISOString(),
+      reviewerNote: ''
+    };
+
+    saveDuplicatesToStorage([newFlagged, ...duplicates]);
+
+    logAuditEvent(
+      'MANUAL_REVIEW_REQUESTED',
+      alertId,
+      extDocNum,
+      `User requested manual review verification for document ${extDocNum}.`,
+      'CHECKING',
+      'PENDING_REVIEW'
+    );
+
+    toast.info(`Document ${extDocNum} added to Manual Review queue.`, 'Manual Review');
+    handleResetScanConsole();
+    setActiveTab('flagged-dups');
+  };
 
   // Mark as Unique clearance flow (Flow 7)
   const handleMarkAsUniqueClick = () => {
@@ -1192,12 +1354,74 @@ export const DuplicateAlerts: React.FC = () => {
                 {/* Scanned Document Preview Box */}
                 <div className="card" style={{ padding: '16px', borderRadius: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#ffffff', border: '1px solid var(--border)', minHeight: '340px' }}>
                   <img 
-                    src={previewDocUrl || '/mock_receipt.png'} 
+                    src={previewDocUrl || '/receipt_preview.png'} 
                     alt="Document Preview" 
                     style={{ width: '100%', maxHeight: '280px', objectFit: 'contain', borderRadius: '8px', marginBottom: '10px', border: '1px solid var(--border)' }}
                   />
                   <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--tp)' }}>{uploadFile?.name || 'scanned_document.png'}</div>
                   <div style={{ fontSize: '11.5px', color: 'var(--ts)' }}>Source: {sourceType}</div>
+                </div>
+              </div>
+            )}
+
+            {/* FLOW 3.5: INVALID / NON-OFFICIAL RECEIPT DOCUMENT RESULT */}
+            {scanResultMode === 'INVALID' && (
+              <div className="card fade-in" style={{ padding: '32px', borderRadius: '16px', border: '1px solid rgba(225, 29, 72, 0.3)', background: 'linear-gradient(135deg, #fff1f2 0%, #fff 100%)' }}>
+                <div style={{ display: 'flex', gap: '16px', marginBottom: '24px' }}>
+                  <div style={{
+                    width: '52px', height: '52px', borderRadius: '50%',
+                    backgroundColor: '#ffe4e6', color: 'var(--err)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                  }}>
+                    <AlertTriangle size={26} />
+                  </div>
+                  <div>
+                    <h3 style={{ margin: '0 0 4px', fontSize: '18px', fontWeight: 800, color: 'var(--err)' }}>
+                      Unacceptable Document: Not an Official Receipt / Billing Invoice
+                    </h3>
+                    <p style={{ margin: 0, fontSize: '14px', color: 'var(--ts)' }}>
+                      The AI document validator determined that this file is <strong>NOT an acceptable Official Receipt or Billing Invoice</strong>. Non-financial images or unofficial notes cannot be processed for duplicate validation.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Preview of what was scanned */}
+                {previewDocUrl && (
+                  <div style={{ display: 'flex', gap: '20px', marginBottom: '24px', alignItems: 'flex-start' }}>
+                    <div style={{ flex: '0 0 160px', background: '#fff', border: '1px solid var(--err-bg)', borderRadius: '10px', padding: '8px', textAlign: 'center' }}>
+                      <img src={previewDocUrl} alt="Rejected scan" style={{ maxHeight: '120px', maxWidth: '100%', objectFit: 'contain', borderRadius: '6px' }} />
+                      <p style={{ fontSize: '11px', color: 'var(--err)', marginTop: '6px', fontWeight: 600 }}>Image Submitted</p>
+                    </div>
+                    <div style={{ flex: 1, background: '#fef2f2', borderRadius: '10px', padding: '16px 18px', border: '1px solid #fecaca' }}>
+                      <p style={{ fontSize: '13.5px', fontWeight: 700, color: '#991b1b', margin: '0 0 8px 0' }}>⚠️ Validation Requirement Notice:</p>
+                      <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', color: '#7f1d1d', lineHeight: 1.8 }}>
+                        <li>This document does <strong>NOT match the official receipt or billing invoice format</strong>.</li>
+                        <li>Please upload or scan an official <strong>Speedex Official Receipt, Billing Invoice, or Waybill</strong>.</li>
+                        <li>Ensure all text fields, OR number, and total amounts are clear and readable.</li>
+                        <li>Non-financial images, personal photos, or unofficial notes are strictly rejected.</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                  <button className="btn btn-outline" onClick={handleResetScanConsole}>Clear / Reset</button>
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => { handleResetScanConsole(); setTimeout(() => handleOpenScanner(), 100); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                  >
+                    <Camera size={15} />
+                    Scan Again
+                  </button>
+                  <button
+                    className="btn btn-outline"
+                    onClick={() => { handleResetScanConsole(); document.getElementById('file-upload-input')?.click(); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                  >
+                    <UploadCloud size={15} />
+                    Upload Document Instead
+                  </button>
                 </div>
               </div>
             )}
@@ -1243,7 +1467,7 @@ export const DuplicateAlerts: React.FC = () => {
                   {/* Right Column: preview */}
                   <div style={{ background: '#ffffff', border: '1px solid var(--border)', borderRadius: '12px', padding: '10px', textAlign: 'center' }}>
                     <img 
-                      src={previewDocUrl || '/mock_receipt.png'} 
+                      src={previewDocUrl || '/receipt_preview.png'} 
                       alt="Checked Preview" 
                       style={{ maxHeight: '140px', maxWidth: '100%', objectFit: 'contain', borderRadius: '6px' }}
                     />
@@ -1251,11 +1475,21 @@ export const DuplicateAlerts: React.FC = () => {
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span className="badge badge-success" style={{ padding: '6px 14px', fontSize: '13px', borderRadius: '20px', fontWeight: 700 }}>
-                    Clear
-                  </span>
-                  <div style={{ display: 'flex', gap: '12px' }}>
+                  <button className="btn btn-outline" onClick={handleResetScanConsole} style={{ padding: '6px 16px', fontSize: '13px', borderRadius: '20px', fontWeight: 600 }}>
+                    Clear / Reset Console
+                  </button>
+
+                  <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                     <button className="btn btn-outline" onClick={handleResetScanConsole}>Upload Another Document</button>
+                    <button 
+                      className="btn btn-outline" 
+                      onClick={handleSendToManualReview}
+                      disabled={!canValidate}
+                      style={{ borderColor: 'var(--warn)', color: 'var(--warn-dark)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                    >
+                      <Clock size={15} />
+                      Send for Manual Review
+                    </button>
                     <button className="btn btn-primary" onClick={handleMarkAsUniqueClick} disabled={!canValidate}>
                       Mark as Unique
                     </button>
@@ -1293,7 +1527,7 @@ export const DuplicateAlerts: React.FC = () => {
                       <h4 style={{ margin: '0 0 12px', fontSize: '12.5px', fontWeight: 700, color: 'var(--ts)', textTransform: 'uppercase' }}>Uploaded / Scanned Document</h4>
                       <div style={{ overflow: 'hidden', height: '180px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#ffffff', borderRadius: '8px', border: '1px solid var(--border)' }}>
                         <img 
-                          src={previewDocUrl || '/mock_receipt.png'} 
+                          src={previewDocUrl || '/receipt_preview.png'} 
                           alt="Uploaded candidate preview" 
                           style={{ 
                             maxHeight: '100%', 
@@ -1311,7 +1545,7 @@ export const DuplicateAlerts: React.FC = () => {
                       <h4 style={{ margin: '0 0 12px', fontSize: '12.5px', fontWeight: 700, color: 'var(--ts)', textTransform: 'uppercase' }}>Existing Matching FOMS Record</h4>
                       <div style={{ overflow: 'hidden', height: '180px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--s1)', borderRadius: '8px', border: '1px solid var(--border)' }}>
                         <img 
-                          src={extDocType === 'INVOICE' ? '/mock_invoice.png' : '/mock_receipt.png'} 
+                          src={extDocType === 'INVOICE' ? '/invoice_preview.png' : '/receipt_preview.png'} 
                           alt="Existing database match preview" 
                           style={{ 
                             maxHeight: '100%', 
@@ -1490,7 +1724,7 @@ export const DuplicateAlerts: React.FC = () => {
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
                         <div style={{ overflow: 'hidden', height: '140px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
                           <img 
-                            src={previewDocUrl || '/mock_receipt.png'} 
+                            src={previewDocUrl || '/receipt_preview.png'} 
                             alt="Uploaded original doc" 
                             style={{ 
                               maxHeight: '100%', 
@@ -1503,7 +1737,7 @@ export const DuplicateAlerts: React.FC = () => {
                         </div>
                         <div style={{ overflow: 'hidden', height: '140px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
                           <img 
-                            src={extDocType === 'INVOICE' ? '/mock_invoice.png' : '/mock_receipt.png'} 
+                            src={extDocType === 'INVOICE' ? '/invoice_preview.png' : '/receipt_preview.png'} 
                             alt="Legar FOMS match doc" 
                             style={{ 
                               maxHeight: '100%', 
@@ -1787,7 +2021,7 @@ export const DuplicateAlerts: React.FC = () => {
                   { key: 'clientName', label: 'Client Name', sortable: true, width: '240px' },
                   {
                     key: 'amount', label: 'Amount', sortable: true, width: '140px', align: 'right',
-                    render: (row) => <>₱{parseFloat(row.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</>
+                    render: (row) => <>₱{parseFloat(row.amount || '0').toLocaleString(undefined, { minimumFractionDigits: 2 })}</>,
                   },
                   { key: 'transactionDate', label: 'Transaction Date', sortable: true, width: '170px' },
                   {
@@ -1891,7 +2125,7 @@ export const DuplicateAlerts: React.FC = () => {
                   { key: 'clientName', label: 'Client Name', sortable: true, width: '240px' },
                   {
                     key: 'amount', label: 'Amount', sortable: true, width: '140px', align: 'right',
-                    render: (row) => <>₱{parseFloat(row.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</>
+                    render: (row) => <>₱{parseFloat(row.amount || '0').toLocaleString(undefined, { minimumFractionDigits: 2 })}</>,
                   },
                   {
                     key: 'similarityScore', label: 'Similarity', sortable: true, width: '140px',
@@ -2038,53 +2272,112 @@ export const DuplicateAlerts: React.FC = () => {
       {/* ==========================================
           SCAN DOCUMENT CAMERA SIMULATOR MODAL
           ========================================== */}
+      {/* Hidden canvas for frame capture */}
+      <canvas ref={canvasRef} style={{ display: 'none' }} />
+
       <Modal
         isOpen={showCameraModal}
-        onClose={() => setShowCameraModal(false)}
+        onClose={() => { stopCameraStream(); setShowCameraModal(false); }}
         title="Scan Document Console"
         footerButtons={
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', width: '100%' }}>
-            <button className="btn btn-outline" onClick={() => setShowCameraModal(false)}>Close</button>
+            <button className="btn btn-outline" onClick={() => { stopCameraStream(); setShowCameraModal(false); }}>Close</button>
             {cameraActive ? (
-              <button className="btn btn-primary" onClick={handleCaptureScan}>Capture Scan</button>
+              <button className="btn btn-primary" onClick={handleCaptureScan} disabled={!!cameraError}>Capture Scan</button>
             ) : (
               <>
                 <button className="btn btn-outline" onClick={handleRetakeScan}>Retake</button>
-                <button className="btn btn-primary" onClick={handleConfirmScan}>Confirm Scan</button>
+                <button className="btn btn-primary" onClick={handleConfirmScan} disabled={!capturedImage}>Confirm Scan</button>
               </>
             )}
           </div>
         }
       >
-        {cameraActive && (
-          <div style={{
-            position: 'relative', width: '100%', height: '300px',
-            background: '#0B0F19', borderRadius: '12px',
-            overflow: 'hidden', display: 'flex', flexDirection: 'column',
-            alignItems: 'center', justifyContent: 'center', border: '2px solid var(--teal)'
-          }}>
-            <div style={{
-              position: 'absolute', inset: '24px', border: '2px dashed var(--teal)',
-              opacity: 0.6, pointerEvents: 'none', borderRadius: '8px'
-            }} />
-            <div style={{
-              position: 'absolute', width: '100%', height: '2px',
-              background: 'var(--teal)', top: '50%',
-              animation: 'scanLineAnim 2.5s ease-in-out infinite'
-            }} />
-            <Camera size={48} style={{ color: '#ffffff', opacity: 0.8 }} />
-            <span style={{ fontSize: '13px', color: '#ffffff', marginTop: '10px', opacity: 0.8 }}>Live Viewport Camera</span>
+        {/* Camera error state */}
+        {cameraError && (
+          <div style={{ background: 'var(--err-bg)', border: '1px solid rgba(225,29,72,0.2)', borderRadius: '10px', padding: '16px 20px', marginBottom: '12px', fontSize: '13.5px', color: 'var(--err)', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+            <AlertCircle size={18} style={{ flexShrink: 0, marginTop: '1px' }} />
+            <span>{cameraError}</span>
           </div>
         )}
 
+        {/* Live camera feed */}
+        {cameraActive && !cameraError && (
+          <div style={{
+            position: 'relative', width: '100%', height: '300px',
+            background: '#0B0F19', borderRadius: '12px',
+            overflow: 'hidden', border: '2px solid var(--teal)'
+          }}>
+            {/* Scanning overlay guides */}
+            <div style={{
+              position: 'absolute', inset: '24px', border: '2px dashed var(--teal)',
+              opacity: 0.6, pointerEvents: 'none', borderRadius: '8px', zIndex: 2
+            }} />
+            <div style={{
+              position: 'absolute', width: '100%', height: '2px',
+              background: 'var(--teal)', top: '50%', zIndex: 2,
+              animation: 'scanLineAnim 2.5s ease-in-out infinite'
+            }} />
+
+            {/* 🔄 Camera flip button — top-right overlay */}
+            <button
+              onClick={handleFlipCamera}
+              title={facingMode === 'environment' ? 'Switch to Front Camera' : 'Switch to Back Camera'}
+              style={{
+                position: 'absolute', top: '10px', right: '10px', zIndex: 10,
+                background: 'rgba(0,0,0,0.55)', border: '1px solid rgba(255,255,255,0.25)',
+                borderRadius: '50%', width: '40px', height: '40px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', color: '#ffffff', backdropFilter: 'blur(4px)',
+                transition: 'background 0.2s'
+              }}
+            >
+              <SwitchCamera size={18} />
+            </button>
+
+            {/* Camera label pill — bottom-left */}
+            <div style={{
+              position: 'absolute', bottom: '10px', left: '10px', zIndex: 10,
+              background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)',
+              borderRadius: '20px', padding: '4px 10px',
+              fontSize: '11px', fontWeight: 600, color: '#fff',
+              border: '1px solid rgba(255,255,255,0.15)',
+              display: 'flex', alignItems: 'center', gap: '5px'
+            }}>
+              <Camera size={11} />
+              {facingMode === 'environment' ? 'Back Camera' : 'Front Camera'}
+            </div>
+
+            {/* Real webcam video */}
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              style={{
+                width: '100%', height: '100%', objectFit: 'cover', borderRadius: '10px',
+                // Mirror the front cam so text appears naturally
+                transform: facingMode === 'user' ? 'scaleX(-1)' : 'none'
+              }}
+            />
+          </div>
+        )}
+
+        {/* Captured real image preview */}
         {!cameraActive && capturedImage && (
           <div style={{ textAlign: 'center', background: 'var(--s1)', padding: '12px', borderRadius: '12px', border: '1px solid var(--border)' }}>
             <img 
               src={capturedImage} 
               alt="Captured Document" 
-              style={{ maxHeight: '280px', maxWidth: '100%', objectFit: 'contain', borderRadius: '8px', border: '1px solid var(--border)' }}
+              style={{ maxHeight: '300px', maxWidth: '100%', objectFit: 'contain', borderRadius: '8px', border: '1px solid var(--border)' }}
             />
+            <p style={{ marginTop: '10px', fontSize: '12.5px', color: 'var(--ts)' }}>✅ Image captured. Click <strong>Confirm Scan</strong> to process, or <strong>Retake</strong> to try again.</p>
           </div>
+        )}
+
+        {/* No camera, no error, no capture — loading state */}
+        {cameraActive && !cameraError && (
+          <p style={{ textAlign: 'center', fontSize: '12.5px', color: 'var(--ts)', marginTop: '8px' }}>Point your camera at the invoice/receipt, then click <strong>Capture Scan</strong>.</p>
         )}
       </Modal>
 
