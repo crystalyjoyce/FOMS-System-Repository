@@ -1,23 +1,23 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\Joana\\OneDrive\\Desktop\\FOR PM\\foms-ai-intelligence\\integration-gateway\\foms-ai-gateway.csproj": {}
+    "C:\\Users\\Crystalyn Joyce\\Downloads\\backend ai layer\\AI-LAYER\\integration-gateway\\foms-ai-gateway.csproj": {}
   },
   "projects": {
-    "C:\\Users\\Joana\\OneDrive\\Desktop\\FOR PM\\foms-ai-intelligence\\integration-gateway\\foms-ai-gateway.csproj": {
+    "C:\\Users\\Crystalyn Joyce\\Downloads\\backend ai layer\\AI-LAYER\\integration-gateway\\foms-ai-gateway.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Joana\\OneDrive\\Desktop\\FOR PM\\foms-ai-intelligence\\integration-gateway\\foms-ai-gateway.csproj",
+        "projectUniqueName": "C:\\Users\\Crystalyn Joyce\\Downloads\\backend ai layer\\AI-LAYER\\integration-gateway\\foms-ai-gateway.csproj",
         "projectName": "foms-ai-gateway",
-        "projectPath": "C:\\Users\\Joana\\OneDrive\\Desktop\\FOR PM\\foms-ai-intelligence\\integration-gateway\\foms-ai-gateway.csproj",
-        "packagesPath": "C:\\Users\\Joana\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Joana\\OneDrive\\Desktop\\FOR PM\\foms-ai-intelligence\\integration-gateway\\obj\\",
+        "projectPath": "C:\\Users\\Crystalyn Joyce\\Downloads\\backend ai layer\\AI-LAYER\\integration-gateway\\foms-ai-gateway.csproj",
+        "packagesPath": "C:\\Users\\Crystalyn Joyce\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\Crystalyn Joyce\\Downloads\\backend ai layer\\AI-LAYER\\integration-gateway\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
         ],
         "configFilePaths": [
-          "C:\\Users\\Joana\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Users\\Crystalyn Joyce\\AppData\\Roaming\\NuGet\\NuGet.Config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
