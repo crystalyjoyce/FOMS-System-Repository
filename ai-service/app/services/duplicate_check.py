@@ -296,11 +296,26 @@ def process_scanned_document(db: Session, file_bytes: bytes, filename: str, mime
         db.add(match_details)
         db.commit()
 
+        matched_record_payload = None
+        if matched_record and matched_record.source_details:
+            source = matched_record.source_details or {}
+            matched_amount = source.get("amount") or amount
+            matched_record_payload = {
+                "record_id": str(matched_record.id),
+                "documentNumber": source.get("documentNumber") or source.get("receiptNumber") or source.get("invoiceNumber") or source.get("waybillNumber") or doc_num,
+                "clientName": source.get("clientName") or client_name or "Customer Name Not Read",
+                "amount": str(matched_amount) if matched_amount is not None else "Missing",
+                "transactionDate": source.get("transactionDate") or tx_date,
+                "referenceNumber": source.get("referenceNumber") or ref,
+                "waybillNumber": source.get("waybillNumber") or ""
+            }
+
         return {
             "status": "FLAGGED_DUPLICATE",
             "alert_id": alert.id,
             "confidence_score": highest_score,
             "extracted": extracted,
+            "matched_record": matched_record_payload,
             "reason": reason,
             "message": f"Duplicate detected ({highest_score:.1f}% similarity). Document flagged for review."
         }

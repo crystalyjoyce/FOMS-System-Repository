@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("foms-ai-gateway")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+17809b11a91a9efa269e491dab9b8b3985938919")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+60d94d787c43da39f389e62738b8ec21f84c8eab")]
 [assembly: System.Reflection.AssemblyProductAttribute("foms-ai-gateway")]
 [assembly: System.Reflection.AssemblyTitleAttribute("foms-ai-gateway")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

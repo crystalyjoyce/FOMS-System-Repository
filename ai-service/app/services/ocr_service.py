@@ -2,6 +2,8 @@ import os
 import json
 import re
 import logging
+import base64
+import requests
 from datetime import datetime
 from typing import Dict, Any, Optional
 
@@ -12,17 +14,13 @@ def extract_document_fields(file_bytes: bytes, filename: str, mime_type: str = "
     Extracts structured financial document fields using Gemini 2.5 Flash Multimodal Vision API.
     Falls back to a fallback heuristic extractor if GEMINI_API_KEY is not set or API is unreachable.
     """
-    gemini_api_key = os.getenv("GEMINI_API_KEY", "")
+    gemini_api_key = os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
     gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 
-    # If valid Gemini API key is configured, use official Google GenAI SDK
+    # If valid Gemini API key is configured, try the direct REST API-key flow first.
+    # This avoids the SDK authentication mismatch that can incorrectly send the key as an OAuth bearer token.
     if gemini_api_key and gemini_api_key != "your_gemini_api_key_here":
         try:
-            from google import genai
-            from google.genai import types
-
-            client = genai.Client(api_key=gemini_api_key)
-
             prompt = """
             Analyze this uploaded document image carefully.
             
@@ -50,7 +48,7 @@ def extract_document_fields(file_bytes: bytes, filename: str, mime_type: str = "
                 "documentType": "OFFICIAL_RECEIPT | INVOICE | WAYBILL | PROOF_OF_PAYMENT | INVALID_DOCUMENT",
                 "documentNumber": "Extracted invoice/receipt/waybill/OR number (or null if not found)",
                 "clientName": "Extracted client or company name (or null if not found)",
-                "amount": "CRITICAL: Extract ONLY the FINAL GRAND TOTAL / TOTAL AMOUNT DUE / TOTAL PAID. Do NOT use sub-totals, VAT, or line item prices. Return as numeric float string (e.g. 13650.00). Return null if not found.",
+                "amount": "CRITICAL: Extract ONLY the FINAL GRAND TOTAL / TOTAL AMOUNT / TOTAL PAID / AMOUNT DUE value that is explicitly labeled TOTAL. Never return subtotal, VAT, discount, service charge, or any line-item amount. If the document shows only a subtotal and no clear TOTAL/GRAND TOTAL label, return null. Do not guess. Return a numeric float string only when the final total is clearly visible. Otherwise return null.",
                 "transactionDate": "YYYY-MM-DD format (or null if not found)",
                 "referenceNumber": "Extracted reference/transaction ID (or null if not found)",
                 "validationMessage": "Brief explanation of what type of document this is, or why it was rejected"
@@ -66,24 +64,41 @@ def extract_document_fields(file_bytes: bytes, filename: str, mime_type: str = "
                 else:
                     mime_type = "image/jpeg"
 
-            response = client.models.generate_content(
-                model=gemini_model,
-                contents=[
-                    types.Part.from_bytes(data=file_bytes, mime_type=mime_type),
-                    prompt
+            encoded_image = base64.b64encode(file_bytes).decode("utf-8")
+            payload = {
+                "contents": [
+                    {
+                        "parts": [
+                            {"text": prompt},
+                            {"inlineData": {"mime_type": mime_type, "data": encoded_image}}
+                        ]
+                    }
                 ],
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json"
-                )
+                "generationConfig": {
+                    "responseMimeType": "application/json"
+                }
+            }
+
+            response = requests.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent?key={gemini_api_key}",
+                headers={"Content-Type": "application/json"},
+                json=payload,
+                timeout=60
             )
 
-            if response and response.text:
-                extracted = json.loads(response.text)
-                # Ensure valid financial document types (Receipt, Invoice, Waybill, SpeedPay) are always marked valid
-                if extracted.get("documentType") in ["OFFICIAL_RECEIPT", "INVOICE", "WAYBILL", "PROOF_OF_PAYMENT"]:
-                    extracted["is_valid"] = True
-                logger.info(f"Gemini extraction result: {extracted.get('documentType')} - Valid: {extracted.get('is_valid')}")
-                return extracted
+            if response.status_code == 200:
+                result = response.json()
+                candidate_text = result.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text")
+                if candidate_text:
+                    extracted = json.loads(candidate_text)
+                    if extracted.get("documentType") in ["OFFICIAL_RECEIPT", "INVOICE", "WAYBILL", "PROOF_OF_PAYMENT"]:
+                        extracted["is_valid"] = True
+                    logger.info(f"Gemini extraction result: {extracted.get('documentType')} - Valid: {extracted.get('is_valid')}")
+                    return extracted
+            else:
+                if response.status_code == 401:
+                    raise RuntimeError("Gemini authentication failed: the configured API key is invalid or expired. Update GEMINI_API_KEY with a valid Google AI Studio key.")
+                raise RuntimeError(f"Gemini REST call failed with HTTP {response.status_code}: {response.text[:400]}")
 
         except Exception as e:
             err_str = str(e)
@@ -127,13 +142,21 @@ def _fallback_heuristic_extraction(filename: str, file_bytes: bytes) -> Dict[str
         prefix = "OR-2026" if doc_type == "OFFICIAL_RECEIPT" else ("INV-2026" if doc_type == "INVOICE" else "WBL-2026")
         doc_num = f"{prefix}-{hash_num}"
 
-    client_name = ""
+    client_name = "Customer Name Not Read"
     if "ABC" in clean_name:
         client_name = "ABC Trading Corporation"
     elif "GLOBAL" in clean_name:
         client_name = "Global Logistics Inc."
+    elif "CUSTOMER" in clean_name:
+        client_name = filename.rsplit(".", 1)[0].replace("_", " ").title()
 
-    amount = "0.00"
+    # Only return a numeric amount when the filename itself clearly contains an explicit
+    # final-total label. Do not guess from a subtotal, VAT, or line-item phrase.
+    amount_match = re.search(
+        r'(?i)(?:grand\s+total|total\s+amount|total\s+paid|amount\s+due|total)(?:[^\d]*)(\d[\d,]*\.\d{2})',
+        clean_name,
+    )
+    amount = amount_match.group(1).replace(",", "") if amount_match else None
 
     return {
         "is_valid": True,
@@ -143,6 +166,7 @@ def _fallback_heuristic_extraction(filename: str, file_bytes: bytes) -> Dict[str
         "amount": amount,
         "transactionDate": datetime.utcnow().strftime("%Y-%m-%d"),
         "referenceNumber": f"REF-{doc_num}",
-        "extractedRawText": f"Extracted document metadata for {filename} ({doc_type})"
+        "extractedRawText": f"Extracted document metadata for {filename} ({doc_type})",
+        "warning": "OCR amount could not be read because Gemini quota is exhausted. Please check your Gemini billing/quota in Google AI Studio."
     }
 

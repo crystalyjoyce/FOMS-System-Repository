@@ -193,6 +193,7 @@ export const DuplicateAlerts: React.FC = () => {
   const [extDate, setExtDate] = useState('');
   const [extRef, setExtRef] = useState('');
   const [extWaybill, setExtWaybill] = useState('');
+  const [ocrWarning, setOcrWarning] = useState('');
 
   // Save original OCR backup values
   const [originalOCR, setOriginalOCR] = useState<any>(null);
@@ -471,6 +472,7 @@ export const DuplicateAlerts: React.FC = () => {
     setExtAmount('');
     setExtDate('');
     setExtRef('');
+    setOcrWarning('');
 
     setUploadFile(file);
     setSourceType(source);
@@ -610,8 +612,10 @@ export const DuplicateAlerts: React.FC = () => {
 
         const docType = (extracted.documentType as any) || 'OFFICIAL_RECEIPT';
         const docNum = (extracted.documentNumber && extracted.documentNumber.trim() !== '') ? extracted.documentNumber : `OR-${Date.now().toString().slice(-6)}`;
-        const clientName = (extracted.clientName && extracted.clientName.trim() !== '') ? extracted.clientName : '';
-        const amt = String((extracted.amount && String(extracted.amount).trim() !== '' && String(extracted.amount) !== '0.00') ? extracted.amount : '');
+        const clientName = (extracted.clientName && extracted.clientName.trim() !== '') ? extracted.clientName : 'Customer Name Not Read';
+        const rawAmount = extracted.amount != null ? String(extracted.amount).trim() : '';
+        const amt = rawAmount && rawAmount !== 'null' ? rawAmount : 'Missing';
+        const warningText = extracted.warning || (amt === 'Missing' ? 'OCR amount could not be read because Gemini quota is exhausted. Please check your Gemini billing/quota in Google AI Studio.' : '');
         const dt = extracted.transactionDate || new Date().toISOString().split('T')[0];
         const ref = extracted.referenceNumber || `REF-${docNum}`;
 
@@ -621,6 +625,7 @@ export const DuplicateAlerts: React.FC = () => {
         setExtAmount(amt);
         setExtDate(dt);
         setExtRef(ref);
+        setOcrWarning(warningText);
 
         const ocrData = {
           documentType: docType,
@@ -658,14 +663,15 @@ export const DuplicateAlerts: React.FC = () => {
           setScanResultMode('DUPLICATE');
           setSimilarityScore(scanData.confidence_score || 95);
 
+          const matchedRecord = scanData.matched_record || {};
           setMatchedRecordDetails({
-            record_id: `REC-${Date.now()}`,
-            registered_or: docNum,
-            client_name: clientName,
-            amount: amt,
-            entry_date: dt,
-            reference_no: ref,
-            waybill_no: `WBL-${docNum}`,
+            record_id: matchedRecord.record_id || `REC-${Date.now()}`,
+            registered_or: matchedRecord.documentNumber || matchedRecord.receiptNumber || matchedRecord.invoiceNumber || matchedRecord.waybillNumber || docNum,
+            client_name: matchedRecord.clientName || clientName,
+            amount: matchedRecord.amount || amt || '0.00',
+            entry_date: matchedRecord.transactionDate || dt,
+            reference_no: matchedRecord.referenceNumber || ref,
+            waybill_no: matchedRecord.waybillNumber || `WBL-${docNum}`,
             status: 'FLAGGED'
           });
           toast.warning(`Duplicate detected (${scanData.confidence_score}% similarity). Review required.`, 'AI Gemini Scan');
@@ -1316,6 +1322,15 @@ export const DuplicateAlerts: React.FC = () => {
                     </div>
                   </div>
 
+                  {ocrWarning && (
+                    <div style={{ marginBottom: '14px', padding: '12px 14px', borderRadius: '10px', background: '#fff7ed', border: '1px solid #fdba74', color: '#9a5b00', fontSize: '12.5px', fontWeight: 700, lineHeight: 1.5 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <AlertTriangle size={15} />
+                        <span>{ocrWarning}</span>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid-2" style={{ marginBottom: '14px' }}>
                     <div>
                       <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--ts)', display: 'block', marginBottom: '6px' }}>Client Name</label>
@@ -1527,7 +1542,7 @@ export const DuplicateAlerts: React.FC = () => {
                       <h4 style={{ margin: '0 0 12px', fontSize: '12.5px', fontWeight: 700, color: 'var(--ts)', textTransform: 'uppercase' }}>Uploaded / Scanned Document</h4>
                       <div style={{ overflow: 'hidden', height: '180px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#ffffff', borderRadius: '8px', border: '1px solid var(--border)' }}>
                         <img 
-                          src={previewDocUrl || '/receipt_preview.png'} 
+                          src={previewDocUrl || '/mock_receipt.png'} 
                           alt="Uploaded candidate preview" 
                           style={{ 
                             maxHeight: '100%', 
@@ -1545,7 +1560,7 @@ export const DuplicateAlerts: React.FC = () => {
                       <h4 style={{ margin: '0 0 12px', fontSize: '12.5px', fontWeight: 700, color: 'var(--ts)', textTransform: 'uppercase' }}>Existing Matching FOMS Record</h4>
                       <div style={{ overflow: 'hidden', height: '180px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--s1)', borderRadius: '8px', border: '1px solid var(--border)' }}>
                         <img 
-                          src={extDocType === 'INVOICE' ? '/invoice_preview.png' : '/receipt_preview.png'} 
+                          src={extDocType === 'INVOICE' ? '/mock_invoice.png' : '/mock_receipt.png'} 
                           alt="Existing database match preview" 
                           style={{ 
                             maxHeight: '100%', 
@@ -1724,7 +1739,7 @@ export const DuplicateAlerts: React.FC = () => {
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
                         <div style={{ overflow: 'hidden', height: '140px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
                           <img 
-                            src={previewDocUrl || '/receipt_preview.png'} 
+                            src={previewDocUrl || '/mock_receipt.png'} 
                             alt="Uploaded original doc" 
                             style={{ 
                               maxHeight: '100%', 
@@ -1737,7 +1752,7 @@ export const DuplicateAlerts: React.FC = () => {
                         </div>
                         <div style={{ overflow: 'hidden', height: '140px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
                           <img 
-                            src={extDocType === 'INVOICE' ? '/invoice_preview.png' : '/receipt_preview.png'} 
+                            src={extDocType === 'INVOICE' ? '/mock_invoice.png' : '/mock_receipt.png'} 
                             alt="Legar FOMS match doc" 
                             style={{ 
                               maxHeight: '100%', 
