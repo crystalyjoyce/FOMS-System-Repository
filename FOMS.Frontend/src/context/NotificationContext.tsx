@@ -1,0 +1,202 @@
+import React, { createContext, useContext, useState, useMemo, useEffect } from 'react';
+import { useAuth } from './AuthContext';
+import { useAppData } from './AppDataContext';
+import { SEEDED_WAYBILLS, SEEDED_INVOICES, SEEDED_PAYMENTS, SEEDED_SPEEDPAY, SEEDED_AR_RECORDS } from '../data/seed';
+import type { UserRole } from '../types/auth';
+
+export interface NotificationItem {
+  id: string;
+  title: string;
+  description: string;
+  timestamp: string;
+  read: boolean;
+  type: 'info' | 'alert' | 'success' | 'system';
+  category: 'logistics' | 'finance' | 'driver' | 'system';
+  isToday: boolean;
+  link?: string;
+  actionLabel?: string;
+}
+
+function relTs(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'Just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+function isToday(iso: string): boolean {
+  return new Date(iso).toDateString() === new Date().toDateString();
+}
+
+function generateNotifications(
+  role: UserRole, 
+  data: { waybills: any[], invoices: any[], payments: any[], speedPay: any[], arRecords: any[] }
+): NotificationItem[] {
+  const now = new Date().toISOString();
+  const notes: NotificationItem[] = [];
+  const { waybills, invoices, payments, speedPay, arRecords } = data;
+
+  if (role === 'Coordinator') {
+    const forChecking = waybills.filter(w => w.status === 'For Checking');
+    forChecking.forEach(w => {
+      notes.push({ id: `coord-fc-${w.id}`, title: 'New Waybill Awaiting Check', description: `Waybill ${w.waybillNumber} has arrived and needs your review.`, timestamp: relTs(w.uploaded_date || now), read: false, type: 'info', category: 'logistics', isToday: isToday(w.uploaded_date || now), link: `/waybills` });
+    });
+    const missing = waybills.filter(w => w.status === 'Missing');
+    missing.forEach(w => {
+      const daysDiff = Math.floor((Date.now() - new Date(w.deliveryDate).getTime()) / 86400000);
+      if (daysDiff >= 1) {
+        notes.push({ id: `coord-miss-${w.id}`, title: 'Missing POD Reminder', description: `Waybill ${w.waybillNumber} has been missing for ${daysDiff} day(s). Please submit CTC if original is unavailable.`, timestamp: relTs(w.deliveryDate), read: false, type: 'alert', category: 'logistics', isToday: false, link: `/waybills` });
+      }
+    });
+  }
+
+  if (role === 'Accountant') {
+    const validated = waybills.filter(w => w.status === 'Validated' || w.status === 'CTC Submitted');
+    if (validated.length > 0) {
+      notes.push({ id: 'acct-validated', title: 'Waybills Ready for Invoicing', description: `${validated.length} validated waybill(s) are available and ready for invoice creation.`, timestamp: relTs(now), read: false, type: 'success', category: 'finance', isToday: true, link: `/invoicing` });
+    }
+    const returned = invoices.filter(i => i.status === 'Draft' || i.status === 'Needs Revision');
+    returned.forEach(inv => {
+      notes.push({ id: `acct-ret-${inv.id}`, title: 'Invoice Needs Revision', description: `Invoice ${inv.invoiceNumber} was returned for revision.`, timestamp: relTs(inv.createdAt), read: false, type: 'alert', category: 'finance', isToday: isToday(inv.createdAt), link: `/invoicing` });
+    });
+    const rejectedPayments = payments.filter(p => p.status === 'Rejected');
+    rejectedPayments.forEach(pay => {
+      notes.push({ id: `acct-pay-rej-${pay.id}`, title: 'Payment Rejected', description: `Payment ${pay.id} was rejected by the Assistant Finance Manager.`, timestamp: relTs(pay.recordedAt), read: false, type: 'alert', category: 'finance', isToday: isToday(pay.recordedAt), link: `/payments` });
+    });
+    const approved = invoices.filter(i => i.status === 'Finalized');
+    approved.forEach(inv => {
+      notes.push({ id: `acct-apr-${inv.id}`, title: 'Invoice Finalized', description: `Invoice ${inv.invoiceNumber} has been finalized.`, timestamp: relTs(inv.createdAt), read: true, type: 'success', category: 'finance', isToday: isToday(inv.createdAt), link: `/invoicing` });
+    });
+  }
+
+  if (role === 'Head Accountant') {
+    const pending = invoices.filter(i => i.status === 'Pending Approval');
+    pending.forEach(inv => {
+      notes.push({ id: `ha-pend-${inv.id}`, title: 'Invoice Submitted for Review', description: `Invoice ${inv.invoiceNumber} is pending your approval. Amount: ₱${inv.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}.`, timestamp: relTs(inv.createdAt), read: false, type: 'info', category: 'finance', isToday: isToday(inv.createdAt), link: `/invoice-review` });
+    });
+  }
+
+  if (role === 'Assistant of Finance Manager') {
+    const pendingPayments = payments.filter(p => p.status === 'Pending Validation');
+    pendingPayments.forEach(pay => {
+      notes.push({ id: `afm-pay-${pay.id}`, title: 'Payment Pending Validation', description: `Payment ${pay.id} of ₱${pay.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })} via ${pay.paymentMethod} requires validation.`, timestamp: relTs(pay.recordedAt), read: false, type: 'info', category: 'finance', isToday: isToday(pay.recordedAt), link: `/payments` });
+    });
+    const pendingSP = speedPay.filter(s => s.status === 'Pending Validation');
+    pendingSP.forEach(sp => {
+      notes.push({ id: `afm-sp-${sp.id}`, title: 'SpeedPay Submission Pending', description: `SpeedPay submission ${sp.id} via ${sp.paymentMethod} for ₱${sp.amountPaid.toLocaleString('en-PH', { minimumFractionDigits: 2 })} awaits validation.`, timestamp: relTs(sp.submittedAt), read: false, type: 'alert', category: 'finance', isToday: isToday(sp.submittedAt), link: `/speedpay-validation` });
+    });
+    const sevenDays = Date.now() + 7 * 86400000;
+    const nearDue = invoices.filter(i => ['Finalized'].includes(i.status) && new Date(i.dueDate).getTime() < sevenDays && new Date(i.dueDate).getTime() > Date.now());
+    nearDue.forEach(inv => {
+      notes.push({ id: `afm-due-${inv.id}`, title: 'Invoice Approaching Due Date', description: `Invoice ${inv.invoiceNumber} is due on ${new Date(inv.dueDate).toLocaleDateString('en-PH')}. Follow up if payment is pending.`, timestamp: relTs(inv.createdAt), read: false, type: 'alert', category: 'finance', isToday: false, link: `/accounts-receivable` });
+    });
+  }
+
+  if (role === 'Finance Manager') {
+    const validatedPayments = payments.filter(p => p.status === 'Validated');
+    validatedPayments.forEach(pay => {
+      notes.push({ id: `fm-pay-${pay.id}`, title: 'Payment Validated by Asst. FM', description: `Payment ${pay.id} (₱${pay.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}) has been validated and is awaiting final approval.`, timestamp: relTs(pay.validatedAt || pay.recordedAt), read: false, type: 'success', category: 'finance', isToday: isToday(pay.validatedAt || pay.recordedAt), link: `/payments` });
+    });
+    const overdue = arRecords.filter(r => r.status === 'Overdue' && ['31-60 days', '61-90 days', '90+ days'].includes(r.agingBracket));
+    overdue.forEach(rec => {
+      notes.push({ id: `fm-ar-${rec.id}`, title: 'Overdue Account Alert', description: `Invoice ${rec.invoiceId} has crossed into the ${rec.agingBracket} aging bracket. Outstanding: ₱${rec.outstandingBalance.toFixed(2)}.`, timestamp: relTs(rec.dueDate), read: false, type: 'alert', category: 'finance', isToday: false, link: `/accounts-receivable` });
+    });
+  }
+
+  return notes;
+}
+
+interface NotificationContextValue {
+  notifications: NotificationItem[];
+  unreadCount: number;
+  markAllAsRead: () => void;
+  toggleReadStatus: (id: string) => void;
+  clearAll: () => void;
+}
+
+const NotificationContext = createContext<NotificationContextValue | null>(null);
+
+export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
+  
+  const [readIds, setReadIds] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('foms_read_notifications');
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const [clearedIds, setClearedIds] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('foms_cleared_notifications');
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('foms_read_notifications', JSON.stringify(Array.from(readIds)));
+  }, [readIds]);
+
+  useEffect(() => {
+    localStorage.setItem('foms_cleared_notifications', JSON.stringify(Array.from(clearedIds)));
+  }, [clearedIds]);
+
+  const { waybills, invoices, payments, speedPay, arRecords } = useAppData();
+
+  const allNotifications = useMemo(() => {
+    if (!user) return [];
+    return generateNotifications(user.role, { waybills, invoices, payments, speedPay, arRecords });
+  }, [user, waybills, invoices, payments, speedPay, arRecords]);
+
+  const notifications = useMemo(() => {
+    return allNotifications
+      .filter(n => !clearedIds.has(n.id))
+      .map(n => ({ ...n, read: readIds.has(n.id) || n.read }));
+  }, [allNotifications, readIds, clearedIds]);
+
+  const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
+
+  const markAllAsRead = () => {
+    setReadIds(prev => {
+      const next = new Set(prev);
+      notifications.forEach(n => next.add(n.id));
+      return next;
+    });
+  };
+
+  const toggleReadStatus = (id: string) => {
+    setReadIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const clearAll = () => {
+    setClearedIds(prev => {
+      const next = new Set(prev);
+      notifications.forEach(n => next.add(n.id));
+      return next;
+    });
+  };
+
+  return (
+    <NotificationContext.Provider value={{ notifications, unreadCount, markAllAsRead, toggleReadStatus, clearAll }}>
+      {children}
+    </NotificationContext.Provider>
+  );
+};
+
+export function useNotifications() {
+  const ctx = useContext(NotificationContext);
+  if (!ctx) throw new Error('useNotifications must be used within NotificationProvider');
+  return ctx;
+}
