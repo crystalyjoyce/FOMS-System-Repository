@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { Invoice, PaymentRecord, ClientUser } from '../data/mockData';
-import { MOCK_INVOICES, MOCK_PAYMENTS, MOCK_CLIENT_USER, VALID_CLIENT_IDS } from '../data/mockData';
+import { MOCK_INVOICES, MOCK_PAYMENTS, MOCK_CLIENT_USER } from '../data/mockData';
 
 interface ClientContextType {
   user: ClientUser | null;
@@ -23,9 +23,7 @@ export const ClientProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [clients, setClients] = useState<ClientUser[]>(() => {
     const saved = localStorage.getItem('speedpay_clients');
     if (saved) return JSON.parse(saved);
-    return [
-      MOCK_CLIENT_USER // JD-001 with Password@123 and isFirstLogin: true
-    ];
+    return MOCK_CLIENT_USER.id ? [MOCK_CLIENT_USER] : [];
   });
 
   const [invoices, setInvoices] = useState<Invoice[]>(() => {
@@ -75,20 +73,23 @@ export const ClientProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const createAccount = (accountData: Omit<ClientUser, 'avatarInitials' | 'password'>) => {
-    // 1. Validate Client ID
-    if (!VALID_CLIENT_IDS.includes(accountData.id)) {
-      return { success: false, error: 'Client ID not found. Please contact your account coordinator.' };
-    }
-    
-    // 2. Validate if Email is already used
+    const formattedId = accountData.id.trim().toUpperCase();
+
+    // 1. Validate if Email is already used
     if (clients.some(c => c.email.toLowerCase() === accountData.email.toLowerCase())) {
       return { success: false, error: 'Email is already in use.' };
+    }
+
+    // 2. Validate if Client ID is already registered
+    if (clients.some(c => c.id.toLowerCase() === formattedId.toLowerCase())) {
+      return { success: false, error: 'Client ID is already registered.' };
     }
 
     const avatarInitials = accountData.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
     
     const newClient: ClientUser = {
       ...accountData,
+      id: formattedId,
       avatarInitials,
       password: 'Password@123',
       isFirstLogin: true 

@@ -1,0 +1,40 @@
+﻿using Microsoft.EntityFrameworkCore.Migrations;
+
+#nullable disable
+
+namespace FOMS.Infrastructure.Migrations
+{
+    /// <inheritdoc />
+    public partial class AddClientPasswordHash : Migration
+    {
+        /// <inheritdoc />
+        protected override void Up(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.AddColumn<string>(
+                name: "DateRequested",
+                table: "PaymentAdjustments",
+                type: "nvarchar(max)",
+                nullable: false,
+                defaultValue: "");
+
+            migrationBuilder.AddColumn<string>(
+                name: "PasswordHash",
+                table: "Clients",
+                type: "nvarchar(max)",
+                nullable: false,
+                defaultValue: "");
+        }
+
+        /// <inheritdoc />
+        protected override void Down(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.DropColumn(
+                name: "DateRequested",
+                table: "PaymentAdjustments");
+
+            migrationBuilder.DropColumn(
+                name: "PasswordHash",
+                table: "Clients");
+        }
+    }
+}

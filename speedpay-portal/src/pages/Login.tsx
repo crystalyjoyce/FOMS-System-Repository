@@ -122,6 +122,21 @@ export const Login: React.FC = () => {
     });
   };
 
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotClientId, setForgotClientId] = useState('');
+  const [forgotError, setForgotError] = useState<string | null>(null);
+  const [forgotSuccess, setForgotSuccess] = useState(false);
+
+  const handleForgotSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotClientId.trim()) {
+      setForgotError('Please enter your Client ID or Email.');
+      return;
+    }
+    setForgotError(null);
+    setForgotSuccess(true);
+  };
+
   return (
     <div className="login-shell">
 
@@ -194,11 +209,6 @@ export const Login: React.FC = () => {
                   {fieldErrors.clientId}
                 </span>
               )}
-              {!fieldErrors.clientId && (
-                <span style={{ fontSize: '11px', color: '#9CA3AF', marginTop: '4px' }}>
-                  Demo: JD-001 | Password: Password@123
-                </span>
-              )}
             </div>
 
             <div className="login-field">
@@ -250,7 +260,12 @@ export const Login: React.FC = () => {
               <button
                 type="button"
                 className="login-forgot-link"
-                onClick={() => alert("Please contact SpeedEx support to reset your password.")}
+                onClick={() => {
+                  setShowForgotModal(true);
+                  setForgotSuccess(false);
+                  setForgotError(null);
+                  setForgotClientId('');
+                }}
               >
                 Forgot password?
               </button>
@@ -400,6 +415,71 @@ export const Login: React.FC = () => {
                 Change Password & Continue
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* FORGOT PASSWORD MODAL */}
+      {showForgotModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px' }}>
+          <div style={{ background: '#fff', padding: '32px', borderRadius: '12px', width: '100%', maxWidth: '440px', fontFamily: '"Inter", sans-serif' }}>
+            <h2 style={{ margin: '0 0 8px 0', fontSize: '18px', color: '#0F172A' }}>Reset Client Password</h2>
+            
+            {forgotSuccess ? (
+              <div style={{ textAlign: 'center', padding: '16px 0' }}>
+                <div style={{ fontSize: '36px', marginBottom: '10px' }}>✅</div>
+                <h4 style={{ margin: '0 0 8px 0', fontSize: '15px', color: '#10B981' }}>Reset Instructions Sent</h4>
+                <p style={{ fontSize: '13px', color: '#475569', lineHeight: '1.5', margin: 0 }}>
+                  Password reset instructions for <strong>{forgotClientId}</strong> have been sent to your registered email address and SpeedEx Account Coordinator.
+                </p>
+                <button
+                  onClick={() => setShowForgotModal(false)}
+                  style={{ width: '100%', padding: '12px', background: '#00A99D', border: 'none', borderRadius: '8px', fontWeight: 600, color: '#FFF', cursor: 'pointer', marginTop: '20px', fontSize: '13px' }}
+                >
+                  Return to Login
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleForgotSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <p style={{ margin: 0, fontSize: '13px', color: '#64748B', lineHeight: '1.5' }}>
+                  Enter your Client ID or registered email address. We will verify your account and send reset instructions.
+                </p>
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#374151', marginBottom: '6px', textTransform: 'uppercase' }}>Client ID or Email</label>
+                  <div className="login-input-wrap">
+                    <User size={16} className="login-input-icon" />
+                    <input
+                      type="text"
+                      className="login-input"
+                      required
+                      value={forgotClientId}
+                      onChange={e => setForgotClientId(e.target.value)}
+                      placeholder="e.g. JD-001 or client@company.com"
+                    />
+                  </div>
+                  {forgotError && (
+                    <span style={{ fontSize: '12px', color: '#EF4444', marginTop: '6px', display: 'block' }}>
+                      {forgotError}
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotModal(false)}
+                    style={{ flex: 1, padding: '12px', background: '#F1F5F9', border: 'none', borderRadius: '8px', fontWeight: 600, color: '#475569', cursor: 'pointer', fontSize: '13px' }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    style={{ flex: 1, padding: '12px', background: '#00A99D', border: 'none', borderRadius: '8px', fontWeight: 600, color: '#FFF', cursor: 'pointer', fontSize: '13px' }}
+                  >
+                    Send Reset Link
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

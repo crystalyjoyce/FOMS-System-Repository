@@ -43,7 +43,7 @@ function validateForm(employeeId: string, password: string): FormErrors {
 // ─── Component ───────────────────────────────────────────────────
 
 export function LoginPage() {
-  const { login, isLoading } = useAuth();
+  const { login, registerUser, isLoading } = useAuth();
   const { toast } = useToast();
 
   const [employeeId, setEmployeeId] = useState('');
@@ -52,6 +52,54 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FormErrors>({});
   const [globalError, setGlobalError] = useState<string | null>(null);
+
+  // Create Account State
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newEmpId, setNewEmpId] = useState('');
+  const [newFullName, setNewFullName] = useState('');
+  const [newRole, setNewRole] = useState<any>('Accountant');
+  const [newPassword, setNewPassword] = useState('');
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  const handleCreateSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreateError(null);
+
+    if (!newEmpId.trim() || !newFullName.trim() || !newPassword) {
+      setCreateError('Please fill in all required fields.');
+      return;
+    }
+
+    if (!EMP_ID_REGEX.test(newEmpId.trim())) {
+      setCreateError('Employee ID must follow format EMP-XXX (e.g. EMP-006).');
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setCreateError('Password must be at least 8 characters long.');
+      return;
+    }
+
+    const result = await registerUser({
+      employeeId: newEmpId.trim(),
+      fullName: newFullName.trim(),
+      role: newRole,
+      password: newPassword,
+    });
+
+    if (!result.success && result.error) {
+      setCreateError(result.error);
+      return;
+    }
+
+    toast.success(
+      `Account created for ${newFullName.trim()} (${newEmpId.toUpperCase()}). You can now log in.`,
+      'Registration Successful'
+    );
+    setEmployeeId(newEmpId.trim().toUpperCase());
+    setPassword(newPassword);
+    setShowCreateModal(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,6 +129,25 @@ export function LoginPage() {
       delete next[field];
       return next;
     });
+  };
+
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotEmpId, setForgotEmpId] = useState('');
+  const [forgotError, setForgotError] = useState<string | null>(null);
+  const [forgotSuccess, setForgotSuccess] = useState(false);
+
+  const handleForgotSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmpId.trim()) {
+      setForgotError('Please enter your Employee ID or Email.');
+      return;
+    }
+    setForgotError(null);
+    setForgotSuccess(true);
+    toast.success(
+      `Password reset instructions have been dispatched for ${forgotEmpId.trim()}.`,
+      'Reset Request Dispatched'
+    );
   };
 
   return (
@@ -224,12 +291,12 @@ export function LoginPage() {
               <button
                 type="button"
                 className="login-forgot-link"
-                onClick={() =>
-                  toast.info(
-                    'Please contact your system administrator or HR to reset your credentials.',
-                    'Password Reset Request'
-                  )
-                }
+                onClick={() => {
+                  setShowForgotModal(true);
+                  setForgotSuccess(false);
+                  setForgotError(null);
+                  setForgotEmpId('');
+                }}
               >
                 Forgot password?
               </button>
@@ -260,6 +327,37 @@ export function LoginPage() {
                 'Log In'
               )}
             </button>
+
+            {/* Create Account option */}
+            <div style={{ textAlign: 'center', marginTop: '16px', fontSize: '13px', color: '#64748B' }}>
+              New staff member?{' '}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCreateModal(true);
+                  setCreateError(null);
+                  setNewEmpId('');
+                  setNewFullName('');
+                  setNewRole('Accountant');
+                  setNewPassword('');
+                }}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  background: 'transparent',
+                  border: '1.5px solid #1B254B',
+                  borderRadius: '8px',
+                  fontFamily: '"Inter", sans-serif',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  color: '#1B254B',
+                  cursor: 'pointer',
+                  marginTop: '8px'
+                }}
+              >
+                Create Account
+              </button>
+            </div>
           </form>
         </div>
 
@@ -269,6 +367,178 @@ export function LoginPage() {
           <strong>FOMS</strong> — Finance Operations Management System. All rights reserved.
         </div>
       </main>
+
+      {/* ── FORGOT PASSWORD MODAL ── */}
+      {showForgotModal && (
+        <div className="foms-modal-overlay" onClick={() => setShowForgotModal(false)}>
+          <div className="foms-modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
+            <div className="foms-modal-header">
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>Reset Password</h3>
+              <button className="foms-modal-close" onClick={() => setShowForgotModal(false)}>×</button>
+            </div>
+            <div className="foms-modal-body" style={{ padding: '20px' }}>
+              {forgotSuccess ? (
+                <div style={{ textAlign: 'center', padding: '10px 0' }}>
+                  <div style={{ fontSize: '40px', marginBottom: '10px' }}>✅</div>
+                  <h4 style={{ margin: '0 0 8px 0', fontSize: '16px', color: '#10B981' }}>Reset Request Sent</h4>
+                  <p style={{ fontSize: '14px', color: '#4B5563', lineHeight: '1.5' }}>
+                    If an account matching <strong>{forgotEmpId}</strong> exists, password reset instructions have been sent to your administrator.
+                  </p>
+                  <button
+                    className="login-btn"
+                    style={{ marginTop: '16px', width: '100%' }}
+                    onClick={() => setShowForgotModal(false)}
+                  >
+                    Return to Login
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleForgotSubmit}>
+                  <p style={{ fontSize: '14px', color: '#6B7280', margin: '0 0 16px 0', lineHeight: '1.5' }}>
+                    Enter your Employee ID or registered email address. We will verify your account and send password reset instructions to your system administrator.
+                  </p>
+                  <div className="login-field">
+                    <label className="login-label">Employee ID or Email</label>
+                    <div className="login-input-wrap">
+                      <span className="login-input-icon"><User size={16} /></span>
+                      <input
+                        type="text"
+                        className="login-input"
+                        placeholder="e.g. EMP-001 or user@speedex.ph"
+                        value={forgotEmpId}
+                        onChange={(e) => {
+                          setForgotEmpId(e.target.value);
+                          setForgotError(null);
+                        }}
+                        autoFocus
+                      />
+                    </div>
+                    {forgotError && (
+                      <span className="login-field-error" style={{ marginTop: '6px', color: '#EF4444' }}>
+                        <AlertCircle size={13} /> {forgotError}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+                    <button
+                      type="button"
+                      className="login-btn"
+                      style={{ background: '#F3F4F6', color: '#374151', flex: 1 }}
+                      onClick={() => setShowForgotModal(false)}
+                    >
+                      Cancel
+                    </button>
+                    <button type="submit" className="login-btn" style={{ flex: 1 }}>
+                      Submit Request
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── CREATE ACCOUNT MODAL ── */}
+      {showCreateModal && (
+        <div className="foms-modal-overlay" onClick={() => setShowCreateModal(false)}>
+          <div className="foms-modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+            <div className="foms-modal-header">
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>Create Staff Account</h3>
+              <button className="foms-modal-close" onClick={() => setShowCreateModal(false)}>×</button>
+            </div>
+            <div className="foms-modal-body" style={{ padding: '20px' }}>
+              <form onSubmit={handleCreateSubmit}>
+                <p style={{ fontSize: '13px', color: '#6B7280', margin: '0 0 16px 0', lineHeight: '1.5' }}>
+                  Register a new staff member for authorized system access.
+                </p>
+
+                {createError && (
+                  <div className="login-global-error" style={{ marginBottom: '16px' }}>
+                    <AlertCircle size={15} /> {createError}
+                  </div>
+                )}
+
+                <div className="login-field" style={{ marginBottom: '12px' }}>
+                  <label className="login-label">Employee ID</label>
+                  <div className="login-input-wrap">
+                    <span className="login-input-icon"><User size={16} /></span>
+                    <input
+                      type="text"
+                      className="login-input"
+                      placeholder="e.g. EMP-006"
+                      required
+                      value={newEmpId}
+                      onChange={(e) => setNewEmpId(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="login-field" style={{ marginBottom: '12px' }}>
+                  <label className="login-label">Full Name</label>
+                  <div className="login-input-wrap">
+                    <span className="login-input-icon"><User size={16} /></span>
+                    <input
+                      type="text"
+                      className="login-input"
+                      placeholder="e.g. Maria Garcia"
+                      required
+                      value={newFullName}
+                      onChange={(e) => setNewFullName(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="login-field" style={{ marginBottom: '12px' }}>
+                  <label className="login-label">Authorized Role</label>
+                  <select
+                    className="login-input"
+                    value={newRole}
+                    onChange={(e) => setNewRole(e.target.value as any)}
+                    style={{ paddingLeft: '12px', background: '#F9FAFB' }}
+                  >
+                    <option value="Finance Manager">Finance Manager</option>
+                    <option value="Head Accountant">Head Accountant</option>
+                    <option value="Accountant">Accountant</option>
+                    <option value="Coordinator">Coordinator</option>
+                    <option value="Assistant of Financial Manager">Assistant of Financial Manager</option>
+                  </select>
+                </div>
+
+                <div className="login-field" style={{ marginBottom: '16px' }}>
+                  <label className="login-label">Password</label>
+                  <div className="login-input-wrap">
+                    <span className="login-input-icon"><Lock size={16} /></span>
+                    <input
+                      type="password"
+                      className="login-input"
+                      placeholder="Minimum 8 characters"
+                      required
+                      minLength={8}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+                  <button
+                    type="button"
+                    className="login-btn"
+                    style={{ background: '#F3F4F6', color: '#374151', flex: 1 }}
+                    onClick={() => setShowCreateModal(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" className="login-btn" style={{ flex: 1 }}>
+                    Register Account
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -35,7 +35,15 @@ export interface AuthState {
   isLoading: boolean;
 }
 
+export interface RegisterUserParams {
+  employeeId: string;
+  fullName: string;
+  role: UserRole;
+  password: string;
+}
+
 export interface AuthContextValue extends AuthState {
   login: (credentials: LoginCredentials) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
+  registerUser: (params: RegisterUserParams) => Promise<{ success: boolean; error?: string }>;
 }
