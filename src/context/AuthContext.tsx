@@ -19,7 +19,7 @@ import React, {
 } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { AuthContextValue, AuthState, LoginCredentials, User } from '../types/auth';
-import { SEEDED_USERS, SESSION_CONFIG } from '../data/seed';
+import { SEEDED_USERS, SESSION_CONFIG, type SeededUser } from '../data/seed';
 
 // ─── Context ──────────────────────────────────────────────────────
 
@@ -89,6 +89,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, [authState.isAuthenticated, resetInactivityTimer]);
 
+  const [usersList, setUsersList] = useState<SeededUser[]>(() => {
+    try {
+      const saved = localStorage.getItem('foms_staff_users');
+      return saved ? JSON.parse(saved) : SEEDED_USERS;
+    } catch {
+      return SEEDED_USERS;
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('foms_staff_users', JSON.stringify(usersList));
+  }, [usersList]);
+
   // ── Login (FR-001, FR-002) ──
 
   const login = useCallback(
@@ -96,9 +109,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setAuthState((prev) => ({ ...prev, isLoading: true }));
 
       // Simulate async DB check (replace with Axios call when backend is ready)
-      await new Promise((resolve) => setTimeout(resolve, 800));
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
-      const match = SEEDED_USERS.find(
+      const match = usersList.find(
         (u) =>
           u.employeeId.toLowerCase() === credentials.employeeId.toLowerCase() &&
           u.password === credentials.password
@@ -126,7 +139,38 @@ export function AuthProvider({ children }: AuthProviderProps) {
       navigate('/dashboard', { replace: true });
       return { success: true, user };
     },
-    [navigate]
+    [usersList, navigate]
+  );
+
+  // ── Register User ──
+
+  const registerUser = useCallback(
+    async (params: { employeeId: string; fullName: string; role: any; password: string }): Promise<{ success: boolean; error?: string }> => {
+      const formattedEmpId = params.employeeId.trim().toUpperCase();
+
+      if (usersList.some((u) => u.employeeId.toLowerCase() === formattedEmpId.toLowerCase())) {
+        return { success: false, error: 'Employee ID is already registered.' };
+      }
+
+      const initials = params.fullName
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .substring(0, 2)
+        .toUpperCase();
+
+      const newUser: SeededUser = {
+        employeeId: formattedEmpId,
+        fullName: params.fullName.trim(),
+        role: params.role,
+        avatarInitials: initials || 'EMP',
+        password: params.password,
+      };
+
+      setUsersList((prev) => [...prev, newUser]);
+      return { success: true };
+    },
+    [usersList]
   );
 
   // ── Logout (FR-003) ──
@@ -139,7 +183,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [navigate]);
 
   return (
-    <AuthContext.Provider value={{ ...authState, login, logout }}>
+    <AuthContext.Provider value={{ ...authState, login, logout, registerUser }}>
       {children}
     </AuthContext.Provider>
   );

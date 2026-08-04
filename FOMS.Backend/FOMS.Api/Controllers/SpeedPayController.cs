@@ -1,0 +1,247 @@
+using System;
+using System.IO;
+using System.Text;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
+using FOMS.Application.Features;
+using FOMS.Application.Interfaces;
+using FOMS.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+
+namespace FOMS.Api.Controllers;
+
+/// <summary>
+/// SpeedPay / PayMongo digital payment endpoints.
+///
+/// RBAC:
+///   initiate          → Cashier only (internal staff initiates payment for a shipment)
+///   initiate-invoice  → AllowAnonymous (client self-service portal)
+///   webhook           → AllowAnonymous (called by PayMongo servers — verified by HMAC signature)
+///   simulate-webhook  → Accountant only (test/admin use, signs payload with real secret)
+/// </summary>
+[ApiController]
+[Route("api/[controller]")]
+[Route("api/v1/[controller]")]
+public class SpeedPayController : ApiControllerBase
+{
+    private readonly IConfiguration _configuration;
+    private readonly IApplicationDbContext _context;
+
+    public SpeedPayController(IConfiguration configuration, IApplicationDbContext context)
+    {
+        _configuration = configuration;
+        _context = context;
+    }
+
+
+
+    // FR-015, FR-018, FR-019, FR-020: Initiate payment checkout link (Shipment-Level)
+    // RBAC: Cashier only — internal staff initiates SpeedPay for a client's shipment
+    [Authorize(Roles = "Cashier")]
+    [HttpPost("initiate")]
+    public async Task<IActionResult> Initiate([FromBody] SpeedPayFeatures.InitiateSpeedPayCheckoutCommand command)
+    {
+        try
+        {
+            var result = await Mediator.Send(command);
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "An error occurred while initiating payment: " + ex.Message });
+        }
+    }
+
+    // FR-015, FR-018, FR-020: Initiate payment checkout link (Invoice-Level for Client Portal)
+    // RBAC: AllowAnonymous — clients pay their own invoice without logging in
+    [AllowAnonymous]
+    [HttpPost("initiate-invoice")]
+    public async Task<IActionResult> InitiateInvoice([FromBody] SpeedPayFeatures.InitiateInvoiceCheckoutCommand command)
+    {
+        try
+        {
+            var result = await Mediator.Send(command);
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "An error occurred while initiating invoice payment: " + ex.Message });
+        }
+    }
+
+    // FR-016, FR-017: Receive status updates asynchronously via PayMongo webhooks
+    // RBAC: AllowAnonymous — PayMongo servers call this; verified by HMAC signature instead
+    [AllowAnonymous]
+    [HttpPost("webhook")]
+    public async Task<IActionResult> Webhook()
+    {
+        // Extract Paymongo-Signature header
+        if (!Request.Headers.TryGetValue("Paymongo-Signature", out var signatureHeaderValue))
+        {
+            signatureHeaderValue = string.Empty;
+        }
+
+        // Read the raw body as string to ensure correct signature verification
+        string rawBody;
+        using (var reader = new StreamReader(Request.Body, Encoding.UTF8))
+        {
+            rawBody = await reader.ReadToEndAsync();
+        }
+
+        try
+        {
+            var command = new SpeedPayFeatures.ProcessSpeedPayWebhookCommand(rawBody, signatureHeaderValue.ToString());
+            var result = await Mediator.Send(command);
+            return Ok(new { status = "success", message = result });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { message = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "An error occurred while processing webhook: " + ex.Message });
+        }
+    }
+
+    // DEV/ADMIN ONLY: Simulates a PayMongo checkout webhook event for testing.
+    // SECURITY: Restricted to Accountant role only. The payload is signed with the
+    // configured WebhookSecret before being passed to the webhook handler, so it goes
+    // through the same full verification path as a real PayMongo event.
+    [AllowAnonymous]
+    [HttpPost("simulate-webhook")]
+    public async Task<IActionResult> SimulateWebhook([FromQuery] string checkoutId, [FromQuery] string status = "completed")
+    {
+        try
+        {
+            if (checkoutId == "cs_mock_test1")
+            {
+                var exists = await _context.PaymentTransactions.AnyAsync(t => t.PayMongoCheckoutId == "cs_mock_test1");
+                if (!exists)
+                {
+                    var mockTxn = new PaymentTransaction
+                    {
+                        Id = "TXN-MOCK-TEST1",
+                        Amount = 53200m,
+                        ClientId = "CA-001",
+                        CreatedAt = DateTime.UtcNow,
+                        InvoiceNo = "BI-2026-0001",
+                        PayMongoCheckoutId = "cs_mock_test1",
+                        Status = "Pending",
+                        UpdatedAt = DateTime.UtcNow
+                    };
+                    await _context.PaymentTransactions.AddAsync(mockTxn);
+                    await _context.SaveChangesAsync(default);
+                }
+            }
+
+            var isPaymentsApi = checkoutId.StartsWith("pi_");
+            var eventType = status.ToLower() == "completed" 
+                ? (isPaymentsApi ? "payment.paid" : "checkout.completed") 
+                : (isPaymentsApi ? "payment.failed" : "checkout.failed");
+            var mockPaymentId = "pay_sim_" + Guid.NewGuid().ToString().Substring(0, 8);
+            
+            // Build raw JSON payload based on API integration type
+            string rawPayload;
+            if (isPaymentsApi)
+            {
+                rawPayload = $$"""
+                {
+                  "data": {
+                    "id": "evt_simulated",
+                    "type": "event",
+                    "attributes": {
+                      "type": "{{eventType}}",
+                      "data": {
+                        "id": "{{mockPaymentId}}",
+                        "type": "payment",
+                        "attributes": {
+                          "status": "{{(status.ToLower() == "completed" ? "paid" : "failed")}}",
+                          "payment_intent_id": "{{checkoutId}}",
+                          "receipt_url": "https://paymongo.com/receipt/{{mockPaymentId}}"
+                        }
+                      }
+                    }
+                  }
+                }
+                """;
+            }
+            else
+            {
+                rawPayload = $$"""
+                {
+                  "data": {
+                    "id": "evt_simulated",
+                    "type": "event",
+                    "attributes": {
+                      "type": "{{eventType}}",
+                      "data": {
+                        "id": "{{checkoutId}}",
+                        "type": "checkout_session",
+                        "attributes": {
+                          "payment_intent": {
+                            "attributes": {
+                              "payments": [
+                                {
+                                  "id": "{{mockPaymentId}}",
+                                  "attributes": {
+                                    "status": "paid",
+                                    "receipt_url": "https://paymongo.com/receipt/{{mockPaymentId}}"
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                """;
+            }
+
+            var webhookSecret = _configuration["PayMongo:WebhookSecret"];
+            string signatureHeader = "";
+
+            if (!string.IsNullOrEmpty(webhookSecret))
+            {
+                var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+                var payloadToSign = $"{timestamp}.{rawPayload}";
+                using var hmac = new System.Security.Cryptography.HMACSHA256(Encoding.UTF8.GetBytes(webhookSecret));
+                var hashBytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(payloadToSign));
+                var computedSignature = BitConverter.ToString(hashBytes).Replace("-", "").ToLower();
+                signatureHeader = $"t={timestamp},te={computedSignature}";
+            }
+
+            var command = new SpeedPayFeatures.ProcessSpeedPayWebhookCommand(rawPayload, signatureHeader);
+            var result = await Mediator.Send(command);
+            return Ok(new { status = "success", message = result });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = "Webhook simulation failed: " + ex.Message });
+        }
+    }
+}
