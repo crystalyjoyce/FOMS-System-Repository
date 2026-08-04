@@ -218,18 +218,14 @@ export const SpeedPayValidation: React.FC = () => {
             <div>
               <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#0F172A', marginBottom: '10px' }}>VALIDATION DECISION</label>
               <div style={{ display: 'flex', gap: '16px' }}>
-                <button 
-                  onClick={() => setValidationStatus('Approve')}
-                  style={{ flex: 1, padding: '16px', borderRadius: '8px', fontWeight: 600, fontSize: '15px', cursor: 'pointer', transition: 'all 0.2s', border: validationStatus === 'Approve' ? '2px solid #10B981' : '1px solid #E2E8F0', background: validationStatus === 'Approve' ? '#F0FDF4' : '#FFF', color: validationStatus === 'Approve' ? '#047857' : '#64748B' }}
+                <select
+                  value={validationStatus}
+                  onChange={(e) => setValidationStatus(e.target.value as 'Approve' | 'Reject')}
+                  style={{ flex: 1, padding: '12px 16px', border: validationStatus === 'Approve' ? '2px solid #10B981' : '2px solid #EF4444', borderRadius: '8px', fontSize: '14px', outline: 'none', background: validationStatus === 'Approve' ? '#F0FDF4' : '#FEF2F2', color: validationStatus === 'Approve' ? '#047857' : '#B91C1C', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
                 >
-                  <i className="ti ti-check" style={{ marginRight: 8 }} /> Verify
-                </button>
-                <button 
-                  onClick={() => setValidationStatus('Reject')}
-                  style={{ flex: 1, padding: '16px', borderRadius: '8px', fontWeight: 600, fontSize: '15px', cursor: 'pointer', transition: 'all 0.2s', border: validationStatus === 'Reject' ? '2px solid #EF4444' : '1px solid #E2E8F0', background: validationStatus === 'Reject' ? '#FEF2F2' : '#FFF', color: validationStatus === 'Reject' ? '#B91C1C' : '#64748B' }}
-                >
-                  <i className="ti ti-x" style={{ marginRight: 8 }} /> Reject
-                </button>
+                  <option value="Approve">Verify</option>
+                  <option value="Reject">Reject</option>
+                </select>
               </div>
             </div>
 

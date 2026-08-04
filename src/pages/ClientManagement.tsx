@@ -10,6 +10,7 @@ import { useToast } from '../components/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { useAppData } from '../context/AppDataContext';
 import { TableContainer } from '../components/TableContainer';
+import { Users, FileText, Phone, Mail, MapPin, Calendar as CalIcon, Hash, Settings, CreditCard } from 'lucide-react';
 
 export const ClientManagement: React.FC = () => {
   const { id } = useParams();
@@ -81,53 +82,134 @@ export const ClientManagement: React.FC = () => {
     const editingClient = clients.find(c => c.id === id);
     if (!editingClient) return <div>Client not found</div>;
 
+    const billedInvoices = invoices.filter(inv => inv.clientId === editingClient.id);
+    const totalBilled = billedInvoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
+    const totalPaid = billedInvoices.filter(inv => inv.status === 'Paid').reduce((sum, inv) => sum + inv.totalAmount, 0);
+    const currentBalance = totalBilled - totalPaid;
+    const overdue = billedInvoices.filter(inv => inv.status === 'Overdue').reduce((sum, inv) => sum + inv.totalAmount, 0);
+
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
         <div onClick={() => { navigate('/clients'); setIsEditMode(false); }} style={{ cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600, width: 'fit-content' }}>
           <i className="ti ti-arrow-left" style={{ fontSize: '16px' }}></i> Back to Clients
         </div>
 
-        <Card>
-          <div style={{ padding: '24px' }}>
-            <h3 style={{ margin: '0 0 24px', fontSize: '1rem', color: '#0F172A', fontWeight: 700 }}>Client Record: {editingClient.id}</h3>
-            {!isEditMode ? (
-              // View Mode
-              <div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '32px' }}>
-                  <div>
-                    <p style={{ margin: '0 0 4px', fontSize: '0.75rem', fontWeight: 600, color: '#64748B' }}>Client Name</p>
-                    <p style={{ margin: 0, fontSize: '0.9rem', color: '#0F172A', fontWeight: 500 }}>{formData.name}</p>
+        {!isEditMode ? (
+          // Redesigned View Mode
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            
+            {/* Header Card */}
+            <div style={{ background: '#0F172A', color: 'white', padding: '32px 24px', borderRadius: '12px' }}>
+              <p style={{ margin: '0 0 8px', fontSize: '0.75rem', fontWeight: 600, color: '#94A3B8', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Company Code</p>
+              <h2 style={{ margin: '0 0 16px', fontSize: '1.25rem', fontWeight: 700, color: 'white' }}>{editingClient.id} · {editingClient.name}</h2>
+              <div style={{ width: 'fit-content' }}>
+                <StatusBadge status={editingClient.status} />
+              </div>
+            </div>
+
+            {/* Client Profile */}
+            <div style={{ background: '#fff', border: '1px solid #E2E8F0', padding: '24px', borderRadius: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px' }}>
+                <Users size={18} color="#64748B" />
+                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>Client Profile</h3>
+              </div>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                {/* Row 1 */}
+                <div>
+                  <p style={{ margin: '0 0 4px', fontSize: '0.75rem', fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase' }}>Contact Person</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Users size={14} color="#94A3B8" />
+                    <p style={{ margin: 0, fontSize: '0.9rem', color: '#334155', fontWeight: 500 }}>{editingClient.contactPerson}</p>
                   </div>
-                  <div>
-                    <p style={{ margin: '0 0 4px', fontSize: '0.75rem', fontWeight: 600, color: '#64748B' }}>Contact Person</p>
-                    <p style={{ margin: 0, fontSize: '0.9rem', color: '#0F172A', fontWeight: 500 }}>{formData.contactPerson}</p>
-                  </div>
-                  <div style={{ gridColumn: '1 / -1' }}>
-                    <p style={{ margin: '0 0 4px', fontSize: '0.75rem', fontWeight: 600, color: '#64748B' }}>Address</p>
-                    <p style={{ margin: 0, fontSize: '0.9rem', color: '#0F172A', fontWeight: 500 }}>{formData.address}</p>
-                  </div>
-                  <div>
-                    <p style={{ margin: '0 0 4px', fontSize: '0.75rem', fontWeight: 600, color: '#64748B' }}>Rate Type</p>
-                    <p style={{ margin: 0, fontSize: '0.9rem', color: '#0F172A', fontWeight: 500 }}>{formData.rateType}</p>
-                  </div>
-                  <div>
-                    <p style={{ margin: '0 0 4px', fontSize: '0.75rem', fontWeight: 600, color: '#64748B' }}>Billing Cycle</p>
-                    <p style={{ margin: 0, fontSize: '0.9rem', color: '#0F172A', fontWeight: 500 }}>{formData.billingSchedule}</p>
-                  </div>
-                  <div>
-                    <p style={{ margin: '0 0 4px', fontSize: '0.75rem', fontWeight: 600, color: '#64748B' }}>Status</p>
-                    <StatusBadge status={formData.status} />
+                </div>
+                <div>
+                  <p style={{ margin: '0 0 4px', fontSize: '0.75rem', fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase' }}>Contact Number</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Phone size={14} color="#94A3B8" />
+                    <p style={{ margin: 0, fontSize: '0.9rem', color: '#334155', fontWeight: 500 }}>{editingClient.phone}</p>
                   </div>
                 </div>
                 
-                {user?.role === 'Accountant' && (
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-                    <Button variant="primary" title="Edit Details" onClick={() => setIsEditMode(true)} />
+                {/* Row 2 */}
+                <div>
+                  <p style={{ margin: '0 0 4px', fontSize: '0.75rem', fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase' }}>Email</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Mail size={14} color="#94A3B8" />
+                    <p style={{ margin: 0, fontSize: '0.9rem', color: '#334155', fontWeight: 500 }}>{editingClient.email}</p>
                   </div>
-                )}
+                </div>
+                <div>
+                  <p style={{ margin: '0 0 4px', fontSize: '0.75rem', fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase' }}>TIN</p>
+                  <p style={{ margin: 0, fontSize: '0.9rem', color: '#334155', fontWeight: 500 }}>—</p>
+                </div>
+                
+                {/* Row 3 */}
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <p style={{ margin: '0 0 4px', fontSize: '0.75rem', fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase' }}>Address</p>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+                    <MapPin size={14} color="#94A3B8" style={{ marginTop: '2px' }} />
+                    <p style={{ margin: 0, fontSize: '0.9rem', color: '#334155', fontWeight: 500 }}>{editingClient.address}</p>
+                  </div>
+                </div>
+                
+                {/* Row 4 */}
+                <div>
+                  <p style={{ margin: '0 0 4px', fontSize: '0.75rem', fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase' }}>Registered</p>
+                  <p style={{ margin: 0, fontSize: '0.9rem', color: '#334155', fontWeight: 500 }}>
+                    {new Date(editingClient.createdAt).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}
+                  </p>
+                </div>
               </div>
-            ) : (
+            </div>
+
+            {/* Billing History Card */}
+            <div style={{ background: '#fff', border: '1px solid #E2E8F0', padding: '24px', borderRadius: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                <FileText size={18} color="#F59E0B" />
+                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>Billing History</h3>
+              </div>
+              <div style={{ borderRadius: '8px', overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                  <thead style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', borderTop: '1px solid #E2E8F0' }}>
+                    <tr>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Invoice No.</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Due Date</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Amount</th>
+                      <th style={{ padding: '12px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {billedInvoices.length > 0 ? (
+                      billedInvoices.map(inv => (
+                        <tr key={inv.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
+                          <td style={{ padding: '12px 16px', color: '#2563EB', fontWeight: 500 }}>{inv.invoiceNumber}</td>
+                          <td style={{ padding: '12px 16px', color: '#475569' }}>{new Date(inv.dueDate).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}</td>
+                          <td style={{ padding: '12px 16px', color: '#0F172A', fontWeight: 600 }}>PHP {inv.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                          <td style={{ padding: '12px 16px' }}><StatusBadge status={inv.status} /></td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={4} style={{ padding: '20px', textAlign: 'center', color: '#94A3B8' }}>No billing history found for this client.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {user?.role === 'Accountant' && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                <Button variant="primary" title="Edit Details" onClick={() => setIsEditMode(true)} />
+              </div>
+            )}
+          </div>
+        ) : (
               // Edit Mode
+          <Card>
+            <div style={{ padding: '24px' }}>
+              <h3 style={{ margin: '0 0 24px', fontSize: '1rem', color: '#0F172A', fontWeight: 700 }}>Edit Client Record: {editingClient.id}</h3>
               <form onSubmit={handleEditSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>Client Name *</label>
@@ -165,46 +247,8 @@ export const ClientManagement: React.FC = () => {
                   <Button variant="primary" title="Save Changes" type="submit" />
                 </div>
               </form>
-            )}
-          </div>
-        </Card>
-
-        {!isEditMode && (
-          <Card>
-            <div style={{ padding: '24px' }}>
-              <div style={{ marginBottom: '8px' }}>
-                <h4 style={{ margin: '0 0 16px', fontSize: '0.95rem', fontWeight: 700, color: '#0F172A', borderBottom: '1px solid #E2E8F0', paddingBottom: '8px' }}>Billing History</h4>
-                <div style={{ background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0', overflow: 'hidden' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                      <thead style={{ background: '#F1F5F9', borderBottom: '1px solid #E2E8F0' }}>
-                        <tr>
-                          <th style={{ padding: '10px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Invoice No.</th>
-                          <th style={{ padding: '10px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Due Date</th>
-                          <th style={{ padding: '10px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Amount</th>
-                          <th style={{ padding: '10px 16px', textAlign: 'left', color: '#475569', fontWeight: 600 }}>Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {invoices.filter(inv => inv.clientId === editingClient.id).length > 0 ? (
-                          invoices.filter(inv => inv.clientId === editingClient.id).map(inv => (
-                            <tr key={inv.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
-                              <td style={{ padding: '10px 16px', color: '#0F172A', fontWeight: 500 }}>{inv.invoiceNumber}</td>
-                              <td style={{ padding: '10px 16px', color: '#64748B' }}>{new Date(inv.dueDate).toLocaleDateString('en-PH')}</td>
-                              <td style={{ padding: '10px 16px', color: '#0F172A', fontWeight: 600 }}>₱{inv.totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
-                              <td style={{ padding: '10px 16px' }}><StatusBadge status={inv.status} /></td>
-                            </tr>
-                          ))
-                        ) : (
-                          <tr>
-                            <td colSpan={4} style={{ padding: '20px', textAlign: 'center', color: '#94A3B8' }}>No billing history found for this client.</td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            </Card>
+            </div>
+          </Card>
         )}
       </div>
     );

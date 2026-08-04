@@ -12,7 +12,8 @@ import {
   ChevronRight,
   Sparkles,
   MoreVertical,
-  Calendar
+  Calendar,
+  Clock
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -35,14 +36,28 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = () => {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [bellAnimating, setBellAnimating] = useState(false);
 
-  const currentDate = useMemo(() => {
-    return new Date().toLocaleDateString('en-US', {
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const formattedDateTime = useMemo(() => {
+    const datePart = currentTime.toLocaleDateString('en-US', {
       weekday: 'short',
       month: 'short',
       day: 'numeric',
       year: 'numeric'
     });
-  }, []);
+    const timePart = currentTime.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+    return `${datePart} • ${timePart}`;
+  }, [currentTime]);
 
   const notificationRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -129,7 +144,7 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = () => {
         
         {/* Right Side: Interactive Controls */}
         <div className="header-controls">
-          {/* Date Pill */}
+          {/* Date and Time Pill */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -143,8 +158,8 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = () => {
             fontWeight: 500,
             whiteSpace: 'nowrap'
           }}>
-            <Calendar size={15} style={{ color: '#0EA5E9' }} strokeWidth={2.5} />
-            <span>{currentDate}</span>
+            <Clock size={15} style={{ color: '#0D9488' }} strokeWidth={2.5} />
+            <span>{formattedDateTime}</span>
           </div>
 
           {/* Notification Button & Dropdown */}

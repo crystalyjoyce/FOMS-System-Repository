@@ -163,10 +163,9 @@ export function LoginPage() {
                 </span>
               )}
               {!fieldErrors.employeeId && (
-                <span style={{ fontSize: '11px', color: '#9CA3AF', marginTop: '4px' }}>
-                  Try: EMP1-EMP5 Password: Password@123
-                </span>
+                <div style={{ marginTop: '4px', height: '16px' }} />
               )}
+
             </div>
 
             {/* Password */}
