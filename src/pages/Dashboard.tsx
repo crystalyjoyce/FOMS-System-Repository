@@ -110,17 +110,31 @@ const HeadAccountantDashboard: React.FC = () => {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
         <Card>
-          <h3 style={{ margin: '0 0 16px', fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>Accounts Near Due Date</h3>
-          {nearDueAccounts.map((account: any) => (
-            <div key={account.id} onClick={() => navigate('/accounts-receivable')} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #F1F5F9', cursor: 'pointer' }}>
-              <div>
-                <p style={{ margin: 0, fontWeight: 600, fontSize: '0.875rem', color: '#0F172A' }}>{account.clientName}</p>
-                <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#F59E0B' }}>Due Soon</p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 8, background: '#FEF2F2', color: '#EF4444', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <i className="ti ti-alert-triangle" style={{ fontSize: '1.25rem' }}></i>
               </div>
-              <p style={{ margin: 0, fontWeight: 700, color: '#F59E0B' }}>₱{account.outstandingBalance?.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</p>
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#0F172A' }}>Accounts Near Due Date</h3>
             </div>
-          ))}
-          {nearDueAccounts.length === 0 && <p style={{ color: '#94A3B8', fontSize: '0.875rem', textAlign: 'center', padding: '24px 0' }}>No accounts are currently near due date.</p>}
+            <span 
+              onClick={() => navigate('/accounts-receivable')}
+              style={{ color: '#0D9488', fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+            >
+              View All <i className="ti ti-arrow-right"></i>
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {nearDueAccounts.slice(0, 5).map((account: any, index: number, arr: any[]) => (
+              <div key={account.id} onClick={() => navigate(`/accounts-receivable/${account.clientId}`)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 0', borderBottom: index < arr.length - 1 ? '1px solid #F1F5F9' : 'none', cursor: 'pointer' }}>
+                <span style={{ fontSize: '0.875rem', color: '#F59E0B', fontWeight: 500 }}>{account.clientId} (Due Soon)</span>
+                <span style={{ fontSize: '0.875rem', color: '#F59E0B', fontWeight: 700 }}>₱{account.outstandingBalance?.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+              </div>
+            ))}
+            {nearDueAccounts.length === 0 && (
+              <p style={{ color: '#94A3B8', fontSize: '0.875rem', textAlign: 'center', padding: '24px 0', margin: 0 }}>No accounts are currently near due date.</p>
+            )}
+          </div>
         </Card>
         <RecentActivity logs={recentActivity.length > 0 ? recentActivity : auditLogs.slice(0, 5)} />
       </div>
@@ -408,18 +422,41 @@ const FinanceManagerDashboard: React.FC = () => {
         </Card>
       </div>
 
-      {/* Accounts Near Due Date Table */}
-      <TableContainer>
-        <DataTable 
-          title="Accounts Near Due Date"
-          data={nearDueAccounts} 
-          columns={displayColumns} 
-          rowKey="id" 
-          searchPlaceholder="Search accounts..." 
-          searchFields={['clientName', 'invoiceNumber'] as any}
-          emptyMessage="No accounts are near their due date."
-        />
-      </TableContainer>
+      {/* Accounts Near Due Date Card */}
+      <Card>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 8, background: '#FEF2F2', color: '#EF4444', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <i className="ti ti-alert-triangle" style={{ fontSize: '1.25rem' }}></i>
+            </div>
+            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: '#0F172A' }}>Accounts Near Due Date</h3>
+          </div>
+          <span 
+            onClick={() => navigate('/accounts-receivable')}
+            style={{ color: '#0D9488', fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+          >
+            View All <i className="ti ti-arrow-right"></i>
+          </span>
+        </div>
+        
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {nearDueAccounts.slice(0, 5).map((account: any, index: number, arr: any[]) => (
+            <div key={account.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 0', borderBottom: index < arr.length - 1 ? '1px solid #F1F5F9' : 'none' }}>
+              <span style={{ fontSize: '0.875rem', color: '#334155', fontWeight: 500 }}>{account.clientName}</span>
+              {account.daysRemaining < 0 ? (
+                <span style={{ fontSize: '0.875rem', color: '#EF4444', fontWeight: 500 }}>{Math.abs(account.daysRemaining)} days overdue</span>
+              ) : account.daysRemaining === 0 ? (
+                <span style={{ fontSize: '0.875rem', color: '#F59E0B', fontWeight: 500 }}>Due Today</span>
+              ) : (
+                <span style={{ fontSize: '0.875rem', color: '#10B981', fontWeight: 500 }}>{account.daysRemaining} days left</span>
+              )}
+            </div>
+          ))}
+          {nearDueAccounts.length === 0 && (
+            <p style={{ color: '#94A3B8', fontSize: '0.875rem', textAlign: 'center', padding: '24px 0', margin: 0 }}>No accounts are near their due date.</p>
+          )}
+        </div>
+      </Card>
       {selectedClientId && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
           <Button variant="secondary" title="← Back to Summary" onClick={() => setSelectedClientId(null)} />

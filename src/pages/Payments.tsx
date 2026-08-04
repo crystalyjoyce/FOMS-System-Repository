@@ -368,12 +368,14 @@ export const Payments: React.FC = () => {
                   <div>
                     <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: '#0F172A', marginBottom: '10px' }}>FINAL DECISION</label>
                     <div style={{ display: 'flex', gap: '12px' }}>
-                      <button onClick={() => setApprovalStatus('Approve')} style={{ flex: 1, padding: '10px', borderRadius: '6px', fontWeight: 600, fontSize: '14px', cursor: 'pointer', transition: 'all 0.2s', border: approvalStatus === 'Approve' ? '2px solid #10B981' : '1px solid #E2E8F0', background: approvalStatus === 'Approve' ? '#F0FDF4' : '#FFF', color: approvalStatus === 'Approve' ? '#047857' : '#64748B' }}>
-                        <i className="ti ti-check" style={{ marginRight: 6 }} /> Approve
-                      </button>
-                      <button onClick={() => setApprovalStatus('Return for Review')} style={{ flex: 1, padding: '10px', borderRadius: '6px', fontWeight: 600, fontSize: '14px', cursor: 'pointer', transition: 'all 0.2s', border: approvalStatus === 'Return for Review' ? '2px solid #F59E0B' : '1px solid #E2E8F0', background: approvalStatus === 'Return for Review' ? '#FFFBEB' : '#FFF', color: approvalStatus === 'Return for Review' ? '#B45309' : '#64748B' }}>
-                        <i className="ti ti-arrow-back-up" style={{ marginRight: 6 }} /> Return for Review
-                      </button>
+                      <select
+                        value={approvalStatus}
+                        onChange={(e) => setApprovalStatus(e.target.value as 'Approve' | 'Return for Review')}
+                        style={{ flex: 1, padding: '10px', border: approvalStatus === 'Approve' ? '2px solid #10B981' : '2px solid #F59E0B', borderRadius: '6px', fontSize: '14px', outline: 'none', background: approvalStatus === 'Approve' ? '#F0FDF4' : '#FFFBEB', color: approvalStatus === 'Approve' ? '#047857' : '#B45309', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
+                      >
+                        <option value="Approve">Approve</option>
+                        <option value="Return for Review">Return for Review</option>
+                      </select>
                     </div>
                   </div>
 

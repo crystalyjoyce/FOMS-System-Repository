@@ -9,8 +9,8 @@
 
 .dt-root--compact .dt-td   { padding: 5px 10px; }
 .dt-root--compact .dt-th   { padding: 6px 10px; }
-.dt-root--relaxed .dt-td   { padding: 14px 16px; }
-.dt-root--relaxed .dt-th   { padding: 14px 16px; }
+.dt-root--relaxed .dt-td   { padding: 24px 16px; }
+.dt-root--relaxed .dt-th   { padding: 20px 16px; }
 
 /* ── Toolbar ─────────────────────────────────────────────────────────────── */
 
