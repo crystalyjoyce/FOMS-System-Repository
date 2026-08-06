@@ -1,5 +1,67 @@
 services:
 
+  # =================================================================
+  # DATABASES & GUI MANAGEMENT TOOLS
+  # =================================================================
+
+  # PostgreSQL Database (AI Layer Relational & Vector DB)
+  foms-ai-postgres:
+    image: pgvector/pgvector:pg16
+    container_name: foms-ai-postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=foms_ai_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./foms-backend/database/postgresql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  # pgAdmin 4 Web GUI for PostgreSQL (http://localhost:5050)
+  foms-pgadmin:
+    image: dpage/pgadmin4
+    container_name: foms-pgadmin
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@foms.com
+      - PGADMIN_DEFAULT_PASSWORD=admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - foms-ai-postgres
+    restart: unless-stopped
+
+  # MongoDB Database (Time-Series Trends DB)
+  foms-ai-mongodb:
+    image: mongo:7.0
+    container_name: foms-ai-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - ./foms-backend/database/mongodb/init.js:/docker-entrypoint-initdb.d/init.js:ro
+      - mongodata:/data/db
+    restart: unless-stopped
+
+  # Mongo Express Web GUI for MongoDB (http://localhost:8081)
+  foms-mongo-express:
+    image: mongo-express:latest
+    container_name: foms-mongo-express
+    environment:
+      - ME_CONFIG_MONGODB_SERVER=foms-ai-mongodb
+      - ME_CONFIG_MONGODB_PORT=27017
+      - ME_CONFIG_BASICAUTH_USERNAME=admin
+      - ME_CONFIG_BASICAUTH_PASSWORD=pass
+    ports:
+      - "8081:8081"
+    depends_on:
+      - foms-ai-mongodb
+    restart: unless-stopped
+
+  # =================================================================
+  # CORE SERVICES
+  # =================================================================
+
   # 1. FOMS C# .NET 10 Web API Backend
   foms-backend:
     build:
@@ -52,8 +114,8 @@ services:
     env_file:
       - .env
     environment:
-      - POSTGRES_CONNECTION_STRING=${POSTGRES_CONNECTION_STRING}
-      - MONGODB_URI=${MONGODB_URI}
+      - POSTGRES_CONNECTION_STRING=postgresql://postgres:postgres@foms-ai-postgres:5432/foms_ai_db
+      - MONGODB_URI=mongodb://foms-ai-mongodb:27017/
       - FOMS_READ_API_URL=http://foms-backend:8080
       - FOMS_AI_SERVICE_API_KEY=${FOMS_AI_SERVICE_API_KEY}
       - AI_SERVICE_API_KEY=${AI_SERVICE_API_KEY}
@@ -73,6 +135,8 @@ services:
       - LOG_ROTATION_DAILY=${LOG_ROTATION_DAILY}
     depends_on:
       - foms-backend
+      - foms-ai-postgres
+      - foms-ai-mongodb
     restart: unless-stopped
 
   # 5. ASP.NET Core 10 Integration Gateway
@@ -118,3 +182,7 @@ services:
       - foms-ai-gateway
       - foms-ai-service
     restart: unless-stopped
+
+volumes:
+  pgdata:
+  mongodata:
