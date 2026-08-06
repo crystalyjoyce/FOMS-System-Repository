@@ -1,6 +1,45 @@
 services:
 
+  # 1. FOMS C# .NET 10 Web API Backend
+  foms-backend:
+    build:
+      context: ./foms-backend
+      dockerfile: Dockerfile
+    container_name: foms-backend
+    ports:
+      - "5000:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - PayMongo__SecretKey=${PAYMONGO_SECRET_KEY:-sk_test_fyNzfY2nbwdhfgUcoMmWoZJq}
+      - PayMongo__WebhookSecret=${PAYMONGO_WEBHOOK_SECRET:-whsk_AhGd2fDaqcnLia9sJ79EHsL2}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
 
+  # 2. FOMS React Staff Web Application Frontend
+  foms-frontend:
+    build:
+      context: ./foms-frontend
+      dockerfile: Dockerfile
+    container_name: foms-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - foms-backend
+    restart: unless-stopped
+
+  # 3. SpeedPay React Client Portal
+  speedpay-portal:
+    build:
+      context: ./speedpay-portal
+      dockerfile: Dockerfile
+    container_name: speedpay-portal
+    ports:
+      - "5174:80"
+    depends_on:
+      - foms-backend
+    restart: unless-stopped
 
   # 4. Python FastAPI AI Service Backend
   foms-ai-service:
@@ -15,30 +54,26 @@ services:
     environment:
       - POSTGRES_CONNECTION_STRING=${POSTGRES_CONNECTION_STRING}
       - MONGODB_URI=${MONGODB_URI}
-      - FOMS_READ_API_URL=${FOMS_READ_API_URL}
+      - FOMS_READ_API_URL=http://foms-backend:8080
       - FOMS_AI_SERVICE_API_KEY=${FOMS_AI_SERVICE_API_KEY}
       - AI_SERVICE_API_KEY=${AI_SERVICE_API_KEY}
       - SYNC_INTERVAL_MINUTES=${SYNC_INTERVAL_MINUTES}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GEMINI_MODEL=${GEMINI_MODEL}
-      # §7 JWT Security
       - FOMS_JWT_PUBLIC_KEY=${FOMS_JWT_PUBLIC_KEY}
       - FOMS_JWT_ISSUER=${FOMS_JWT_ISSUER}
       - FOMS_JWT_AUDIENCE=${FOMS_JWT_AUDIENCE}
-      # §11 Service-to-Service Auth
       - SERVICE_JWT_SECRET=${SERVICE_JWT_SECRET}
       - SERVICE_API_KEY=${SERVICE_API_KEY}
-      # §17 Rate Limiting
       - RATE_LIMIT_DEFAULT=${RATE_LIMIT_DEFAULT}
       - RATE_LIMIT_UPLOAD=${RATE_LIMIT_UPLOAD}
-      # §22 CORS
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
-      # §21 Audit Logging
       - AUDIT_RETENTION_YEARS=${AUDIT_RETENTION_YEARS}
       - LOG_ROTATION_MAX_SIZE_MB=${LOG_ROTATION_MAX_SIZE_MB}
       - LOG_ROTATION_DAILY=${LOG_ROTATION_DAILY}
-
-
+    depends_on:
+      - foms-backend
+    restart: unless-stopped
 
   # 5. ASP.NET Core 10 Integration Gateway
   foms-ai-gateway:
@@ -47,21 +82,25 @@ services:
       dockerfile: Dockerfile
     container_name: foms-ai-gateway
     ports:
-      - "5000:5000"
+      - "5001:5000"
     environment:
       - AI_SERVICE_URL=http://foms-ai-service:8000
       - AI_SERVICE_API_KEY=change-me
     depends_on:
       - foms-ai-service
+    restart: unless-stopped
 
-  # 6. React 19 Frontend Web Dashboard
+  # 6. React 19 AI Frontend Web Dashboard
   foms-ai-frontend:
     build:
       context: ./ai-frontend
       dockerfile: Dockerfile
     container_name: foms-ai-frontend
+    ports:
+      - "5175:80"
     depends_on:
       - foms-ai-gateway
+    restart: unless-stopped
 
   # 7. Global Nginx Router / Reverse Proxy
   foms-nginx-proxy:
@@ -72,6 +111,10 @@ services:
     volumes:
       - ./proxy/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
+      - foms-frontend
+      - speedpay-portal
+      - foms-backend
       - foms-ai-frontend
       - foms-ai-gateway
-
+      - foms-ai-service
+    restart: unless-stopped
