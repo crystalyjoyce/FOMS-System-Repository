@@ -39,12 +39,35 @@ export const PayInvoice: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // Call the Vite proxy middleware which handles the secret key securely
+      // 1. Try FOMS Backend API (registers transaction & creates PayMongo session)
+      const fomsRes = await fetch('/api/speedpay/initiate-invoice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invoiceNo: selectedInvoice.invoiceNumber,
+          amount: selectedInvoice.amount,
+          paymentMethod: paymentMethod.toLowerCase() === 'bank transfer' ? 'card' : paymentMethod.toLowerCase(),
+          returnUrl: window.location.origin + '/pay-invoice'
+        })
+      });
+
+      if (fomsRes.ok) {
+        const fomsData = await fomsRes.json();
+        if (fomsData?.checkoutUrl) {
+          if (!fomsData.checkoutUrl.includes('mock-checkout')) {
+            window.open(fomsData.checkoutUrl, '_blank');
+          }
+          setReferenceNo(fomsData.referenceOrNumber || fomsData.payMongoCheckoutId || `PAY-${Math.floor(1000000 + Math.random() * 9000000)}`);
+          setShowModal(true);
+          setStep(fomsData.checkoutUrl.includes('mock-checkout') ? 2 : 3);
+          return;
+        }
+      }
+
+      // 2. Direct PayMongo Link fallback via Vite proxy middleware
       const response = await fetch('/api/paymongo-link', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           data: {
             attributes: {
@@ -59,15 +82,12 @@ export const PayInvoice: React.FC = () => {
       const data = await response.json();
       
       if (response.ok && data?.data?.attributes?.checkout_url) {
-        // Open PayMongo checkout in a new tab
         window.open(data.data.attributes.checkout_url, '_blank');
-        
-        // Move to step 3 to wait for their screenshot
         setReferenceNo(data.data.id || `PAY-${Math.floor(1000000 + Math.random() * 9000000)}`);
         setShowModal(true);
         setStep(3);
       } else {
-        // Seamless fallback to PayMongo checkout simulation modal
+        // 3. Seamless simulation fallback
         setReferenceNo(`PAY-${Math.floor(1000000 + Math.random() * 9000000)}`);
         setShowModal(true);
         setStep(2);
