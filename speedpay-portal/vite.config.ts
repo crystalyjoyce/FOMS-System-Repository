@@ -54,6 +54,13 @@ export default defineConfig(({ mode }) => {
     ],
     server: {
       port: 5174,
+      proxy: {
+        '/api/speedpay': {
+          target: 'http://localhost:5000',
+          changeOrigin: true,
+          secure: false,
+        }
+      }
     }
   };
 })
