@@ -43,7 +43,7 @@ services:
   # 5. ASP.NET Core 10 Integration Gateway
   foms-ai-gateway:
     build:
-      context: ./integration-gateway
+      context: ./ai-gateway
       dockerfile: Dockerfile
     container_name: foms-ai-gateway
     ports:
@@ -57,7 +57,7 @@ services:
   # 6. React 19 Frontend Web Dashboard
   foms-ai-frontend:
     build:
-      context: ./frontend
+      context: ./ai-frontend
       dockerfile: Dockerfile
     container_name: foms-ai-frontend
     depends_on:
@@ -70,7 +70,7 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./proxy/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - foms-ai-frontend
       - foms-ai-gateway
