@@ -171,7 +171,7 @@ app.Map("/{*path}", async (string? path, HttpContext context, IHttpClientFactory
     var pathLower = path.ToLowerInvariant();
 
     // 2. Enforce Authentication check
-    if (role == "Anonymous" && !pathLower.StartsWith("auth/login"))
+    if (role == "Anonymous" && !pathLower.StartsWith("auth/login") && !pathLower.StartsWith("health"))
     {
         context.Response.StatusCode = 401;
         await context.Response.WriteAsJsonAsync(new { code = "UNAUTHORIZED", message = "Authentication token is missing or invalid." });
