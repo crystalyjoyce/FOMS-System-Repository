@@ -206,21 +206,15 @@ def process_scanned_document(db: Session, file_bytes: bytes, filename: str, mime
     # 1. OCR Field Extraction via Gemini 2.0 Flash
     extracted = extract_document_fields(file_bytes, filename, mime_type)
     
-    doc_type = extracted.get("documentType", "OFFICIAL_RECEIPT")
+    doc_type = extracted.get("documentType", "INVALID_DOCUMENT")
+    is_valid = extracted.get("is_valid")
     
-    # Only reject if Gemini explicitly classified the document as non-financial.
-    # Valid financial document types are always accepted, even if is_valid is missing.
-    valid_doc_types = {"OFFICIAL_RECEIPT", "INVOICE", "WAYBILL", "PROOF_OF_PAYMENT"}
-    is_financial_doc = doc_type in valid_doc_types
-    is_explicitly_invalid = (doc_type == "INVALID_DOCUMENT") or (
-        extracted.get("is_valid") is False and not is_financial_doc
-    )
-
-    if is_explicitly_invalid:
+    # Reject if Gemini or heuristic parser classified the document as non-financial or invalid
+    if doc_type == "INVALID_DOCUMENT" or is_valid is False:
         return {
             "status": "INVALID_DOCUMENT",
             "is_valid": False,
-            "message": "INVALID DOCUMENT: The uploaded file is not a valid financial receipt, invoice, or waybill. Please upload a clear financial document.",
+            "message": extracted.get("validationMessage") or "INVALID DOCUMENT: The uploaded file is not a valid financial document (Official Receipt, Invoice, Waybill, Proof of Payment). Random pictures are strictly prohibited.",
             "extracted": {
                 "documentType": "INVALID_DOCUMENT",
                 "documentNumber": "N/A - Non-Financial Image",
@@ -337,4 +331,131 @@ def process_scanned_document(db: Session, file_bytes: bytes, filename: str, mime
             "reason": "No duplicate detected. Cleared for FOMS normal validation.",
             "message": "Document scanned and cataloged as Unique Document."
         }
+
+
+def run_foms_database_sync(db: Session, foms_client: FomsClient) -> Dict[str, int]:
+    """
+    Scans all FOMS SQL Server records (Waybills, Invoices, Receipts, SpeedPay Submissions)
+    and populates AI Layer PostgreSQL tables with unique records and duplicate alerts.
+    """
+    total_processed = 0
+    duplicates_found = 0
+
+    # 1. Sync Waybills
+    waybills = foms_client.get_waybills()
+    seen_wb = {}
+    for wb in waybills:
+        wb_num = wb.get("waybillNumber") or wb.get("id")
+        if not wb_num:
+            continue
+        total_processed += 1
+        norm_num = normalize_string(str(wb_num))
+        if norm_num in seen_wb:
+            duplicates_found += 1
+            # Flag duplicate alert
+            alert = AIDuplicateAlert(
+                alert_type="WAYBILL",
+                source_record_id=str(wb_num),
+                matched_record_id=str(seen_wb[norm_num].get("waybillNumber") or seen_wb[norm_num].get("id")),
+                confidence_score=100.0,
+                severity="High",
+                matched_fields={"waybillNumber": str(wb_num)},
+                match_reason=f"Exact duplicate Waybill detected in FOMS DB: {wb_num}",
+                status="Pending Review"
+            )
+            db.add(alert)
+            db.flush()
+            db.add(AIDuplicateMatch(alert_id=alert.id, source_details=wb, match_details=seen_wb[norm_num]))
+        else:
+            seen_wb[norm_num] = wb
+            # Save as cataloged document
+            db.add(AIDuplicateMatch(alert_id=None, source_details=wb, match_details={"status": "UNIQUE_WAYBILL"}))
+
+    # 2. Sync Invoices
+    invoices = foms_client.get_invoices()
+    seen_inv = {}
+    for inv in invoices:
+        inv_num = inv.get("invoiceNo") or inv.get("id")
+        if not inv_num:
+            continue
+        total_processed += 1
+        norm_num = normalize_string(str(inv_num))
+        if norm_num in seen_inv:
+            duplicates_found += 1
+            alert = AIDuplicateAlert(
+                alert_type="INVOICE",
+                source_record_id=str(inv_num),
+                matched_record_id=str(seen_inv[norm_num].get("invoiceNo") or seen_inv[norm_num].get("id")),
+                confidence_score=100.0,
+                severity="High",
+                matched_fields={"invoiceNo": str(inv_num)},
+                match_reason=f"Exact duplicate Invoice number detected in FOMS DB: {inv_num}",
+                status="Pending Review"
+            )
+            db.add(alert)
+            db.flush()
+            db.add(AIDuplicateMatch(alert_id=alert.id, source_details=inv, match_details=seen_inv[norm_num]))
+        else:
+            seen_inv[norm_num] = inv
+            db.add(AIDuplicateMatch(alert_id=None, source_details=inv, match_details={"status": "UNIQUE_INVOICE"}))
+
+    # 3. Sync Official Receipts
+    receipts = foms_client.get_official_receipts()
+    seen_or = {}
+    for rec in receipts:
+        or_num = rec.get("orNumber") or rec.get("id")
+        if not or_num:
+            continue
+        total_processed += 1
+        norm_num = normalize_string(str(or_num))
+        if norm_num in seen_or:
+            duplicates_found += 1
+            alert = AIDuplicateAlert(
+                alert_type="OFFICIAL_RECEIPT",
+                source_record_id=str(or_num),
+                matched_record_id=str(seen_or[norm_num].get("orNumber") or seen_or[norm_num].get("id")),
+                confidence_score=100.0,
+                severity="High",
+                matched_fields={"orNumber": str(or_num)},
+                match_reason=f"Exact duplicate Official Receipt detected in FOMS DB: {or_num}",
+                status="Pending Review"
+            )
+            db.add(alert)
+            db.flush()
+            db.add(AIDuplicateMatch(alert_id=alert.id, source_details=rec, match_details=seen_or[norm_num]))
+        else:
+            seen_or[norm_num] = rec
+            db.add(AIDuplicateMatch(alert_id=None, source_details=rec, match_details={"status": "UNIQUE_RECEIPT"}))
+
+    # 4. Sync SpeedPay Submissions
+    speedpay = foms_client.get_speedpay_submissions()
+    seen_sp = {}
+    for sp in speedpay:
+        ref_num = sp.get("referenceOrNumber") or sp.get("payMongoCheckoutId") or sp.get("id")
+        if not ref_num:
+            continue
+        total_processed += 1
+        norm_num = normalize_string(str(ref_num))
+        if norm_num in seen_sp:
+            duplicates_found += 1
+            alert = AIDuplicateAlert(
+                alert_type="SPEEDPAY_REFERENCE",
+                source_record_id=str(ref_num),
+                matched_record_id=str(seen_sp[norm_num].get("referenceOrNumber") or seen_sp[norm_num].get("id")),
+                confidence_score=100.0,
+                severity="High",
+                matched_fields={"referenceNumber": str(ref_num)},
+                match_reason=f"Exact duplicate SpeedPay reference detected in FOMS DB: {ref_num}",
+                status="Pending Review"
+            )
+            db.add(alert)
+            db.flush()
+            db.add(AIDuplicateMatch(alert_id=alert.id, source_details=sp, match_details=seen_sp[norm_num]))
+        else:
+            seen_sp[norm_num] = sp
+            db.add(AIDuplicateMatch(alert_id=None, source_details=sp, match_details={"status": "UNIQUE_SPEEDPAY"}))
+
+    db.commit()
+    return {"total_processed": total_processed, "duplicates_found": duplicates_found}
+
 

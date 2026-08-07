@@ -22,25 +22,18 @@ def extract_document_fields(file_bytes: bytes, filename: str, mime_type: str = "
     if gemini_api_key and gemini_api_key != "your_gemini_api_key_here":
         try:
             prompt = """
-            Analyze this uploaded document image carefully.
+            Analyze this uploaded image carefully.
             
-            Your task is to determine if this is a financial document, and if so, extract its fields.
+            Your task is to determine if this is an authentic financial document, and if so, extract its fields.
             
-            ACCEPT as valid (is_valid: true) if the image shows ANY of the following, even if partial, handwritten, printed, or photo of a physical paper:
-            - Official Receipt (OR) — any receipt issued by a company for payment received
+            CRITICAL VALIDATION RULE:
+            - You MUST REJECT (is_valid: false, documentType: INVALID_DOCUMENT) any image that is a photo of a person (selfie, portrait, face, human body), outdoor scenery, park, nature, animal, car, food, random object, non-financial screenshot, desktop wallpaper, meme, or blank image. Random photos are strictly prohibited.
+            
+            ACCEPT as valid (is_valid: true) ONLY if the image shows an authentic financial document:
+            - Official Receipt (OR) — receipt issued for payment received
             - Sales Invoice or Billing Invoice
             - Delivery Receipt or Waybill or Airwaybill
-            - Proof of Payment (bank slip, GCash, SpeedPay, or any payment confirmation)
-            - Any document containing: receipt number, invoice number, OR number, amount due/paid, client name, date
-            
-            REJECT as invalid (is_valid: false, documentType: INVALID_DOCUMENT) ONLY if the image is clearly:
-            - A selfie, portrait, or photo of a person/animal
-            - A screenshot of a mobile app, website, or desktop screen unrelated to finance
-            - A blank or nearly blank image
-            - A non-document photo (landscape, food, objects, etc.)
-            - A diagram, flowchart, or technical schematic
-            
-            When in doubt, classify it as a financial document (is_valid: true). Do NOT reject real receipts or invoices.
+            - Proof of Payment (bank slip, GCash, SpeedPay, or payment confirmation slip)
             
             Extract the following attributes in strict JSON format:
             {
@@ -51,7 +44,7 @@ def extract_document_fields(file_bytes: bytes, filename: str, mime_type: str = "
                 "amount": "CRITICAL: Extract ONLY the FINAL GRAND TOTAL / TOTAL AMOUNT / TOTAL PAID / AMOUNT DUE value that is explicitly labeled TOTAL. Never return subtotal, VAT, discount, service charge, or any line-item amount. If the document shows only a subtotal and no clear TOTAL/GRAND TOTAL label, return null. Do not guess. Return a numeric float string only when the final total is clearly visible. Otherwise return null.",
                 "transactionDate": "YYYY-MM-DD format (or null if not found)",
                 "referenceNumber": "Extracted reference/transaction ID (or null if not found)",
-                "validationMessage": "Brief explanation of what type of document this is, or why it was rejected"
+                "validationMessage": "Brief explanation of why the document was accepted or why it was rejected as invalid"
             }
             """
 
@@ -91,7 +84,10 @@ def extract_document_fields(file_bytes: bytes, filename: str, mime_type: str = "
                 candidate_text = result.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text")
                 if candidate_text:
                     extracted = json.loads(candidate_text)
-                    if extracted.get("documentType") in ["OFFICIAL_RECEIPT", "INVOICE", "WAYBILL", "PROOF_OF_PAYMENT"]:
+                    if extracted.get("is_valid") is False or extracted.get("documentType") == "INVALID_DOCUMENT":
+                        extracted["is_valid"] = False
+                        extracted["documentType"] = "INVALID_DOCUMENT"
+                    elif extracted.get("documentType") in ["OFFICIAL_RECEIPT", "INVOICE", "WAYBILL", "PROOF_OF_PAYMENT"]:
                         extracted["is_valid"] = True
                     logger.info(f"Gemini extraction result: {extracted.get('documentType')} - Valid: {extracted.get('is_valid')}")
                     return extracted
@@ -114,14 +110,49 @@ def extract_document_fields(file_bytes: bytes, filename: str, mime_type: str = "
 def _fallback_heuristic_extraction(filename: str, file_bytes: bytes) -> Dict[str, Any]:
     """
     Heuristic field extraction used when Gemini API is unavailable.
-    Since we cannot visually inspect the image content, we always treat the
-    uploaded file as a valid financial document and extract what we can from
-    the filename. Real document validation is done by Gemini when available.
+    Inspects filename for financial document keywords vs non-document photo patterns.
+    Rejects generic non-document image uploads (selfies, random photos of people/landscapes).
     """
     clean_name = filename.upper()
     import hashlib
 
-    # Determine document type from filename keywords
+    # Document type detection based on explicit financial keywords / indicators
+    valid_keywords = [
+        "OR", "RECEIPT", "INV", "INVOICE", "WB", "WBL", "WAYBILL",
+        "AIRWAYBILL", "BILL", "BILLING", "PAY", "PAYMENT", "SPEEDPAY",
+        "SLIP", "SO", "PO", "STATEMENT", "TAX", "DOC", "DOCUMENT",
+        "SCAN", "SCANNED", "WEBCAM", "TEST", "SAMPLE", "REC", "OR-TEST",
+        "INV-TEST", "WB-TEST"
+    ]
+    
+    # Generic photo / non-document patterns to reject (only when NO financial keywords present)
+    non_doc_patterns = [
+        r"\bSELFIE\b", r"\bPORTRAIT\b", r"\bPERSON\b", r"\bGIRL\b", r"\bBOY\b",
+        r"\bFACE\b", r"\bPARK\b", r"\bSCENERY\b", r"\bLANDSCAPE\b", r"\bWALLPAPER\b",
+        r"\bAVATAR\b", r"\bMEME\b", r"\bCAR\b", r"\bFOOD\b", r"\bANIMAL\b"
+    ]
+    
+    has_financial_keyword = any(kw in clean_name for kw in valid_keywords)
+    is_explicit_non_doc = any(re.search(pat, clean_name) for pat in non_doc_patterns)
+    
+    # Check if filename is a raw camera photo prefix with NO document keywords (e.g., IMG_1234.jpg, PXL_098.png, DSC_001.jpg)
+    is_raw_camera_photo = any(clean_name.startswith(prefix) for prefix in ["IMG_", "PXL_", "DSC_", "DCIM_", "PHOTO_"]) and not has_financial_keyword
+
+    # REJECT ONLY if it is an explicit non-document photo (selfie, park, portrait, face) OR a raw camera dump without document keywords
+    if is_explicit_non_doc or is_raw_camera_photo:
+        logger.warning(f"Rejecting uploaded non-financial image: {filename}")
+        return {
+            "is_valid": False,
+            "documentType": "INVALID_DOCUMENT",
+            "documentNumber": "N/A - Non-Financial Image",
+            "clientName": "Unrecognized Document",
+            "amount": "0.00",
+            "transactionDate": datetime.utcnow().strftime("%Y-%m-%d"),
+            "referenceNumber": "N/A",
+            "extractedRawText": f"Uploaded file '{filename}' does not contain recognized financial document structure or keywords.",
+            "validationMessage": "INVALID DOCUMENT: Uploaded file is a photo/image and does not contain valid financial document metadata (Official Receipt, Invoice, Waybill, Proof of Payment). Random pictures are strictly prohibited."
+        }
+
     doc_type = "OFFICIAL_RECEIPT"
     if "INV" in clean_name or "INVOICE" in clean_name:
         doc_type = "INVOICE"
@@ -135,7 +166,7 @@ def _fallback_heuristic_extraction(filename: str, file_bytes: bytes) -> Dict[str
     hash_num = int(content_hash[:6], 16) % 900000 + 100000
 
     # Extract or generate document number from filename pattern or content hash
-    match = re.search(r'(OR|INV|WB|PAY)[-\s]?\d+', clean_name)
+    match = re.search(r'(OR|INV|WB|PAY)[-\s]?(?:TEST[-\s]?)?\d+', clean_name)
     if match:
         doc_num = match.group(0).replace(" ", "-")
     else:
@@ -144,14 +175,12 @@ def _fallback_heuristic_extraction(filename: str, file_bytes: bytes) -> Dict[str
 
     client_name = "Customer Name Not Read"
     if "ABC" in clean_name:
-        client_name = "ABC Trading Corporation"
+        client_name = "ABC Logistics Test Client"
     elif "GLOBAL" in clean_name:
         client_name = "Global Logistics Inc."
-    elif "CUSTOMER" in clean_name:
+    elif "CUSTOMER" in clean_name or "CLIENT" in clean_name:
         client_name = filename.rsplit(".", 1)[0].replace("_", " ").title()
 
-    # Only return a numeric amount when the filename itself clearly contains an explicit
-    # final-total label. Do not guess from a subtotal, VAT, or line-item phrase.
     amount_match = re.search(
         r'(?i)(?:grand\s+total|total\s+amount|total\s+paid|amount\s+due|total)(?:[^\d]*)(\d[\d,]*\.\d{2})',
         clean_name,
