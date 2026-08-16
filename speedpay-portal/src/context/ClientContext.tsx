@@ -48,6 +48,45 @@ export const ClientProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     localStorage.setItem('speedpay_payments', JSON.stringify(payments));
   }, [payments]);
 
+  useEffect(() => {
+    fetch('/api/speedpay/invoices')
+      .then(res => res.json())
+      .then((data: any[]) => {
+        if (data && Array.isArray(data) && data.length > 0) {
+          const mapped = data.map(inv => ({
+            id: inv.id,
+            invoiceNumber: inv.invoiceNo ?? inv.id,
+            description: inv.description ?? 'Logistics Services',
+            amount: inv.totalAmount ?? inv.amount ?? 0,
+            dueDate: inv.dueDate ?? new Date().toISOString(),
+            status: inv.paymentStatus === 'Unpaid' ? 'Unpaid' 
+                  : inv.paymentStatus === 'Partially Paid' ? 'Due Soon'
+                  : 'Paid'
+          }));
+          setInvoices(mapped);
+        }
+      })
+      .catch(console.error);
+      
+    fetch('/api/speedpay/transactions')
+      .then(res => res.json())
+      .then((data: any[]) => {
+        if (data && Array.isArray(data) && data.length > 0) {
+          const mapped = data.map(p => ({
+            id: p.transactionId ?? p.id,
+            invoiceId: p.invoiceId,
+            referenceNo: p.referenceNumber,
+            paymentMethod: p.paymentMethod ?? 'Bank Transfer',
+            dateSubmitted: p.submittedAt ?? p.createdAt ?? new Date().toISOString(),
+            amount: p.amountPaid ?? p.amount ?? 0,
+            status: p.status ?? 'Pending Validation'
+          }));
+          setPayments(mapped);
+        }
+      })
+      .catch(console.error);
+  }, []);
+
   // Auth functions
   const login = (clientId: string, password: string) => {
     const client = clients.find(c => c.id.toLowerCase() === clientId.toLowerCase());
