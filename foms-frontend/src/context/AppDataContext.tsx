@@ -4,13 +4,13 @@
  * Components MUST read from and write to this context instead of
  * directly using the static SEEDED_* arrays from seed.ts.
  *
- * This ensures that actions by one role (e.g. Coordinator validating
- * a waybill) are immediately visible to all other roles without a
- * page refresh or manual data sync.
+ * Data is now fetched from the real .NET backend API (localhost:5007)
+ * via the Vite proxy. Static seed data is used as fallback only.
  * ─────────────────────────────────────────────────────────────────
  */
 
-import React, { createContext, useContext, useState, useMemo, useCallback } from 'react';
+import React, { createContext, useContext, useState, useMemo, useCallback, useEffect } from 'react';
+import api from '../services/api';
 import {
   SEEDED_WAYBILLS,
   SEEDED_INVOICES,
@@ -132,6 +132,124 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [clients, setClients] = useState<Client[]>(() => [...SEEDED_CLIENTS]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => [...SEEDED_AUDIT_LOGS]);
   const [followUpRecords, setFollowUpRecords] = useState<FollowUpRecord[]>(() => [...SEEDED_FOLLOW_UP_RECORDS]);
+
+  // ── Fetch Clients from real backend on mount ──
+  useEffect(() => {
+    api.get('/clients')
+      .then((res) => {
+        const mapped: Client[] = res.data.map((c: any) => ({
+          id: c.id ?? c.clientCode,
+          name: c.name ?? c.businessName ?? '',
+          contactPerson: c.contactPerson ?? '',
+          email: c.email ?? '',
+          phone: c.contactNumber ?? '',
+          address: c.address ?? '',
+          region: c.region ?? 'Metro Manila',
+          billingSchedule: c.billingSchedule ?? 'Monthly',
+          status: c.status === 'Active' ? 'Active' : 'Inactive',
+          vatStatus: c.vatStatus ?? 'VATable',
+          vatRate: c.vatRate ?? 12,
+          createdAt: c.dateRegistered ?? new Date().toISOString(),
+        }));
+        if (mapped.length > 0) setClients(mapped);
+      })
+      .catch(() => { /* keep static seed as fallback */ });
+  }, []);
+
+  // ── Fetch Invoices from real backend on mount ──
+  useEffect(() => {
+    api.get('/invoices')
+      .then((res) => {
+        const mapped: Invoice[] = res.data.map((inv: any) => ({
+          id: inv.id,
+          invoiceNumber: inv.invoiceNo ?? inv.id,
+          clientId: inv.clientId,
+          waybillIds: inv.waybillIds ?? [],
+          amount: inv.subtotal ?? inv.freightCharges ?? 0,
+          vatAmount: inv.vatAmount ?? 0,
+          surchargeAmount: inv.otherCharges ?? 0,
+          totalAmount: inv.totalAmount ?? 0,
+          billingSchedule: inv.billingSchedule ?? 'Monthly',
+          billingPeriod: inv.billingDate ?? '',
+          status: inv.paymentStatus === 'Unpaid' ? 'Finalized'
+                : inv.paymentStatus === 'Partially Paid' ? 'Verified'
+                : inv.paymentStatus === 'Paid' ? 'Paid'
+                : 'Finalized',
+          createdBy: inv.createdBy ?? 'EMP-003',
+          createdAt: inv.billingDate ?? new Date().toISOString(),
+          dueDate: inv.dueDate ?? new Date().toISOString(),
+          notes: inv.description ?? '',
+        }));
+        if (mapped.length > 0) setInvoices(mapped);
+      })
+      .catch(() => { /* keep static seed as fallback */ });
+  }, []);
+
+  // ── Fetch Waybills from real backend on mount ──
+  useEffect(() => {
+    api.get('/shipment-records')
+      .then((res) => {
+        const mapped: Waybill[] = res.data.map((w: any) => ({
+          id: w.id ?? w.shipmentRecordId,
+          waybillNumber: w.waybillNumber ?? w.id,
+          clientCode: w.clientId ?? w.clientCode ?? 'CLI-001',
+          deliveryDate: w.deliveryDate ?? new Date().toISOString().split('T')[0],
+          status: w.status ?? 'For Checking',
+          hasOriginalPOD: w.hasOriginalPOD ?? false,
+          hasApprovedCTC: w.hasApprovedCTC ?? false,
+          encodedBy: w.encodedBy ?? 'EMP-004',
+          encodedAt: w.encodedAt ?? new Date().toISOString(),
+          destinationArea: w.destinationArea ?? 'Unknown',
+          invoiceId: w.invoiceId
+        }));
+        if (mapped.length > 0) setWaybills(mapped);
+      })
+      .catch(() => { /* keep static seed as fallback */ });
+  }, []);
+
+  // ── Fetch SpeedPay from real backend on mount ──
+  useEffect(() => {
+    api.get('/speedpay/transactions')
+      .then((res) => {
+        const mapped: SpeedPaySubmission[] = res.data.map((s: any) => ({
+          id: s.id ?? s.transactionId,
+          invoiceId: s.invoiceId ?? 'INV-001',
+          clientName: s.clientName ?? 'Unknown',
+          clientEmail: s.clientEmail ?? '',
+          paymentMethod: s.paymentMethod ?? 'GCash',
+          referenceNumber: s.referenceNumber ?? s.id,
+          amountPaid: s.amountPaid ?? s.amount ?? 0,
+          proofFileName: s.proofFileName ?? 'proof.jpg',
+          proofFileUrl: s.proofFileUrl,
+          submittedAt: s.submittedAt ?? s.createdAt ?? new Date().toISOString(),
+          status: s.status ?? 'Pending Validation',
+        }));
+        if (mapped.length > 0) setSpeedPay(mapped);
+      })
+      .catch(() => { /* keep static seed as fallback */ });
+  }, []);
+
+  // ── Fetch AuditLogs from real backend on mount ──
+  useEffect(() => {
+    api.get('/audit-logs')
+      .then((res) => {
+        const mapped: AuditLog[] = res.data.map((a: any) => ({
+          id: a.id ?? a.auditLogId,
+          timestamp: a.timestamp ?? a.createdAt ?? new Date().toISOString(),
+          userId: a.userId ?? 'SYS',
+          userFullName: a.userFullName ?? 'System',
+          userRole: a.userRole ?? 'System',
+          action: a.action ?? 'Unknown',
+          module: a.module ?? 'System',
+          recordId: a.recordId ?? '',
+          recordType: a.recordType ?? '',
+          details: a.details ?? '',
+          ipAddress: a.ipAddress ?? '127.0.0.1'
+        }));
+        if (mapped.length > 0) setAuditLogs(mapped);
+      })
+      .catch(() => { /* keep static seed as fallback */ });
+  }, []);
 
   // AR records are always computed live — never stale
   const arRecords = useMemo(
