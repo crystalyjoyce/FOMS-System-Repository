@@ -1,0 +1,22 @@
+{
+  "name": "foms-e2e-tests",
+  "version": "1.0.0",
+  "description": "FOMS System — Playwright End-to-End Tests",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:all": "playwright test --headed",
+    "test:module1": "playwright test e2e/module1-waybill.spec.ts --headed",
+    "test:module2": "playwright test e2e/module2-speedpay.spec.ts --headed",
+    "test:module3": "playwright test e2e/module3-ai-collection.spec.ts --headed",
+    "test:demo:module1": "playwright test e2e/module1-waybill.spec.ts --headed --slow-mo=800",
+    "test:demo:module2": "playwright test e2e/module2-speedpay.spec.ts --headed --slow-mo=800",
+    "test:demo:module3": "playwright test e2e/module3-ai-collection.spec.ts --headed --slow-mo=800",
+    "test:report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^20.19.43"
+  }
+}

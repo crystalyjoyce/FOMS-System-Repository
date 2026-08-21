@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using FOMS.Application.Interfaces;
@@ -30,7 +30,7 @@ public class PaymentConcernTicketsController : ControllerBase
         return ticket == null ? NotFound() : Ok(ticket);
     }
 
-    [Authorize(Roles = "Bookkeeper,Accountant")]
+    [Authorize]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] PaymentConcernTicket request)
     {

@@ -124,7 +124,13 @@ const AppDataContext = createContext<AppDataContextValue | null>(null);
 // ─── Provider ─────────────────────────────────────────────────────
 
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
-  const [waybills, setWaybills] = useState<Waybill[]>(() => [...SEEDED_WAYBILLS]);
+  const [waybills, setWaybills] = useState<Waybill[]>(() => {
+    const saved = localStorage.getItem('foms_waybills');
+    return saved ? JSON.parse(saved) : [...SEEDED_WAYBILLS];
+  });
+  useEffect(() => {
+    localStorage.setItem('foms_waybills', JSON.stringify(waybills));
+  }, [waybills]);
   const [invoices, setInvoices] = useState<Invoice[]>(() => [...SEEDED_INVOICES]);
   const [payments, setPayments] = useState<Payment[]>(() => [...SEEDED_PAYMENTS]);
   const [receipts, setReceipts] = useState<Receipt[]>(() => [...SEEDED_RECEIPTS]);
@@ -151,7 +157,14 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
           vatRate: c.vatRate ?? 12,
           createdAt: c.dateRegistered ?? new Date().toISOString(),
         }));
-        if (mapped.length > 0) setClients(mapped);
+        if (mapped.length > 0) {
+          // Merge: keep seed clients, add backend clients that don't conflict
+          setClients(prev => {
+            const existingIds = new Set(prev.map(c => c.id));
+            const newOnes = mapped.filter(c => !existingIds.has(c.id));
+            return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
+          });
+        }
       })
       .catch(() => { /* keep static seed as fallback */ });
   }, []);
@@ -180,7 +193,14 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
           dueDate: inv.dueDate ?? new Date().toISOString(),
           notes: inv.description ?? '',
         }));
-        if (mapped.length > 0) setInvoices(mapped);
+        if (mapped.length > 0) {
+          // Merge: keep seed invoices, add backend invoices that don't conflict
+          setInvoices(prev => {
+            const existingIds = new Set(prev.map(i => i.id));
+            const newOnes = mapped.filter(i => !existingIds.has(i.id));
+            return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
+          });
+        }
       })
       .catch(() => { /* keep static seed as fallback */ });
   }, []);
@@ -202,18 +222,27 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
           destinationArea: w.destinationArea ?? 'Unknown',
           invoiceId: w.invoiceId
         }));
-        if (mapped.length > 0) setWaybills(mapped);
+        if (mapped.length > 0) {
+          // Merge: keep seed waybills (they have our test statuses), add backend ones
+          setWaybills(prev => {
+            const existingIds = new Set(prev.map(w => w.id));
+            const newOnes = mapped.filter(w => !existingIds.has(w.id));
+            return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
+          });
+        }
       })
       .catch(() => { /* keep static seed as fallback */ });
   }, []);
 
   // ── Fetch SpeedPay from real backend on mount ──
   useEffect(() => {
-    api.get('/speedpay/transactions')
+    api.get('/speedpay/submissions')
       .then((res) => {
         const mapped: SpeedPaySubmission[] = res.data.map((s: any) => ({
           id: s.id ?? s.transactionId,
           invoiceId: s.invoiceId ?? 'INV-001',
+          invoiceNumber: s.invoiceNumber,
+          clientId: s.clientId ?? '',
           clientName: s.clientName ?? 'Unknown',
           clientEmail: s.clientEmail ?? '',
           paymentMethod: s.paymentMethod ?? 'GCash',
@@ -224,9 +253,43 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
           submittedAt: s.submittedAt ?? s.createdAt ?? new Date().toISOString(),
           status: s.status ?? 'Pending Validation',
         }));
+        console.log('[AppDataContext] mapped speedPay:', mapped);
         if (mapped.length > 0) setSpeedPay(mapped);
       })
+      .catch((err) => { 
+        console.error('[AppDataContext] Failed to fetch speedPay:', err);
+      });
+  }, []);
+
+  // ── Fetch Payments from real backend on mount ──
+  useEffect(() => {
+    api.get('/payments')
+      .then((res) => {
+        const mapped: Payment[] = res.data.map((p: any) => ({
+          id: p.id ?? p.orNumber,
+          invoiceId: p.invoiceId ?? '',
+          invoiceNumber: p.invoiceNo ?? p.invoiceId ?? '',
+          clientId: p.clientId ?? '',
+          clientName: p.clientName ?? '',
+          amount: p.amount ?? 0,
+          paymentMethod: p.paymentMethod ?? 'Bank Transfer',
+          referenceNumber: p.referenceNumber ?? '',
+          bankConfirmed: true,
+          proofOfPaymentUrl: p.proofImageUrl ?? '',
+          recordedBy: p.recordedBy ?? '',
+          recordedAt: p.dateRecorded ?? p.paymentDate ?? new Date().toISOString(),
+          status: 'Validated' as const,
+          notes: p.remarks ?? '',
+        }));
+        if (mapped.length > 0) setPayments(mapped);
+      })
       .catch(() => { /* keep static seed as fallback */ });
+  }, []);
+
+  // ── Fetch CashFlow from real backend on mount ──
+  useEffect(() => {
+    api.get('/cash-flow')
+      .catch(() => { /* not critical */ });
   }, []);
 
   // ── Fetch AuditLogs from real backend on mount ──

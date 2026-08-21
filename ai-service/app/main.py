@@ -11,6 +11,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from app.core.config import settings
+from app.models.database import Base, engine
 from app.api.routes import (
     duplicate_routes, collection_routes,
     recommendation_routes, health_routes, dashboard_routes, auth_routes
@@ -25,6 +26,12 @@ from app.core.rate_limit import limiter
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Initializing AI Service...")
+    logger.info("Creating database tables if they do not exist...")
+    try:
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database tables ready.")
+    except Exception as e:
+        logger.warning(f"Could not connect to PostgreSQL database to create tables (Docker might be off). Bypassing DB initialization. Error: {e}")
     yield
     logger.info("Shutting down AI Service...")
 
@@ -44,7 +51,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # Only allow known frontend origins — never use "*" in production
 ALLOWED_ORIGINS = os.getenv(
     "CORS_ALLOWED_ORIGINS",
-    "http://localhost:5174,http://localhost:80,http://localhost,http://127.0.0.1:5174"
+    "http://localhost:5174,http://localhost:5175,http://localhost:5176,http://localhost:80,http://localhost,http://127.0.0.1:5174,http://127.0.0.1:5175,http://127.0.0.1:5176"
 ).split(",")
 
 app.add_middleware(

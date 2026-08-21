@@ -56,6 +56,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const [authState, setAuthState] = useState<AuthState>(() => {
     const stored = loadSession();
+    // ── Clear stale sessions from the old static-auth format ──
+    // Old sessions don't have accessToken — they are incompatible with the
+    // new real-API login. Clear them so the user gets sent to login fresh.
+    if (stored) {
+      const raw = sessionStorage.getItem(SESSION_CONFIG.STORAGE_KEY);
+      try {
+        const parsed = JSON.parse(raw || '{}');
+        if (!parsed.accessToken) {
+          clearSession();
+          return { user: null, isAuthenticated: false, isLoading: false };
+        }
+      } catch {
+        clearSession();
+        return { user: null, isAuthenticated: false, isLoading: false };
+      }
+    }
     return {
       user: stored,
       isAuthenticated: !!stored,
@@ -108,38 +124,56 @@ export function AuthProvider({ children }: AuthProviderProps) {
     async (credentials: LoginCredentials): Promise<{ success: boolean; error?: string; user?: User }> => {
       setAuthState((prev) => ({ ...prev, isLoading: true }));
 
-      // Simulate async DB check (replace with Axios call when backend is ready)
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: credentials.employeeId, password: credentials.password }),
+        });
 
-      const match = usersList.find(
-        (u) =>
-          u.employeeId.toLowerCase() === credentials.employeeId.toLowerCase() &&
-          u.password === credentials.password
-      );
+        const json = await res.json();
 
-      if (!match) {
+        if (!res.ok || !json.success) {
+          setAuthState((prev) => ({ ...prev, isLoading: false }));
+          return { success: false, error: json.message || 'Invalid Employee ID or password. Please try again.' };
+        }
+
+        const data = json.data;
+        const userData = data.user; // ← user info is nested under data.user
+
+        // Map role from backend to frontend UserRole type
+        const roleMap: Record<string, string> = {
+          'Finance Manager': 'Finance Manager',
+          'Financial Manager': 'Financial Manager',
+          'Head Accountant': 'Head Accountant',
+          'Accountant': 'Accountant',
+          'Coordinator': 'Coordinator',
+          'Assistant of Finance Manager': 'Assistant of Finance Manager',
+          'Assistant of Financial Manager': 'Assistant of Financial Manager',
+        };
+
+        const user: User = {
+          employeeId: userData.id,
+          fullName: userData.fullName,
+          role: (roleMap[userData.role] ?? userData.role) as any,
+          avatarInitials: userData.fullName?.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() || 'EMP',
+          lastLogin: new Date().toISOString(),
+          loginHistory: [new Date().toISOString()],
+        };
+
+        // Save session with accessToken so api.ts interceptor can use it
+        const sessionData = { ...user, accessToken: data.accessToken, refreshToken: data.refreshToken };
+        sessionStorage.setItem(SESSION_CONFIG.STORAGE_KEY, JSON.stringify(sessionData));
+
+        setAuthState({ user, isAuthenticated: true, isLoading: false });
+        navigate('/dashboard', { replace: true });
+        return { success: true, user };
+      } catch {
         setAuthState((prev) => ({ ...prev, isLoading: false }));
-        return { success: false, error: 'Invalid Employee ID or password. Please try again.' };
+        return { success: false, error: 'Unable to connect to server. Please check your connection.' };
       }
-
-      // Build user object (strip password)
-      const { password: _omit, ...userData } = match;
-      void _omit;
-      const user: User = {
-        ...userData,
-        lastLogin: new Date().toISOString(),
-        loginHistory: [
-          new Date().toISOString(),
-          ...(match.loginHistory ?? []),
-        ].slice(0, 5),
-      };
-
-      saveSession(user);
-      setAuthState({ user, isAuthenticated: true, isLoading: false });
-      navigate('/dashboard', { replace: true });
-      return { success: true, user };
     },
-    [usersList, navigate]
+    [navigate]
   );
 
   // ── Register User ──

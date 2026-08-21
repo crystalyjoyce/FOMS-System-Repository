@@ -25,11 +25,9 @@ public class CashFlowController : ApiControllerBase
         _context = context;
     }
 
-    [Authorize(Roles = "Accountant,Cashier")]
     [HttpGet]
     public async Task<IActionResult> GetAll() => Ok(await _repository.GetAllAsync());
 
-    [Authorize(Roles = "Accountant,Cashier")]
     [HttpGet("summary")]
     public async Task<IActionResult> GetSummary()
     {
@@ -38,7 +36,6 @@ public class CashFlowController : ApiControllerBase
         return Ok(new { Inflow = inflow, Outflow = outflow });
     }
 
-    [Authorize(Roles = "Accountant,Cashier")]
     [HttpGet("balances")]
     public async Task<IActionResult> GetBalances()
     {
@@ -46,7 +43,7 @@ public class CashFlowController : ApiControllerBase
         return Ok(balances);
     }
 
-    [Authorize(Roles = "Cashier")]
+    [Authorize]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CashFlowTransaction request)
     {

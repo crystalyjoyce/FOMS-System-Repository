@@ -44,8 +44,6 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new() { Title = "FOMS API", Version = "v1" });
-    // Note: Swagger Bearer auth definition omitted to avoid OpenApi v2 namespace conflicts.
-    // Use the Authorize header directly in Swagger UI or test via Postman/curl.
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
