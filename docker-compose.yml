@@ -19,6 +19,17 @@ services:
       - pgdata:/var/lib/postgresql/data
     restart: unless-stopped
 
+  # SQL Server Database (Core FOMS C# Backend Relational DB)
+  foms-sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: foms-sqlserver
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=Postgres2026!
+    ports:
+      - "14333:1433"
+    restart: unless-stopped
+
   # pgAdmin 4 Web GUI for PostgreSQL (http://localhost:5050)
   foms-pgadmin:
     image: dpage/pgadmin4
@@ -73,8 +84,11 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__DefaultConnection=Server=foms-sqlserver;Database=FOMSDB;User Id=sa;Password=Postgres2026!;TrustServerCertificate=True
       - PayMongo__SecretKey=${PAYMONGO_SECRET_KEY:-sk_test_fyNzfY2nbwdhfgUcoMmWoZJq}
       - PayMongo__WebhookSecret=${PAYMONGO_WEBHOOK_SECRET:-whsk_AhGd2fDaqcnLia9sJ79EHsL2}
+    depends_on:
+      - foms-sqlserver
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
