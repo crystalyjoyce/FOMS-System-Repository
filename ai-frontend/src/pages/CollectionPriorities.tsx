@@ -1,20 +1,77 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { DecisionSupportNotice } from '../components/DecisionSupportNotice';
-import DataTable from '../components/DataTable';
-import StatusBadge from '../components/StatusBadge';
-import StatusCard from '../components/StatusCard';
 import { useToast } from '../components/ToastContext';
 import { AiHeader } from '../components/AiHeader';
-import { Sparkles, ShieldAlert, CheckCircle, AlertCircle, TrendingUp } from 'lucide-react';
+import { Sparkles, TrendingUp, RefreshCw, Download, CheckCircle, AlertCircle, X, Search } from 'lucide-react';
 import { normalizeInvoiceNumber } from '../utils/referenceNormalizer';
+
+// ─── Priority Score Slider ─────────────────────────────────────────────────
+function PrioritySlider({ score, priorityLevel, size = 'md' }: { score: number; priorityLevel?: string; size?: 'sm' | 'md' }) {
+  // Red for high/overdue, Orange for medium, Green for low based on text level
+  const p = String(priorityLevel || '').toUpperCase();
+  const color = 
+    p.includes('HIGH') || p.includes('CRITICAL') || p.includes('URGENT') ? '#DC2626' :
+    p.includes('MEDIUM') || p.includes('MED') ? '#F97316' : 
+    '#22C55E'; // Low or default
+
+  const trackH = size === 'sm' ? 6 : 8;
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', width: '100%', minWidth: size === 'sm' ? 80 : 120 }}>
+      <div style={{ flex: 1, position: 'relative', height: trackH, background: '#E5E7EB', borderRadius: 999, overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${score}%`, background: color, borderRadius: 999 }} />
+      </div>
+    </div>
+  );
+}
+
+// ─── Priority Badge ──────────────────────────────────────────────────────────
+function PriorityBadge({ level }: { level: string }) {
+  const l = String(level || '').toLowerCase();
+  const isHigh = l.includes('high') || l.includes('urgent') || l.includes('critical');
+  const isMed = l.includes('medium') || l.includes('med');
+
+  const cfg = isHigh
+    ? { bg: '#FEE2E2', color: '#B91C1C', text: 'High priority' }
+    : isMed
+    ? { bg: '#FEF3C7', color: '#D97706', text: 'Medium priority' }
+    : { bg: '#D1FAE5', color: '#059669', text: 'Low priority' };
+
+  return (
+    <span style={{ background: cfg.bg, color: cfg.color, fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 20 }}>
+      {cfg.text}
+    </span>
+  );
+}
+
+// ─── Review Status Badge ─────────────────────────────────────────────────────
+function ReviewBadge({ status }: { status: string }) {
+  const s = String(status || '').toLowerCase();
+  const cfg =
+    s.includes('processing') || s.includes('accepted')
+      ? { bg: '#ECFDF5', color: '#059669', border: '#6EE7B7', text: 'Processing' }
+      : s.includes('reviewed') || s.includes('completed')
+      ? { bg: '#EDE9FE', color: '#7C3AED', border: '#C4B5FD', text: 'Reviewed' }
+      : s.includes('reject')
+      ? { bg: '#FEF2F2', color: '#DC2626', border: '#FECACA', text: 'Rejected' }
+      : { bg: '#F9FAFB', color: '#6B7280', border: '#D1D5DB', text: status || 'Pending Review' };
+
+  return (
+    <span style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}`, fontSize: 12, fontWeight: 600, padding: '4px 12px', borderRadius: 20 }}>
+      {cfg.text}
+    </span>
+  );
+}
 
 export const CollectionPriorities: React.FC = () => {
   const { token, user } = useAuth();
   const { toast } = useToast();
 
-  // Tab State
   const [activeTab, setActiveTab] = useState<'priorities' | 'recommendations'>('priorities');
+  const [search, setSearch] = useState('');
+  const [priorityFilter, setPriorityFilter] = useState('all');
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
 
   // Priorities State
   const [priorities, setPriorities] = useState<any[]>([]);
@@ -26,7 +83,6 @@ export const CollectionPriorities: React.FC = () => {
   const [recs, setRecs] = useState<any[]>([]);
   const [loadingRecs, setLoadingRecs] = useState(true);
   const [errorRecs, setErrorRecs] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState('Pending Review');
   const [selectedRec, setSelectedRec] = useState<any | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
   const [decision, setDecision] = useState('Accepted as Recommendation');
@@ -58,7 +114,7 @@ export const CollectionPriorities: React.FC = () => {
     setLoadingRecs(true);
     setErrorRecs(null);
     try {
-      const res = await fetch(`/api/ai/collection/recommendations?status=${statusFilter}`, {
+      const res = await fetch(`/api/ai/collection/recommendations?status=Pending Review`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -73,15 +129,10 @@ export const CollectionPriorities: React.FC = () => {
     }
   };
 
+  useEffect(() => { fetchPriorities(); }, [token]);
   useEffect(() => {
-    fetchPriorities();
-  }, [token]);
-
-  useEffect(() => {
-    if (activeTab === 'recommendations') {
-      fetchRecommendations();
-    }
-  }, [token, activeTab, statusFilter]);
+    if (activeTab === 'recommendations') fetchRecommendations();
+  }, [token, activeTab]);
 
   const handleOpenPriorityDetail = async (row: any) => {
     try {
@@ -135,175 +186,152 @@ export const CollectionPriorities: React.FC = () => {
   const canSubmitReviews =
     user?.role && ['Financial Manager', 'Head Accountant', 'Accountant'].includes(user.role);
 
-  const priorityToStatus = (lvl: string) => {
-    switch (lvl?.toLowerCase()) {
-      case 'urgent': return '90+ Days';
-      case 'high': return '60 - 90 Days';
-      case 'medium': return '30 - 60 Days';
-      default: return 'Active';
-    }
+  const getScore = (row: any) => {
+    const p = String(row.priority_level || '').toUpperCase();
+    return row.priority_score || row.risk_score || (
+      p.includes('CRITICAL') || p.includes('URGENT') ? 95 :
+      p.includes('HIGH') ? 82 :
+      p.includes('MEDIUM') ? 55 : 15
+    );
   };
 
-  const reviewToStatus = (status: string) => {
-    switch (status) {
-      case 'Accepted as Recommendation':
-      case 'Reviewed': return 'Completed';
-      case 'Rejected': return 'Failed';
-      default: return 'Processing';
-    }
+  const getDaysOverdue = (dueDate: string) => {
+    if (!dueDate || dueDate === 'N/A') return 0;
+    const diff = (new Date().getTime() - new Date(dueDate).getTime()) / (1000 * 60 * 60 * 24);
+    return Math.max(0, Math.round(diff));
   };
 
-  // Priorities Table Columns
-  const priorityColumns: import('../components/DataTable').ColumnDef<any>[] = [
-    {
-      key: 'invoice_number',
-      label: 'Invoice Number',
-      sortable: true,
-      width: '160px',
-      render: (row: any) => (
-        <span style={{ fontWeight: 600, fontFamily: 'var(--fm)', color: 'var(--tp)' }}>
-          {row.normalized_invoice_number || normalizeInvoiceNumber(row.invoice_number)}
-        </span>
-      ),
-    },
-    {
-      key: 'client_name',
-      label: 'Client Name',
-      sortable: true,
-      width: '220px',
-      render: (row: any) => `${row.client_name} (ID: ${row.client_id})`,
-    },
-    {
-      key: 'outstanding_balance',
-      label: 'Outstanding Balance',
-      sortable: true,
-      width: '180px',
-      render: (row: any) => (
-        <span style={{ fontWeight: 700, color: 'var(--tp)' }}>
-          ₱{row.outstanding_balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-        </span>
-      ),
-    },
-    {
-      key: 'due_date',
-      label: 'Due Date',
-      sortable: true,
-      width: '130px',
-      render: (row: any) => new Date(row.due_date).toLocaleDateString(),
-    },
-    {
-      key: 'priority_level',
-      label: 'Suggested Priority',
-      sortable: true,
-      width: '160px',
-      render: (row: any) => <StatusBadge status={priorityToStatus(row.priority_level)} />,
-    },
-    {
-      key: 'priority_score',
-      label: 'Priority Score',
-      sortable: true,
-      width: '210px',
-      render: (row: any) => {
-        const p = String(row.priority_level || '').toUpperCase();
-        const score = row.priority_score || row.risk_score || (
-          p.includes('CRITICAL') || p.includes('URGENT') ? 95 :
-          p.includes('HIGH') ? 82 :
-          p.includes('MEDIUM') ? 55 : 15
-        );
-        const level = score >= 90 ? 'Critical Priority' : score >= 75 ? 'High Priority' : score >= 40 ? 'Medium Priority' : 'Low Priority';
-        const color = score >= 90 ? 'var(--err)' : score >= 75 ? 'var(--warn)' : score >= 40 ? '#D97706' : 'var(--ok)';
-        const bg = score >= 90 ? 'var(--err-bg)' : score >= 75 ? 'var(--warn-bg)' : score >= 40 ? '#FEF3C7' : 'var(--ok-bg)';
+  // ── Computed KPIs ──────────────────────────────────────────────────────────
+  const activeList = activeTab === 'priorities' ? priorities : recs;
 
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', paddingRight: '12px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
-              <span style={{ fontWeight: 700, color, background: bg, padding: '2px 8px', borderRadius: '4px' }}>
-                {level}
-              </span>
-              <span style={{ fontWeight: 700, color }}>{score}%</span>
-            </div>
-            <div style={{ width: '100%', height: '6px', background: 'var(--s2)', borderRadius: '3px', overflow: 'hidden' }}>
-              <div style={{ width: `${score}%`, height: '100%', background: color, borderRadius: '3px' }} />
-            </div>
-          </div>
-        );
-      },
-    },
-    {
-      key: 'supporting_basis',
-      label: 'Action Basis',
-      width: '300px',
-      render: (row: any) => (
-        <span style={{ fontSize: '13px', color: 'var(--ts)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {row.supporting_basis || 'Overdue balances'}
-        </span>
-      ),
-    },
-  ];
+  const kpiHigh = useMemo(() => {
+    const list = activeTab === 'priorities' ? priorities : recs;
+    return list.filter(r => {
+      const lvl = String((r.priority_level || r.priority?.priority_level || '')).toLowerCase();
+      return lvl.includes('high') || lvl.includes('urgent') || lvl.includes('critical');
+    }).length;
+  }, [priorities, recs, activeTab]);
 
-  // Recommendations Table Columns
-  const recColumns: import('../components/DataTable').ColumnDef<any>[] = [
-    {
-      key: 'invoice_number',
-      label: 'Invoice Number',
-      sortable: true,
-      width: '160px',
-      render: (row: any) => (
-        <span style={{ fontWeight: 600, fontFamily: 'var(--fm)', color: 'var(--tp)' }}>
-          {row.priority?.normalized_invoice_number || normalizeInvoiceNumber(row.priority?.invoice_number)}
-        </span>
-      ),
-    },
-    {
-      key: 'client_name',
-      label: 'Client Name',
-      sortable: true,
-      width: '200px',
-      render: (row: any) => row.priority?.client_name,
-    },
-    {
-      key: 'outstanding_balance',
-      label: 'Outstanding Balance',
-      sortable: true,
-      width: '180px',
-      render: (row: any) => (
-        <span style={{ fontWeight: 700, color: 'var(--tp)' }}>
-          ₱{row.priority?.outstanding_balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-        </span>
-      ),
-    },
-    {
-      key: 'due_date',
-      label: 'Due Date',
-      sortable: true,
-      width: '130px',
-      render: (row: any) => new Date(row.priority?.due_date).toLocaleDateString(),
-    },
-    {
-      key: 'priority_level',
-      label: 'Urgency',
-      sortable: true,
-      width: '140px',
-      render: (row: any) => <StatusBadge status={priorityToStatus(row.priority?.priority_level)} />,
-    },
-    {
-      key: 'recommended_action',
-      label: 'Suggested Action',
-      width: '300px',
-      render: (row: any) => (
-        <span style={{ fontSize: '13px', color: 'var(--ts)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {row.recommended_action}
-        </span>
-      ),
-    },
-    {
-      key: 'review_status',
-      label: 'Status',
-      sortable: true,
-      width: '140px',
-      render: (row: any) => <StatusBadge status={reviewToStatus(row.review_status)} />,
-    },
-  ];
+  const kpiMed = useMemo(() => {
+    const list = activeTab === 'priorities' ? priorities : recs;
+    return list.filter(r => {
+      const lvl = String((r.priority_level || r.priority?.priority_level || '')).toLowerCase();
+      return lvl.includes('medium') || lvl.includes('med');
+    }).length;
+  }, [priorities, recs, activeTab]);
+
+  const kpiLow = useMemo(() => {
+    const list = activeTab === 'priorities' ? priorities : recs;
+    return list.filter(r => {
+      const lvl = String((r.priority_level || r.priority?.priority_level || '')).toLowerCase();
+      return !lvl.includes('high') && !lvl.includes('urgent') && !lvl.includes('critical') && !lvl.includes('medium') && !lvl.includes('med');
+    }).length;
+  }, [priorities, recs, activeTab]);
+
+  const kpiTotal = useMemo(() => {
+    const list = activeTab === 'priorities' ? priorities : recs;
+    return list.reduce((sum, r) => sum + (r.outstanding_balance || r.priority?.outstanding_balance || 0), 0);
+  }, [priorities, recs, activeTab]);
+
+  const totalItems = activeList.length || 1;
+
+  // ── Filtered list ──────────────────────────────────────────────────────────
+  const filteredPriorities = useMemo(() => {
+    return priorities.filter(r => {
+      const lvl = String(r.priority_level || '').toLowerCase();
+      const matchFilter =
+        priorityFilter === 'all' ? true :
+        priorityFilter === 'high' ? (lvl.includes('high') || lvl.includes('urgent') || lvl.includes('critical')) :
+        priorityFilter === 'medium' ? (lvl.includes('medium') || lvl.includes('med')) :
+        priorityFilter === 'low' ? (!lvl.includes('high') && !lvl.includes('urgent') && !lvl.includes('critical') && !lvl.includes('medium')) :
+        true;
+
+      const s = search.toLowerCase();
+      const matchSearch = !s || (
+        (r.client_name || '').toLowerCase().includes(s) ||
+        (r.invoice_number || '').toLowerCase().includes(s) ||
+        (r.normalized_invoice_number || '').toLowerCase().includes(s)
+      );
+      return matchFilter && matchSearch;
+    });
+  }, [priorities, priorityFilter, search]);
+
+  const filteredRecs = useMemo(() => {
+    return recs.filter(r => {
+      const lvl = String(r.priority?.priority_level || '').toLowerCase();
+      const matchFilter =
+        priorityFilter === 'all' ? true :
+        priorityFilter === 'high' ? (lvl.includes('high') || lvl.includes('urgent') || lvl.includes('critical')) :
+        priorityFilter === 'medium' ? (lvl.includes('medium') || lvl.includes('med')) :
+        priorityFilter === 'low' ? (!lvl.includes('high') && !lvl.includes('urgent') && !lvl.includes('critical') && !lvl.includes('medium')) :
+        true;
+
+      const s = search.toLowerCase();
+      const matchSearch = !s || (
+        (r.priority?.client_name || '').toLowerCase().includes(s) ||
+        (r.priority?.invoice_number || '').toLowerCase().includes(s)
+      );
+      return matchFilter && matchSearch;
+    });
+  }, [recs, priorityFilter, search]);
+
+  const filterLabel = priorityFilter === 'all' ? 'All Priorities' :
+    priorityFilter === 'high' ? 'High Priority' :
+    priorityFilter === 'medium' ? 'Medium Priority' : 'Low Priority';
+
+  // ── Export CSV ──────────────────────────────────────────────────────────────
+  const handleExport = () => {
+    const rows = activeTab === 'priorities' ? filteredPriorities : filteredRecs;
+    if (!rows.length) return;
+    const headers = activeTab === 'priorities'
+      ? ['Account', 'Invoice', 'Balance', 'Due Date', 'Priority', 'Score', 'Days Overdue']
+      : ['Account', 'Invoice', 'Balance', 'Due Date', 'Priority', 'Status', 'Action'];
+
+    const csv = [
+      headers.join(','),
+      ...rows.map(r => {
+        if (activeTab === 'priorities') {
+          return [
+            `"${r.client_name || ''}"`,
+            `"${r.normalized_invoice_number || r.invoice_number || ''}"`,
+            r.outstanding_balance || 0,
+            r.due_date ? new Date(r.due_date).toLocaleDateString() : '',
+            `"${r.priority_level || ''}"`,
+            getScore(r),
+            getDaysOverdue(r.due_date),
+          ].join(',');
+        } else {
+          return [
+            `"${r.priority?.client_name || ''}"`,
+            `"${r.priority?.invoice_number || ''}"`,
+            r.priority?.outstanding_balance || 0,
+            r.priority?.due_date ? new Date(r.priority?.due_date).toLocaleDateString() : '',
+            `"${r.priority?.priority_level || ''}"`,
+            `"${r.review_status || ''}"`,
+            `"${r.recommended_action || ''}"`,
+          ].join(',');
+        }
+      }),
+    ].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `collection-${activeTab}-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const loading = activeTab === 'priorities' ? loadingPriorities : loadingRecs;
+  const error = activeTab === 'priorities' ? errorPriorities : errorRecs;
+
+  const thStyle: React.CSSProperties = {
+    textAlign: 'left', padding: '10px 14px',
+    fontSize: 12, fontWeight: 600,
+    color: '#9CA3AF', borderBottom: '1px solid #F3F4F6',
+    whiteSpace: 'nowrap',
+  };
 
   return (
     <div className="main-content fade-in">
@@ -312,335 +340,599 @@ export const CollectionPriorities: React.FC = () => {
       <div className="page-container">
         <DecisionSupportNotice />
 
-        {/* Speedex OneUI Sub-tab Switcher */}
-        <div style={{ display: 'flex', gap: '10px', marginBottom: '24px', borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
+        {/* ── Tab Switcher ─────────────────────────────────────────────── */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
+          {(['priorities', 'recommendations'] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => { setActiveTab(tab); setSearch(''); setPriorityFilter('all'); }}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                padding: '10px 20px', borderRadius: 10,
+                border: activeTab === tab ? 'none' : '1px solid #E5E7EB',
+                fontWeight: 700, fontSize: 14, cursor: 'pointer',
+                background: activeTab === tab ? 'var(--teal, #059669)' : '#ffffff',
+                color: activeTab === tab ? '#ffffff' : '#374151',
+                boxShadow: activeTab === tab ? '0 4px 12px rgba(5,150,105,0.25)' : '0 1px 3px rgba(0,0,0,0.05)',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              {tab === 'priorities'
+                ? <TrendingUp size={15} style={{ color: activeTab === tab ? '#fff' : 'var(--teal, #059669)' }} />
+                : <Sparkles size={15} style={{ color: activeTab === tab ? '#fff' : 'var(--teal, #059669)' }} />
+              }
+              {tab === 'priorities' ? 'Collection Priorities' : 'Recommendations & Review'}
+            </button>
+          ))}
+        </div>
+
+        {/* ── KPI Cards ────────────────────────────────────────────────── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16, marginBottom: 24 }}>
+          {[
+            { label: 'HIGH PRIORITY', value: kpiHigh, pct: Math.round((kpiHigh / totalItems) * 100), border: '#FECACA', bg: '#FFF5F5', color: '#B91C1C' },
+            { label: 'MEDIUM PRIORITY', value: kpiMed, pct: Math.round((kpiMed / totalItems) * 100), border: '#FDE68A', bg: '#FFFBEB', color: '#92400E' },
+            { label: 'LOW PRIORITY', value: kpiLow, pct: Math.round((kpiLow / totalItems) * 100), border: '#BBF7D0', bg: '#F0FDF4', color: '#065F46' },
+            {
+              label: 'TOTAL OUTSTANDING', value: null,
+              amount: `₱${kpiTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
+              sub: 'Across all accounts', border: '#E5E7EB', bg: '#FAFAFA', color: '#111827',
+            },
+          ].map((kpi, i) => (
+            <div key={i} style={{ background: kpi.bg, border: `1px solid ${kpi.border}`, borderRadius: 12, padding: '18px 20px' }}>
+              <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: kpi.color, letterSpacing: '0.06em' }}>{kpi.label}</p>
+              {kpi.value !== null
+                ? <p style={{ margin: '0 0 4px', fontSize: 32, fontWeight: 800, color: '#111827', lineHeight: 1 }}>{kpi.value}</p>
+                : <p style={{ margin: '0 0 4px', fontSize: 20, fontWeight: 800, color: kpi.color, lineHeight: 1.2 }}>{kpi.amount}</p>
+              }
+              <p style={{ margin: 0, fontSize: 12, color: '#9CA3AF' }}>
+                {kpi.value !== null ? `${kpi.pct}% of total` : kpi.sub}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Toolbar ──────────────────────────────────────────────────── */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+          <div style={{ position: 'relative', flex: 1 }}>
+            <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9CA3AF' }} />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder={activeTab === 'priorities' ? 'Search by client, invoice, or reference...' : 'Search recommendations...'}
+              style={{
+                width: '100%', paddingLeft: 36, paddingRight: 14,
+                height: 38, borderRadius: 8, border: '1px solid #E5E7EB',
+                fontSize: 13, color: '#374151', background: '#fff',
+                outline: 'none', boxSizing: 'border-box',
+              }}
+            />
+          </div>
+
+          {/* Priority filter dropdown */}
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setShowFilterDropdown(v => !v)}
+              style={{
+                height: 38, padding: '0 14px', borderRadius: 8, border: '1px solid #E5E7EB',
+                background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#374151',
+                display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap',
+              }}
+            >
+              {filterLabel} <span style={{ fontSize: 10 }}>▾</span>
+            </button>
+            {showFilterDropdown && (
+              <div
+                style={{
+                  position: 'absolute', top: '110%', left: 0, zIndex: 50,
+                  background: '#fff', border: '1px solid #E5E7EB', borderRadius: 10,
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.1)', minWidth: 160, overflow: 'hidden',
+                }}
+              >
+                {[
+                  { label: 'All Priorities', value: 'all' },
+                  { label: 'High Priority', value: 'high' },
+                  { label: 'Medium Priority', value: 'medium' },
+                  { label: 'Low Priority', value: 'low' },
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => { setPriorityFilter(opt.value); setShowFilterDropdown(false); }}
+                    style={{
+                      display: 'block', width: '100%', textAlign: 'left',
+                      padding: '10px 16px', background: priorityFilter === opt.value ? '#F0FDF4' : 'transparent',
+                      border: 'none', cursor: 'pointer', fontSize: 13,
+                      color: priorityFilter === opt.value ? '#059669' : '#374151',
+                      fontWeight: priorityFilter === opt.value ? 700 : 500,
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <button
-            onClick={() => setActiveTab('priorities')}
+            onClick={handleExport}
             style={{
-              display: 'inline-flex', alignItems: 'center', gap: '8px',
-              padding: '10px 22px', borderRadius: '10px',
-              border: activeTab === 'priorities' ? 'none' : '1px solid var(--border)',
-              fontFamily: 'var(--fb)', fontWeight: 700, fontSize: '14px', cursor: 'pointer',
-              background: activeTab === 'priorities' ? 'var(--teal)' : '#ffffff',
-              color: activeTab === 'priorities' ? '#ffffff' : 'var(--tp)',
-              boxShadow: activeTab === 'priorities' ? '0 4px 12px rgba(0, 169, 157, 0.3)' : '0 1px 3px rgba(0,0,0,0.04)',
-              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+              height: 38, padding: '0 16px', borderRadius: 8, border: '1px solid #E5E7EB',
+              background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+              color: '#374151', display: 'inline-flex', alignItems: 'center', gap: 6,
             }}
           >
-            <TrendingUp size={16} style={{ color: activeTab === 'priorities' ? '#ffffff' : 'var(--teal)' }} />
-            Collection Priorities
+            <Download size={14} /> Export
           </button>
 
           <button
-            onClick={() => setActiveTab('recommendations')}
+            onClick={() => activeTab === 'priorities' ? fetchPriorities() : fetchRecommendations()}
             style={{
-              display: 'inline-flex', alignItems: 'center', gap: '8px',
-              padding: '10px 22px', borderRadius: '10px',
-              border: activeTab === 'recommendations' ? 'none' : '1px solid var(--border)',
-              fontFamily: 'var(--fb)', fontWeight: 700, fontSize: '14px', cursor: 'pointer',
-              background: activeTab === 'recommendations' ? 'var(--teal)' : '#ffffff',
-              color: activeTab === 'recommendations' ? '#ffffff' : 'var(--tp)',
-              boxShadow: activeTab === 'recommendations' ? '0 4px 12px rgba(0, 169, 157, 0.3)' : '0 1px 3px rgba(0,0,0,0.04)',
-              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+              height: 38, padding: '0 18px', borderRadius: 8, border: 'none',
+              background: 'var(--teal, #059669)', cursor: 'pointer', fontSize: 13, fontWeight: 700,
+              color: '#fff', display: 'inline-flex', alignItems: 'center', gap: 6,
             }}
           >
-            <Sparkles size={16} style={{ color: activeTab === 'recommendations' ? '#ffffff' : 'var(--teal)' }} />
-            Recommendations &amp; Review
+            <RefreshCw size={14} /> Refresh
           </button>
         </div>
 
-        {/* Tab 1: Collection Priorities */}
-        {activeTab === 'priorities' && (
-          <>
-            {errorPriorities && (
-              <div className="advisory-banner danger" style={{ marginBottom: '20px' }}>
-                <ShieldAlert size={18} style={{ flexShrink: 0 }} />
-                <div><strong>AI Service Offline</strong> — {errorPriorities}</div>
-              </div>
-            )}
-
-            <div className="card" style={{ padding: '24px', borderRadius: '16px', border: '1px solid var(--border)', boxShadow: 'var(--sh1)' }}>
-              <DataTable
-                title="Collection Priorities"
-                rowKey="id"
-                data={priorities}
-                columns={priorityColumns}
-                actions={[
-                  {
-                    label: 'View Details',
-                    icon: 'ti-eye',
-                    onClick: handleOpenPriorityDetail,
-                  },
-                ]}
-                loading={loadingPriorities}
-                searchPlaceholder="Search priorities..."
-                selectable
-                exportable
-                columnToggle
-                densityToggle
-                filters={[
-                  {
-                    key: 'priority_level',
-                    label: 'All Priorities',
-                    options: [
-                      { label: 'Urgent', value: 'Urgent' },
-                      { label: 'High', value: 'High' },
-                      { label: 'Medium', value: 'Medium' },
-                      { label: 'Low', value: 'Low' },
-                    ],
-                  },
-                ]}
-                createButtons={[
-                  { label: 'Refresh Data', icon: 'ti-refresh', variant: 'primary', onClick: () => fetchPriorities() },
-                ]}
-              />
-            </div>
-          </>
+        {/* ── Table ────────────────────────────────────────────────────── */}
+        {error && (
+          <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10, padding: '12px 16px', marginBottom: 16, color: '#B91C1C', fontSize: 13, fontWeight: 600 }}>
+            ⚠ AI Service Offline — {error}
+          </div>
         )}
 
-        {/* Tab 2: Recommendations & Review */}
-        {activeTab === 'recommendations' && (
-          <>
-            {errorRecs && (
-              <div className="advisory-banner danger" style={{ marginBottom: '20px' }}>
-                <ShieldAlert size={18} style={{ flexShrink: 0 }} />
-                <div><strong>AI Service Offline</strong> — {errorRecs}</div>
-              </div>
-            )}
-
-            <div className="card" style={{ padding: '24px', borderRadius: '16px', border: '1px solid var(--border)', boxShadow: 'var(--sh1)' }}>
-              <DataTable
-                title="Collection Recommendations"
-                rowKey="id"
-                data={recs}
-                columns={recColumns}
-                actions={[
-                  {
-                    label: 'Evaluate',
-                    icon: 'ti-file-text',
-                    onClick: handleOpenRecReview,
-                  },
-                ]}
-                loading={loadingRecs}
-                searchPlaceholder="Search recommendations..."
-                selectable
-                exportable
-                columnToggle
-                densityToggle
-                filters={[
-                  {
-                    key: 'review_status',
-                    label: 'All Statuses',
-                    options: [
-                      { label: 'Pending Review', value: 'Pending Review' },
-                      { label: 'Accepted', value: 'Accepted as Recommendation' },
-                      { label: 'Reviewed & Closed', value: 'Reviewed' },
-                      { label: 'Rejected', value: 'Rejected' },
-                    ],
-                  },
-                ]}
-                createButtons={[
-                  { label: 'Refresh Data', icon: 'ti-refresh', variant: 'primary', onClick: () => fetchRecommendations() },
-                ]}
-              />
+        <div style={{ background: '#fff', border: '1px solid #E5E7EB', borderRadius: 12, overflow: 'hidden' }}>
+          {loading ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60, color: '#9CA3AF', gap: 10 }}>
+              <RefreshCw size={20} style={{ animation: 'spin 1s linear infinite' }} />
+              <span style={{ fontSize: 14 }}>Loading data...</span>
             </div>
-          </>
-        )}
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              {/* ── PRIORITIES TABLE ── */}
+              {activeTab === 'priorities' && (
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
+                  <thead style={{ background: '#FAFAFA' }}>
+                    <tr>
+                      <th style={thStyle}>Account</th>
+                      <th style={thStyle}>Balance</th>
+                      <th style={thStyle}>Due date</th>
+                      <th style={{ ...thStyle, minWidth: 140 }}>Priority score</th>
+                      <th style={{ ...thStyle, textAlign: 'right' }}>Overdue</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredPriorities.length === 0 && (
+                      <tr><td colSpan={5} style={{ textAlign: 'center', padding: 48, color: '#9CA3AF', fontSize: 14 }}>No collection priorities found.</td></tr>
+                    )}
+                    {filteredPriorities.map((row, i) => {
+                      const score = getScore(row);
+                      const overdue = getDaysOverdue(row.due_date);
+                      return (
+                        <tr
+                          key={row.id || i}
+                          onClick={() => handleOpenPriorityDetail(row)}
+                          style={{ borderBottom: '1px solid #F3F4F6', cursor: 'pointer', transition: 'background 0.15s' }}
+                          onMouseEnter={e => (e.currentTarget.style.background = '#F9FAFB')}
+                          onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
+                        >
+                          <td style={{ padding: '14px 14px' }}>
+                            <div style={{ fontWeight: 700, fontSize: 14, color: '#0EA5E9' }}>
+                              {row.client_name || 'Unknown Account'}
+                            </div>
+                            <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 2 }}>
+                              {row.normalized_invoice_number || normalizeInvoiceNumber(row.invoice_number) || '—'}
+                            </div>
+                          </td>
+                          <td style={{ padding: '14px 14px', fontWeight: 700, fontSize: 14, color: '#111827' }}>
+                            ₱{(row.outstanding_balance || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td style={{ padding: '14px 14px', fontSize: 13, color: '#374151' }}>
+                            {row.due_date && row.due_date !== 'N/A'
+                              ? new Date(row.due_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+                              : '—'}
+                          </td>
+                          <td style={{ padding: '14px 14px' }}>
+                            <PrioritySlider score={score} priorityLevel={row.priority_level} />
+                          </td>
+                          <td style={{ padding: '14px 14px', textAlign: 'right', fontWeight: 600, fontSize: 13, color: overdue > 30 ? '#DC2626' : overdue > 0 ? '#D97706' : '#6B7280' }}>
+                            {overdue > 0 ? `${overdue}d` : '—'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+
+              {/* ── RECOMMENDATIONS TABLE ── */}
+              {activeTab === 'recommendations' && (
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
+                  <thead style={{ background: '#FAFAFA' }}>
+                    <tr>
+                      <th style={thStyle}>Account</th>
+                      <th style={thStyle}>Balance</th>
+                      <th style={thStyle}>Due date</th>
+                      <th style={{ ...thStyle, minWidth: 140 }}>Priority score</th>
+                      <th style={{ ...thStyle, textAlign: 'right' }}>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredRecs.length === 0 && (
+                      <tr><td colSpan={5} style={{ textAlign: 'center', padding: 48, color: '#9CA3AF', fontSize: 14 }}>No recommendations found.</td></tr>
+                    )}
+                    {filteredRecs.map((row, i) => {
+                      const p = row.priority || {};
+                      const score = getScore(p);
+                      return (
+                        <tr
+                          key={row.id || i}
+                          onClick={() => handleOpenRecReview(row)}
+                          style={{ borderBottom: '1px solid #F3F4F6', cursor: 'pointer', transition: 'background 0.15s' }}
+                          onMouseEnter={e => (e.currentTarget.style.background = '#F9FAFB')}
+                          onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
+                        >
+                          <td style={{ padding: '14px 14px' }}>
+                            <div style={{ fontWeight: 700, fontSize: 14, color: '#0EA5E9' }}>
+                              {p.client_name || 'Unknown Account'}
+                            </div>
+                            <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 2 }}>
+                              {p.normalized_invoice_number || normalizeInvoiceNumber(p.invoice_number) || '—'}
+                            </div>
+                          </td>
+                          <td style={{ padding: '14px 14px', fontWeight: 700, fontSize: 14, color: '#111827' }}>
+                            ₱{(p.outstanding_balance || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td style={{ padding: '14px 14px', fontSize: 13, color: '#374151' }}>
+                            {p.due_date && p.due_date !== 'N/A'
+                              ? new Date(p.due_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+                              : '—'}
+                          </td>
+                          <td style={{ padding: '14px 14px' }}>
+                            <PrioritySlider score={score} priorityLevel={p.priority_level} />
+                          </td>
+                          <td style={{ padding: '14px 14px', textAlign: 'right' }}>
+                            <ReviewBadge status={row.review_status || 'Pending Review'} />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Priority Detail Panel */}
+      {/* ── PRIORITY DETAIL SIDE PANEL ──────────────────────────────────────── */}
       {selectedPriority && (
         <div
-          style={{
-            position: 'fixed', inset: 0, zIndex: 200,
-            background: 'rgba(0,0,0,0.45)', display: 'flex',
-            alignItems: 'center', justifyContent: 'center', padding: '20px',
-          }}
-          onClick={(e) => { if (e.target === e.currentTarget) setSelectedPriority(null); }}
+          style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex' }}
+          onClick={e => { if (e.target === e.currentTarget) setSelectedPriority(null); }}
         >
+          {/* Dimmed left */}
+          <div style={{ flex: 1, background: 'rgba(0,0,0,0.2)' }} onClick={() => setSelectedPriority(null)} />
+
+          {/* Side panel */}
           <div style={{
-            background: 'var(--s0)', borderRadius: 'var(--r-lg)',
-            boxShadow: 'var(--sh4)', width: '100%', maxWidth: '600px',
-            maxHeight: '90vh', overflow: 'auto', padding: '32px',
+            width: 360, background: '#fff', height: '100%', overflowY: 'auto',
+            boxShadow: '-8px 0 32px rgba(0,0,0,0.12)',
+            display: 'flex', flexDirection: 'column',
+            animation: 'slideInRight 0.2s ease',
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, fontFamily: 'var(--fh)' }}>
-                Priority Details
-              </h2>
-              <button onClick={() => setSelectedPriority(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tt)', fontSize: '20px' }}>
-                <i className="ti ti-x" />
+            <div style={{ padding: '20px 20px 0', borderBottom: '1px solid #F3F4F6', paddingBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <p style={{ margin: '0 0 2px', fontSize: 12, color: '#9CA3AF' }}>
+                    {selectedPriority.normalized_invoice_number || normalizeInvoiceNumber(selectedPriority.invoice_number) || selectedPriority.invoice_number}
+                  </p>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#111827' }}>
+                    {selectedPriority.client_name}
+                  </h3>
+                </div>
+                <button onClick={() => setSelectedPriority(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 4 }}>
+                  <X size={18} />
+                </button>
+              </div>
+              <div style={{ marginTop: 10 }}>
+                <PriorityBadge level={selectedPriority.priority_level} />
+              </div>
+            </div>
+
+            <div style={{ padding: 20, flex: 1 }}>
+              {/* Key metrics */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+                <div>
+                  <p style={{ margin: '0 0 4px', fontSize: 11, color: '#9CA3AF', fontWeight: 600 }}>Outstanding balance</p>
+                  <p style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#111827' }}>
+                    ₱{(selectedPriority.outstanding_balance || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div>
+                  <p style={{ margin: '0 0 4px', fontSize: 11, color: '#9CA3AF', fontWeight: 600 }}>Due date</p>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#374151' }}>
+                    {selectedPriority.due_date && selectedPriority.due_date !== 'N/A'
+                      ? new Date(selectedPriority.due_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+                      : 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <p style={{ margin: '0 0 4px', fontSize: 11, color: '#9CA3AF', fontWeight: 600 }}>Days overdue</p>
+                  <p style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#DC2626' }}>
+                    {getDaysOverdue(selectedPriority.due_date)} days
+                  </p>
+                </div>
+                <div>
+                  <p style={{ margin: '0 0 8px', fontSize: 11, color: '#9CA3AF', fontWeight: 600 }}>Priority score</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <PrioritySlider score={selectedPriority.score || getScore(selectedPriority)} priorityLevel={selectedPriority.priority_level} />
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#DC2626', whiteSpace: 'nowrap' }}>
+                      {Math.round(selectedPriority.score || getScore(selectedPriority))}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action basis */}
+              {(selectedPriority.supporting_basis || selectedPriority.explanation) && (
+                <div style={{ marginBottom: 16 }}>
+                  <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 700, color: '#374151' }}>Action basis</p>
+                  <p style={{ margin: 0, fontSize: 13, color: '#6B7280', lineHeight: 1.5 }}>
+                    {selectedPriority.supporting_basis || selectedPriority.explanation}
+                  </p>
+                </div>
+              )}
+
+              {/* AI recommendation */}
+              {selectedPriority.explanation && (
+                <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                    <Sparkles size={14} style={{ color: '#059669' }} />
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#065F46' }}>AI recommendation</span>
+                  </div>
+                  <p style={{ margin: 0, fontSize: 13, color: '#374151', lineHeight: 1.5 }}>
+                    {selectedPriority.explanation}
+                  </p>
+                </div>
+              )}
+
+              {/* Factor breakdown as next steps */}
+              {selectedPriority.factors?.length > 0 && (
+                <div style={{ marginBottom: 20 }}>
+                  <p style={{ margin: '0 0 10px', fontSize: 12, fontWeight: 700, color: '#374151' }}>Suggested next steps</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {selectedPriority.factors.slice(0, 4).map((f: any, idx: number) => (
+                      <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#059669', flexShrink: 0, marginTop: 4 }} />
+                        <span style={{ fontSize: 13, color: '#374151' }}>{f.name}: {f.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Default next steps if no factors */}
+              {(!selectedPriority.factors || selectedPriority.factors.length === 0) && (
+                <div style={{ marginBottom: 20 }}>
+                  <p style={{ margin: '0 0 10px', fontSize: 12, fontWeight: 700, color: '#374151' }}>Suggested next steps</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {['Contact client via phone or email', 'Send payment reminder', 'Schedule follow-up if no response'].map((step, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#059669', flexShrink: 0, marginTop: 4 }} />
+                        <span style={{ fontSize: 13, color: '#374151' }}>{step}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div style={{ padding: '16px 20px', borderTop: '1px solid #F3F4F6', display: 'flex', gap: 10 }}>
+              <button
+                onClick={() => setSelectedPriority(null)}
+                style={{ flex: 1, height: 40, borderRadius: 8, border: '1px solid #E5E7EB', background: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: 13, color: '#374151' }}
+              >
+                Close
               </button>
-            </div>
-
-            <p style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--tt)', margin: '0 0 4px' }}>Official FOMS Data</p>
-            <h3 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 20px' }}>
-              {selectedPriority.client_name} (Client ID: {selectedPriority.client_id})
-            </h3>
-
-            <div className="grid-2" style={{ marginBottom: '20px' }}>
-              <div className="card" style={{ padding: '16px' }}>
-                <p style={{ fontSize: '12px', color: 'var(--tt)', margin: '0 0 4px' }}>Outstanding Balance</p>
-                <p style={{ fontSize: '18px', fontWeight: 800, margin: 0, color: 'var(--tp)' }}>
-                  ₱{selectedPriority.outstanding_balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                </p>
-              </div>
-              <div className="card" style={{ padding: '16px' }}>
-                <p style={{ fontSize: '12px', color: 'var(--tt)', margin: '0 0 8px' }}>Suggested Priority</p>
-                <StatusBadge status={priorityToStatus(selectedPriority.priority_level)} />
-              </div>
-            </div>
-
-            <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
-              <button className="btn btn-outline" onClick={() => setSelectedPriority(null)}>Close</button>
+              <button
+                onClick={() => { setSelectedPriority(null); toast.success('Priority marked as reviewed.', 'Reviewed'); }}
+                style={{ flex: 1.5, height: 40, borderRadius: 8, border: 'none', background: 'var(--teal, #059669)', cursor: 'pointer', fontWeight: 700, fontSize: 13, color: '#fff' }}
+              >
+                Mark as reviewed
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Recommendation Evaluation Modal */}
+      {/* ── RECOMMENDATION REVIEW SIDE PANEL ────────────────────────────────── */}
       {selectedRec && (
         <div
-          style={{
-            position: 'fixed', inset: 0, zIndex: 200,
-            background: 'rgba(0,0,0,0.45)', display: 'flex',
-            alignItems: 'center', justifyContent: 'center', padding: '20px',
-          }}
-          onClick={(e) => { if (e.target === e.currentTarget) setSelectedRec(null); }}
+          style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex' }}
+          onClick={e => { if (e.target === e.currentTarget) setSelectedRec(null); }}
         >
+          <div style={{ flex: 1, background: 'rgba(0,0,0,0.2)' }} onClick={() => setSelectedRec(null)} />
           <div style={{
-            background: 'var(--s0)', borderRadius: 'var(--r-lg)',
-            boxShadow: 'var(--sh4)', width: '100%', maxWidth: '700px',
-            maxHeight: '90vh', overflow: 'auto', padding: '32px',
+            width: 380, background: '#fff', height: '100%', overflowY: 'auto',
+            boxShadow: '-8px 0 32px rgba(0,0,0,0.12)',
+            display: 'flex', flexDirection: 'column',
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, fontFamily: 'var(--fh)' }}>
-                Evaluate Collection Recommendation #{selectedRec.id}
-              </h2>
-              <button onClick={() => setSelectedRec(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tt)', fontSize: '20px' }}>
-                <i className="ti ti-x" />
-              </button>
-            </div>
-
-            {/* Official FOMS Data */}
-            <div style={{ marginBottom: '16px' }}>
-              <p style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--tt)', fontWeight: 700, margin: '0 0 8px' }}>Official FOMS Data</p>
-              <div className="card" style={{ padding: '16px' }}>
-                <p style={{ fontSize: '13px', color: 'var(--tt)', margin: '0 0 4px' }}>Client Account</p>
-                <p style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 12px', color: 'var(--tp)' }}>
-                  {selectedRec.priority?.client_name} (Client ID: {selectedRec.priority?.client_id})
-                </p>
-                <div className="grid-2">
-                  <div>
-                    <p style={{ fontSize: '12px', color: 'var(--tt)', margin: '0 0 4px' }}>Invoice Number</p>
-                    <p style={{ fontWeight: 600, fontSize: '14px', margin: 0 }}>
-                      {selectedRec.priority?.normalized_invoice_number || normalizeInvoiceNumber(selectedRec.priority?.invoice_number)}
-                    </p>
-                  </div>
-                  <div>
-                    <p style={{ fontSize: '12px', color: 'var(--tt)', margin: '0 0 4px' }}>Outstanding Balance</p>
-                    <p style={{ fontWeight: 700, fontSize: '14px', margin: 0, color: 'var(--tp)' }}>
-                      ₱{selectedRec.priority?.outstanding_balance?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </p>
-                  </div>
+            <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid #F3F4F6' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <p style={{ margin: '0 0 2px', fontSize: 12, color: '#9CA3AF' }}>
+                    {selectedRec.priority?.normalized_invoice_number || normalizeInvoiceNumber(selectedRec.priority?.invoice_number) || selectedRec.priority?.invoice_number}
+                  </p>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#111827' }}>
+                    {selectedRec.priority?.client_name}
+                  </h3>
                 </div>
+                <button onClick={() => setSelectedRec(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 4 }}>
+                  <X size={18} />
+                </button>
+              </div>
+              <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <PriorityBadge level={selectedRec.priority?.priority_level} />
+                <ReviewBadge status={selectedRec.review_status || 'Pending Review'} />
               </div>
             </div>
 
-            {/* AI Recommendation */}
-            <div style={{ marginBottom: '16px' }}>
-              <p style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--teal)', fontWeight: 700, margin: '0 0 8px' }}>AI Recommendation</p>
-              <div style={{ background: 'var(--teal-bg)', padding: '16px', borderRadius: '10px', border: '1px solid var(--teal-ring)' }}>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '10px' }}>
-                  <Sparkles size={16} style={{ color: 'var(--teal)' }} />
-                  <span style={{ fontWeight: 700, color: 'var(--teal-dark)', fontSize: '14px' }}>Suggested Action Plan</span>
+            <div style={{ padding: 20, flex: 1 }}>
+              {/* Key metrics */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+                <div>
+                  <p style={{ margin: '0 0 4px', fontSize: 11, color: '#9CA3AF', fontWeight: 600 }}>Outstanding balance</p>
+                  <p style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#111827' }}>
+                    ₱{(selectedRec.priority?.outstanding_balance || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                  </p>
                 </div>
-                <p style={{ fontWeight: 600, color: 'var(--tp)', fontSize: '14px', margin: '0 0 12px' }}>
+                <div>
+                  <p style={{ margin: '0 0 4px', fontSize: 11, color: '#9CA3AF', fontWeight: 600 }}>Due date</p>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#374151' }}>
+                    {selectedRec.priority?.due_date && selectedRec.priority?.due_date !== 'N/A'
+                      ? new Date(selectedRec.priority?.due_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+                      : 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <p style={{ margin: '0 0 4px', fontSize: 11, color: '#9CA3AF', fontWeight: 600 }}>Days overdue</p>
+                  <p style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#DC2626' }}>
+                    {getDaysOverdue(selectedRec.priority?.due_date)} days
+                  </p>
+                </div>
+                <div>
+                  <p style={{ margin: '0 0 8px', fontSize: 11, color: '#9CA3AF', fontWeight: 600 }}>Priority score</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <PrioritySlider score={getScore(selectedRec.priority || {})} />
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#DC2626', whiteSpace: 'nowrap' }}>
+                      {Math.round(getScore(selectedRec.priority || {}))}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action basis */}
+              {selectedRec.priority?.supporting_basis && (
+                <div style={{ marginBottom: 16 }}>
+                  <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 700, color: '#374151' }}>Action basis</p>
+                  <p style={{ margin: 0, fontSize: 13, color: '#6B7280', lineHeight: 1.5 }}>
+                    {selectedRec.priority?.supporting_basis}
+                  </p>
+                </div>
+              )}
+
+              {/* AI Recommendation */}
+              <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                  <Sparkles size={14} style={{ color: '#059669' }} />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#065F46' }}>AI recommendation</span>
+                </div>
+                <p style={{ margin: 0, fontSize: 13, color: '#374151', lineHeight: 1.5 }}>
                   {selectedRec.recommended_action}
                 </p>
-                {selectedRec.explanation_basis?.length > 0 && (
-                  <div>
-                    <p style={{ fontSize: '12px', color: 'var(--ts)', margin: '0 0 6px', fontWeight: 600 }}>Supporting Factors:</p>
-                    <ul style={{ paddingLeft: '16px', margin: 0 }}>
-                      {selectedRec.explanation_basis.map((reason: string, idx: number) => (
-                        <li key={idx} style={{ fontSize: '13px', color: 'var(--ts)', marginBottom: '4px' }}>{reason}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
               </div>
-            </div>
 
-            {/* Finance Review */}
-            <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
-              <p style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--tt)', fontWeight: 700, margin: '0 0 12px' }}>Finance Review</p>
-
-              {canSubmitReviews && selectedRec.review_status === 'Pending Review' ? (
-                <div>
-                  <div className="grid-2" style={{ marginBottom: '16px' }}>
-                    <div>
-                      <label style={{ fontSize: '12px', fontWeight: 600, display: 'block', marginBottom: '6px', color: 'var(--ts)' }}>Review Decision</label>
-                      <select className="input-select" value={decision} onChange={(e) => setDecision(e.target.value)}>
-                        <option value="Accepted as Recommendation">Accept Recommendation</option>
-                        <option value="Reviewed">Reviewed &amp; Closed</option>
-                        <option value="Rejected">Reject Priority Assignment</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label style={{ fontSize: '12px', fontWeight: 600, display: 'block', marginBottom: '6px', color: 'var(--ts)' }}>Action Taken</label>
-                      <input type="text" className="form-control" value={recommendedAction} onChange={(e) => setRecommendedAction(e.target.value)} />
-                    </div>
+              {/* Explanation basis */}
+              {selectedRec.explanation_basis?.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 700, color: '#374151' }}>Suggested next steps</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {selectedRec.explanation_basis.map((reason: string, idx: number) => (
+                      <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#059669', flexShrink: 0, marginTop: 4 }} />
+                        <span style={{ fontSize: 13, color: '#374151' }}>{reason}</span>
+                      </div>
+                    ))}
                   </div>
-                  <div style={{ marginBottom: '16px' }}>
-                    <label style={{ fontSize: '12px', fontWeight: 600, display: 'block', marginBottom: '6px', color: 'var(--ts)' }}>
-                      Remarks / Validation Notes <span style={{ color: 'var(--err)' }}>*</span>
+                </div>
+              )}
+
+              {/* Finance Review form */}
+              {canSubmitReviews && selectedRec.review_status === 'Pending Review' && (
+                <div style={{ borderTop: '1px solid #F3F4F6', paddingTop: 16 }}>
+                  <p style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 700, color: '#374151', textTransform: 'uppercase' }}>Finance Review</p>
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6, color: '#6B7280' }}>Review Decision</label>
+                    <select
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #E5E7EB', fontSize: 13 }}
+                      value={decision}
+                      onChange={e => setDecision(e.target.value)}
+                    >
+                      <option value="Accepted as Recommendation">Accept Recommendation</option>
+                      <option value="Reviewed">Reviewed & Closed</option>
+                      <option value="Rejected">Reject</option>
+                    </select>
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6, color: '#6B7280' }}>
+                      Remarks / Notes <span style={{ color: '#DC2626' }}>*</span>
                     </label>
                     <textarea
-                      style={{ width: '100%', minHeight: '90px', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', fontFamily: 'var(--fb)', fontSize: '13px', resize: 'vertical' }}
-                      placeholder="Log validation steps (e.g. contact logs, account changes)..."
+                      style={{ width: '100%', minHeight: 80, padding: '8px 12px', borderRadius: 8, border: '1px solid #E5E7EB', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
+                      placeholder="Log your validation steps..."
                       value={remarks}
-                      onChange={(e) => setRemarks(e.target.value)}
+                      onChange={e => setRemarks(e.target.value)}
                     />
                   </div>
-                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                    <button className="btn btn-outline" onClick={() => setSelectedRec(null)}>Cancel</button>
-                    <button
-                      disabled={modalLoading || !remarks.trim()}
-                      onClick={handleSubmitRecReview}
-                      style={{
-                        background: 'var(--teal)', color: '#fff', border: 'none', borderRadius: '8px',
-                        padding: '0 20px', height: '40px', fontWeight: 600, cursor: 'pointer',
-                        opacity: (modalLoading || !remarks.trim()) ? 0.6 : 1,
-                      }}
-                    >
-                      {modalLoading ? 'Saving...' : 'Log Decision'}
-                    </button>
-                  </div>
                 </div>
-              ) : (
-                <div>
-                  {selectedRec.review_status !== 'Pending Review' ? (
-                    <div style={{ background: 'var(--ok-bg)', padding: '12px', borderRadius: '8px', border: '1px solid var(--ok-r)' }}>
-                      <p style={{ margin: 0, fontWeight: 600, color: 'var(--ok)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <CheckCircle size={16} /> Human review validation logged successfully.
-                      </p>
-                      <p style={{ margin: '4px 0 0', fontSize: '13px' }}>
-                        <strong>Status:</strong> {selectedRec.review_status}
-                      </p>
-                    </div>
-                  ) : (
-                    <p style={{ margin: 0, color: 'var(--err)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <AlertCircle size={16} /> Your role is not authorized to submit validation reviews.
-                    </p>
-                  )}
-                  <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'flex-end' }}>
-                    <button className="btn btn-outline" onClick={() => setSelectedRec(null)}>Close</button>
-                  </div>
+              )}
+
+              {/* Already reviewed notice */}
+              {selectedRec.review_status !== 'Pending Review' && (
+                <div style={{ background: '#F0FDF4', padding: 12, borderRadius: 8, border: '1px solid #BBF7D0' }}>
+                  <p style={{ margin: 0, fontWeight: 600, color: '#059669', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <CheckCircle size={16} /> Human review validation logged.
+                  </p>
+                  <p style={{ margin: '4px 0 0', fontSize: 13, color: '#374151' }}>Status: {selectedRec.review_status}</p>
                 </div>
+              )}
+
+              {!canSubmitReviews && selectedRec.review_status === 'Pending Review' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#DC2626', fontSize: 13 }}>
+                  <AlertCircle size={16} /> Not authorized to submit reviews.
+                </div>
+              )}
+            </div>
+
+            <div style={{ padding: '16px 20px', borderTop: '1px solid #F3F4F6', display: 'flex', gap: 10 }}>
+              <button
+                onClick={() => setSelectedRec(null)}
+                style={{ flex: 1, height: 40, borderRadius: 8, border: '1px solid #E5E7EB', background: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: 13, color: '#374151' }}
+              >
+                Close
+              </button>
+              {canSubmitReviews && selectedRec.review_status === 'Pending Review' && (
+                <button
+                  disabled={modalLoading || !remarks.trim()}
+                  onClick={handleSubmitRecReview}
+                  style={{
+                    flex: 1.5, height: 40, borderRadius: 8, border: 'none',
+                    background: 'var(--teal, #059669)', cursor: 'pointer',
+                    fontWeight: 700, fontSize: 13, color: '#fff',
+                    opacity: (modalLoading || !remarks.trim()) ? 0.6 : 1,
+                  }}
+                >
+                  {modalLoading ? 'Saving...' : 'Mark as reviewed'}
+                </button>
               )}
             </div>
           </div>
         </div>
       )}
+
+      <style>{`
+        @keyframes slideInRight {
+          from { transform: translateX(20px); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 };

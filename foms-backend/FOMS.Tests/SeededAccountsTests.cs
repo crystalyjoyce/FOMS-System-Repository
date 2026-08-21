@@ -31,7 +31,13 @@ public class SeededAccountsTests
         try
         {
             var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-                .UseSqlServer(@"Server=localhost\SQLEXPRESS;Database=FOMSDB;Trusted_Connection=True;TrustServerCertificate=True;")
+                .UseSqlServer(
+                    @"Server=localhost\SQLEXPRESS;Database=FOMSDB;Trusted_Connection=True;TrustServerCertificate=True;Connect Timeout=60;Command Timeout=120;Min Pool Size=1;Max Pool Size=20;",
+                    b =>
+                    {
+                        b.CommandTimeout(120);
+                        b.EnableRetryOnFailure(maxRetryCount: 3, maxRetryDelay: TimeSpan.FromSeconds(5), errorNumbersToAdd: null);
+                    })
                 .Options;
 
             await using var context = new ApplicationDbContext(options);

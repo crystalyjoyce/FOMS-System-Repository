@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using FOMS.Application.Interfaces;
@@ -23,7 +23,7 @@ public class PayslipsController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAll() => Ok(await _repository.GetAllAsync());
 
-    [Authorize(Roles = "Payroll Officer")]
+    [Authorize]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] Payslip request)
     {

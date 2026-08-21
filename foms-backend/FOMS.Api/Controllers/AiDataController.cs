@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -151,12 +151,15 @@ public class AiDataController : ApiControllerBase
             .Select(r => new
             {
                 id = r.Id,
+                invoiceId = r.InvoiceId,
                 clientId = r.ClientId,
                 clientName = r.Client != null ? r.Client.Name : "",
                 totalOutstanding = r.BalanceAmount,
                 currentAmount = r.BalanceAmount,
                 overdueAmount = 0m,
-                lastPaymentDate = r.DueDate
+                lastPaymentDate = r.DueDate,
+                outstandingBalance = r.BalanceAmount,
+                dueDate = r.DueDate.ToString("yyyy-MM-dd")
             })
             .ToListAsync();
 

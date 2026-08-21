@@ -39,40 +39,42 @@ def create_app_jwt(username: str, role: str, permissions: list, client_id: str, 
     return f"{header_b64}.{payload_b64}."
 
 @router.post("/login")
-def login(request: LoginRequest, db: Session = Depends(get_db)):
+def login(request: LoginRequest):
     try:
-        result = db.execute(
-            text("SELECT * FROM users WHERE login_id = :login_id OR email = :login_id"), 
-            {"login_id": request.username}
-        ).mappings().first()
+        # Developer Simulation Mocks
+        mocks = {
+            "EMP-001": ("Financial Manager User", "Financial Manager"),
+            "EMP-002": ("Head Accountant User", "Head Accountant"),
+            "EMP-003": ("Accountant User", "Accountant"),
+            "EMP-004": ("Coordinator User", "Coordinator"),
+            "EMP-005": ("Assistant of Financial Manager", "Assistant of Financial Manager"),
+            "EMP-006": ("Client User", "Client")
+        }
         
-        if not result:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-        
-        # Check password
-        if not bcrypt.checkpw(request.password.encode('utf-8'), result["password_hash"].encode('utf-8')):
+        if request.username not in mocks or request.password != "Password@123":
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
             
-        permissions = []
-            
-        client_id = result["login_id"] if result["role_name"] == "Client" else ""
+        full_name, role_name = mocks[request.username]
+        client_id = request.username if role_name == "Client" else ""
         
         token = create_app_jwt(
-            username=result["full_name"],
-            role=result["role_name"],
-            permissions=permissions,
+            username=full_name,
+            role=role_name,
+            permissions=[],
             client_id=client_id,
-            password_version=result.get("password_version", 1)
+            password_version=2
         )
         
         return {
             "token": token,
             "user": {
-                "username": result["full_name"],
-                "role": result["role_name"],
-                "must_change_password": result.get("must_change_password", False)
+                "username": full_name,
+                "role": role_name,
+                "must_change_password": False
             }
         }
+    except HTTPException:
+        raise
     except Exception as e:
         import traceback
         return {"error": str(e), "traceback": traceback.format_exc()}

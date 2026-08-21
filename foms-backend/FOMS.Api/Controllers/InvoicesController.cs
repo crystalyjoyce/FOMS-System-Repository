@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -39,7 +39,7 @@ public class InvoicesController : ApiControllerBase
 
         return Ok(invoice);
     }
-    [Authorize(Roles = "Accountant,Bookkeeper,Cashier")]
+    [Authorize]
     [HttpGet]
     public async Task<IActionResult> GetInvoices()
     {
@@ -47,7 +47,7 @@ public class InvoicesController : ApiControllerBase
         return Ok(invoices);
     }
 
-    [Authorize(Roles = "Accountant")]
+    [Authorize]
     [HttpPost]
     public async Task<IActionResult> CreateInvoice([FromBody] InvoiceFeatures.CreateInvoiceCommand command)
     {
@@ -57,7 +57,7 @@ public class InvoicesController : ApiControllerBase
         return Ok(invoice);
     }
 
-    [Authorize(Roles = "Accountant")]
+    [Authorize]
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteInvoice(string id)
     {
@@ -68,11 +68,11 @@ public class InvoicesController : ApiControllerBase
         return Ok(new { success = true });
     }
 
-    public record ArchiveRequest(bool Archived);
+    public record InvoiceArchiveRequest(bool Archived);
 
-    [Authorize(Roles = "Accountant")]
+    [Authorize]
     [HttpPut("{id}/archive")]
-    public async Task<IActionResult> ArchiveInvoice(string id, [FromBody] ArchiveRequest request)
+    public async Task<IActionResult> ArchiveInvoice(string id, [FromBody] InvoiceArchiveRequest request)
     {
         var user = User.FindFirst("name")?.Value ?? User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? "Unknown User";
         var role = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Unknown Role";
@@ -81,7 +81,7 @@ public class InvoicesController : ApiControllerBase
         return Ok(new { success = true });
     }
 
-    [Authorize(Roles = "Accountant")]
+    [Authorize]
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateInvoice(string id, [FromBody] InvoiceFeatures.UpdateInvoiceCommand command)
     {

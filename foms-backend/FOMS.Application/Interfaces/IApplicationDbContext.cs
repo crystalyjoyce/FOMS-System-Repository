@@ -15,6 +15,7 @@ public interface IApplicationDbContext
     DbSet<Notification> Notifications { get; }
     DbSet<ShipmentRate> ShipmentRates { get; }
     DbSet<SpeedPayTransaction> SpeedPayTransactions { get; }
+    DbSet<SpeedPayManualSubmission> SpeedPayManualSubmissions { get; }
     DbSet<PaymentAdjustment> PaymentAdjustments { get; }
     DbSet<BankBalance> BankBalances { get; }
     DbSet<TransportationExpense> TransportationExpenses { get; }

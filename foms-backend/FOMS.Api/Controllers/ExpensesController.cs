@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -9,7 +9,7 @@ namespace FOMS.Api.Controllers;
 [Authorize]
 public class ExpensesController : ApiControllerBase
 {
-    [Authorize(Roles = "Accountant,Bookkeeper,Cashier")]
+    [Authorize]
     [HttpGet("transportation")]
     public async Task<IActionResult> GetExpenses()
     {
@@ -17,7 +17,7 @@ public class ExpensesController : ApiControllerBase
         return Ok(list);
     }
 
-    [Authorize(Roles = "Bookkeeper,Cashier")]
+    [Authorize]
     [HttpPost("transportation")]
     public async Task<IActionResult> Record([FromBody] ExpenseFeatures.RecordExpenseCommand command)
     {

@@ -247,7 +247,7 @@ export const Login: React.FC = () => {
           </p>
 
           {error && (
-            <div className="advisory-banner danger" style={{ padding: '12px 16px', marginBottom: '24px', borderRadius: '10px', fontSize: '13.5px', boxSizing: 'border-box' }}>
+            <div id="ai-login-error" className="advisory-banner danger" style={{ padding: '12px 16px', marginBottom: '24px', borderRadius: '10px', fontSize: '13.5px', boxSizing: 'border-box' }}>
               <strong>Error:</strong> {error}
             </div>
           )}
@@ -261,6 +261,7 @@ export const Login: React.FC = () => {
               <div style={{ position: 'relative' }}>
                 <User size={16} style={{ position: 'absolute', left: '14px', top: '13px', color: 'var(--ts)' }} />
                 <input
+                  id="ai-employee-id"
                   type="text"
                   className="form-control"
                   style={{
@@ -287,6 +288,7 @@ export const Login: React.FC = () => {
               <div style={{ position: 'relative' }}>
                 <Lock size={16} style={{ position: 'absolute', left: '14px', top: '13px', color: 'var(--ts)' }} />
                 <input
+                  id="ai-password"
                   type="password"
                   className="form-control"
                   style={{
@@ -315,6 +317,7 @@ export const Login: React.FC = () => {
 
             {/* Submit Button */}
             <button
+              id="ai-login-btn"
               type="submit"
               disabled={loading}
               className="btn btn-primary"

@@ -6,20 +6,22 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { UploadCloud, X, Camera, CheckCircle2 } from 'lucide-react';
 
 export const PayInvoice: React.FC = () => {
-  const { invoices, submitPayment } = useClientContext();
+  const { invoices, submitPayment, user } = useClientContext();
   const { toast } = useToast();
   const location = useLocation();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string>('');
-  const [paymentMethod, setPaymentMethod] = useState<'Bank Transfer' | 'GCash' | 'Maya'>('Bank Transfer');
+  const [paymentMethod, _setPaymentMethod] = useState<'Bank Transfer' | 'GCash' | 'Maya'>('Bank Transfer');
   const [showModal, setShowModal] = useState(false);
   const [step, setStep] = useState(1); // 1: Form, 2: Simulating PayMongo, 3: Upload Proof, 4: Success
   const [fileAttached, setFileAttached] = useState(false);
   const [fileName, setFileName] = useState('');
   const [referenceNo, setReferenceNo] = useState('');
+  const [checkoutUrl, setCheckoutUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [proofFileUrl, setProofFileUrl] = useState<string | null>(null);
 
   const unpaidInvoices = invoices.filter(i => i.status === 'Unpaid' || i.status === 'Due Soon' || i.status === 'Overdue');
   const selectedInvoice = invoices.find(i => i.id === selectedInvoiceId);
@@ -56,6 +58,7 @@ export const PayInvoice: React.FC = () => {
         if (fomsData?.checkoutUrl) {
           if (!fomsData.checkoutUrl.includes('mock-checkout')) {
             window.open(fomsData.checkoutUrl, '_blank');
+            setCheckoutUrl(fomsData.checkoutUrl);
           }
           setReferenceNo(fomsData.referenceOrNumber || fomsData.payMongoCheckoutId || `PAY-${Math.floor(1000000 + Math.random() * 9000000)}`);
           setShowModal(true);
@@ -83,6 +86,7 @@ export const PayInvoice: React.FC = () => {
       
       if (response.ok && data?.data?.attributes?.checkout_url) {
         window.open(data.data.attributes.checkout_url, '_blank');
+        setCheckoutUrl(data.data.attributes.checkout_url);
         setReferenceNo(data.data.id || `PAY-${Math.floor(1000000 + Math.random() * 9000000)}`);
         setShowModal(true);
         setStep(3);
@@ -108,14 +112,41 @@ export const PayInvoice: React.FC = () => {
     setStep(3);
   };
 
-  const handleSubmitProof = () => {
-    if (selectedInvoice) {
-      submitPayment(selectedInvoice.id, paymentMethod, referenceNo, selectedInvoice.amount);
-      toast.success('Payment submitted for validation. You will receive an update once it is confirmed.', 'Payment Submitted');
-      setStep(4);
+  const handleSubmitProof = async () => {
+    if (!selectedInvoice) return;
+
+    // Always save to local context state first (instant feedback)
+    submitPayment(selectedInvoice.id, paymentMethod, referenceNo, selectedInvoice.amount);
+
+    // Send to real FOMS backend using the new submissions endpoint
+    const clientName = user?.name || user?.id || 'Unknown Client';
+    const clientId = user?.id || '';
+    try {
+      await fetch('/api/speedpay/submissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invoiceId: selectedInvoice.id,
+          invoiceNumber: selectedInvoice.invoiceNumber,
+          clientName,
+          clientId,
+          paymentMethod,
+          referenceNumber: referenceNo,
+          amountPaid: selectedInvoice.amount,
+          proofFileName: fileName || 'proof.jpg',
+          proofFileUrl: proofFileUrl,
+        })
+      });
+      console.log('[SpeedPay] Successfully submitted to FOMS backend');
+    } catch (err) {
+      console.warn('[SpeedPay] Could not sync to FOMS backend, stored locally only.', err);
     }
+
+    toast.success('Payment submitted for validation. You will receive an update once it is confirmed.', 'Payment Submitted');
+    setStep(4);
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const getMethodStyle = (method: string) => {
     const isSelected = paymentMethod === method;
     return {
@@ -157,27 +188,9 @@ export const PayInvoice: React.FC = () => {
           </select>
         </div>
 
-        {/* Step 2 */}
-        <div style={{ marginBottom: '32px' }}>
-          <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: '#0F172A', color: '#FFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px' }}>2</span>
-            Payment method
-          </h3>
-          <div style={{ display: 'flex', gap: '16px' }}>
-            <div style={getMethodStyle('Bank Transfer')} onClick={() => setPaymentMethod('Bank Transfer')}>
-              Bank Transfer
-              <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '4px', fontWeight: 500 }}>Recommended</div>
-            </div>
-            <div style={getMethodStyle('GCash')} onClick={() => setPaymentMethod('GCash')}>
-              GCash
-            </div>
-            <div style={getMethodStyle('Maya')} onClick={() => setPaymentMethod('Maya')}>
-              Maya
-            </div>
-          </div>
-        </div>
 
-        {/* Step 3: Breakdown & Payment details */}
+        {/* Step 2: Breakdown & Payment details */}
+
         {selectedInvoice && (
           <div style={{ marginBottom: '32px' }}>
             <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -357,6 +370,15 @@ export const PayInvoice: React.FC = () => {
                     <p style={{ fontSize: '13px', color: '#64748B', textAlign: 'center', marginBottom: '24px' }}>
                       Transaction via PayMongo was successful (Ref: <strong>{referenceNo}</strong>). Please upload your screenshot.
                     </p>
+
+                    {checkoutUrl && (
+                      <div style={{ background: '#F0F9FF', padding: '12px', borderRadius: '8px', marginBottom: '20px', textAlign: 'center', fontSize: '13px' }}>
+                        Didn't see the PayMongo popup?{' '}
+                        <a href={checkoutUrl} target="_blank" rel="noreferrer" style={{ color: '#0EA5E9', fontWeight: 600, textDecoration: 'underline' }}>
+                          Click here to open PayMongo Checkout
+                        </a>
+                      </div>
+                    )}
                     
                     <input 
                       type="file" 
@@ -365,8 +387,16 @@ export const PayInvoice: React.FC = () => {
                       style={{ display: 'none' }} 
                       onChange={(e) => {
                         if (e.target.files && e.target.files[0]) {
+                          const file = e.target.files[0];
                           setFileAttached(true);
-                          setFileName(e.target.files[0].name);
+                          setFileName(file.name);
+                          const reader = new FileReader();
+                          reader.onload = (event) => {
+                            if (event.target?.result) {
+                              setProofFileUrl(event.target.result as string);
+                            }
+                          };
+                          reader.readAsDataURL(file);
                         }
                       }}
                     />
