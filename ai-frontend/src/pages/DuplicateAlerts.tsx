@@ -256,7 +256,23 @@ export const DuplicateAlerts: React.FC = () => {
       });
       if (resUniques.ok) {
         const data = await resUniques.json();
-        setUniques(Array.isArray(data) ? data : []);
+        const mappedUniques: UniqueDocument[] = (Array.isArray(data) ? data : []).map((u: any) => ({
+          id: u.id || `REC-${Date.now()}`,
+          documentType: u.documentType || 'OFFICIAL_RECEIPT',
+          documentNumber: u.documentNumber || '',
+          clientName: u.clientName || 'N/A',
+          amount: String(u.amount || '0.00'),
+          transactionDate: u.transactionDate || new Date().toISOString().split('T')[0],
+          source: u.sourceType || 'Scanned',
+          aiConfidence: u.similarityScore || 0,
+          reviewedBy: u.scannedBy || 'System',
+          reviewerRole: u.scannedRole || 'Staff',
+          reviewedDate: u.createdAt || new Date().toISOString(),
+          status: 'Unique',
+          reviewerNote: u.aiResult || '',
+          reason: 'No duplicate detected'
+        }));
+        setUniques(mappedUniques);
       }
 
       // 2. Fetch flagged duplicate alerts from backend PostgreSQL DB
@@ -297,7 +313,21 @@ export const DuplicateAlerts: React.FC = () => {
       });
       if (resHistory.ok) {
         const data = await resHistory.json();
-        setHistoryList(Array.isArray(data) ? data : []);
+        const mappedHistory: HistoryRecord[] = (Array.isArray(data) ? data : []).map((h: any) => ({
+          id: String(h.id),
+          documentType: h.target_type || 'OFFICIAL_RECEIPT',
+          documentNumber: h.target_id || '',
+          clientName: 'System Record',
+          aiResult: h.recommended_action || 'Review Required',
+          finalDecision: h.decision || 'Marked as Duplicate',
+          reviewer: h.reviewer_username || 'Reviewer',
+          reviewerRole: h.reviewer_role || 'Staff',
+          decisionReason: h.remarks || '',
+          reviewerNote: h.remarks || '',
+          reviewedDate: h.review_date || new Date().toISOString(),
+          relatedRecordId: h.target_id || ''
+        }));
+        setHistoryList(mappedHistory);
       }
     } catch (e) {
       console.error("Failed loading database records from PostgreSQL:", e);

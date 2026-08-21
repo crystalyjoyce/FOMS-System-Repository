@@ -249,11 +249,11 @@ WHERE r.role_name = 'AssistantFinancialManager' AND p.permission_name IN (
 -- Seed Users with PBKDF2 (SHA256) hash for 'Password@123'
 -- Hash representation: AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==
 INSERT INTO users (login_id, full_name, email, password_hash, role_name) VALUES
-('EMP-001', 'Maria Santos', 'finance.manager@speedex.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'FinancialManager'),
-('EMP-002', 'Juan Dela Cruz', 'head.accountant@speedex.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'HeadAccountant'),
-('EMP-003', 'Pedro Penduko', 'staff.accountant@speedex.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'Accountant'),
-('EMP-004', 'Ana Ramos', 'coordinator@speedex.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'Coordinator'),
-('EMP-005', 'Miguel Gomez', 'assistant.fm@speedex.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'AssistantFinancialManager'),
+('EMP-001', 'Crystalyn Joyce C. Fajardo', 'finance.manager@speedex.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'FinancialManager'),
+('EMP-002', 'Misty', 'head.accountant@speedex.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'HeadAccountant'),
+('EMP-003', 'Maria Mariel Jane Anonuevo', 'staff.accountant@speedex.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'Accountant'),
+('EMP-004', 'Hannah Estrera', 'coordinator@speedex.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'Coordinator'),
+('EMP-005', 'Joana Marie Ogaya', 'assistant.fm@speedex.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'AssistantFinancialManager'),
 ('EMP-006', 'Client User', 'client@external.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'Client')
 ON CONFLICT (email) DO NOTHING;
 
