@@ -65,6 +65,7 @@ def generate_collection_priorities(
 @router.get("/priorities")
 def get_priorities(
     db: Session = Depends(get_db),
+    foms_client: FomsClient = Depends(get_foms_client),
     payload: dict = Depends(require_roles(*COLLECTION_VIEW_ROLES))
 ):
     """
@@ -85,19 +86,29 @@ def get_priorities(
                 return []  # No client_id in token — return empty safely
             
         priorities = query.all()
+        
+        ar_map = {}
+        try:
+            ar_list = foms_client.get_accounts_receivable()
+            ar_map = {ar.get("invoiceId") or ar.get("id"): ar for ar in ar_list}
+        except Exception:
+            pass
+
         result = []
         for p in priorities:
             factors = db.query(AIPriorityFactor).filter(AIPriorityFactor.priority_result_id == p.id).all()
             factor_list = [{"name": f.factor_name, "value": f.factor_value, "contribution": float(f.contribution)} for f in factors]
             
+            ar_info = ar_map.get(p.invoice_id) or {}
+            
             result.append({
                 "id": p.id,
                 "invoice_number": p.invoice_id,
                 "normalized_invoice_number": p.invoice_id,
-                "client_name": "Speedex Commercial Partner",
+                "client_name": ar_info.get("clientName") or "Speedex Partner",
                 "client_id": p.client_id,
-                "outstanding_balance": 15250.00,
-                "due_date": "2026-07-30",
+                "outstanding_balance": float(ar_info.get("outstandingBalance") or ar_info.get("totalOutstanding") or 0.0),
+                "due_date": ar_info.get("dueDate") or ar_info.get("lastPaymentDate") or "2026-07-30",
                 "priority_level": p.priority,
                 "score": float(p.score),
                 "explanation": p.explanation,
