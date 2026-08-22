@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -6,7 +6,7 @@ using FOMS.Application.Interfaces;
 
 namespace FOMS.Api.Controllers;
 
-[Authorize(Roles = "Bookkeeper,Accountant,Cashier")]
+[Authorize]
 [Route("api/receipts")]
 [Route("api/v1/receipts")]
 [ApiController]

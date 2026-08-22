@@ -21,6 +21,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<ShipmentRate> ShipmentRates => Set<ShipmentRate>();
     public DbSet<SpeedPayTransaction> SpeedPayTransactions => Set<SpeedPayTransaction>();
+    public DbSet<SpeedPayManualSubmission> SpeedPayManualSubmissions => Set<SpeedPayManualSubmission>();
     public DbSet<PaymentAdjustment> PaymentAdjustments => Set<PaymentAdjustment>();
         public DbSet<BankBalance> BankBalances => Set<BankBalance>();
     public DbSet<TransportationExpense> TransportationExpenses => Set<TransportationExpense>();

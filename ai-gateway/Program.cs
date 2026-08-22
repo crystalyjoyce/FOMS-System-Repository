@@ -360,7 +360,7 @@ app.Map("/{*path}", async (string? path, HttpContext context, IHttpClientFactory
     }
 });
 
-app.Run();
+app.Run("http://localhost:5002");
 
 public static class ReferenceNormalizer
 {

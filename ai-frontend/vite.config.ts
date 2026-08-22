@@ -8,7 +8,7 @@ export default defineConfig({
     __BUNDLED_DEV__: false,
   },
   server: {
-    port: 5174,
+    port: 5175,
     host: true,
     proxy: {
       '/api/ai': {
@@ -19,3 +19,4 @@ export default defineConfig({
     }
   }
 });
+

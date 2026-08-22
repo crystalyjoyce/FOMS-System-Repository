@@ -18,6 +18,7 @@ export interface StatusBadgeProps {
 }
 
 export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md', className = '' }) => {
+  if (status === null || status === undefined) return null;
   const normalized = status.toString().toLowerCase().trim();
 
   let tier: 'success' | 'info' | 'warning' | 'warn-danger' | 'danger' | 'neutral' | 'assign' = 'neutral';

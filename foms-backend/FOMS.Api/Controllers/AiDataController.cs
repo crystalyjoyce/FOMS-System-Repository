@@ -151,6 +151,7 @@ public class AiDataController : ApiControllerBase
             .Select(r => new
             {
                 id = r.Id,
+                invoiceId = r.InvoiceId,
                 clientId = r.ClientId,
                 clientName = r.Client != null ? r.Client.Name : "",
                 invoiceId = r.InvoiceId,

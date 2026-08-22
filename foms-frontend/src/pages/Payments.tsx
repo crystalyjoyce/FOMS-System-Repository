@@ -14,6 +14,12 @@ import { CalendarPicker } from '../components/FormModals';
 import { useAppData } from '../context/AppDataContext';
 import { TableContainer } from '../components/TableContainer';
 import { ClientInfoCard } from '../components/ClientInfoCard';
+
+const safeFormatDate = (dateVal: string | Date | undefined | null, options?: Intl.DateTimeFormatOptions) => {
+  if (!dateVal) return '—';
+  const d = new Date(dateVal);
+  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('en-PH', options || { month: 'short', day: 'numeric', year: 'numeric' });
+};
 export const Payments: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -87,7 +93,7 @@ export const Payments: React.FC = () => {
         paymentMethod: 'Mixed',
         referenceNumber: 'Mixed',
         amount: recs.reduce((sum, r) => sum + r.amount, 0),
-        recordedAt: maxDate.toISOString(),
+        recordedAt: isNaN(maxDate.getTime()) ? new Date().toISOString() : maxDate.toISOString(),
         status: status,
         isGrouped: true
       };
@@ -109,7 +115,7 @@ export const Payments: React.FC = () => {
     { key: 'paymentMethod', label: 'PAYMENT MODE' },
     { key: 'referenceNumber', label: 'REFERENCE / CHECK NO.' },
     { key: 'amount', label: 'AMOUNT PAID', render: (row: any) => `₱${row.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` },
-    { key: 'recordedAt', label: 'PAYMENT DATE', render: (row: any) => new Date(row.recordedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) },
+    { key: 'recordedAt', label: 'PAYMENT DATE', render: (row: any) => safeFormatDate(row.recordedAt) },
     { key: 'status', label: 'VERIFICATION STATUS', render: (row: any) => {
         let displayStatus = row.status;
         if (displayStatus === 'Pending Validation') displayStatus = 'Pending Verification';
@@ -310,12 +316,12 @@ export const Payments: React.FC = () => {
                 {isFinanceManager ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>VERIFIED BY</label>
-                    <input type="text" value={`${viewPayment.validatedBy || 'AFM'} on ${new Date(viewPayment.validatedAt || Date.now()).toLocaleDateString()}`} disabled style={{ padding: '12px 16px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0F172A', background: '#F8FAFC', outline: 'none' }} />
+                    <input type="text" value={`${viewPayment.validatedBy || 'AFM'} on ${safeFormatDate(viewPayment.validatedAt || Date.now(), { month: 'numeric', day: 'numeric', year: 'numeric' })}`} disabled style={{ padding: '12px 16px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0F172A', background: '#F8FAFC', outline: 'none' }} />
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>DATE RECORDED</label>
-                    <input type="text" value={new Date(viewPayment.recordedAt).toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' })} disabled style={{ padding: '12px 16px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0F172A', background: '#F8FAFC', outline: 'none' }} />
+                    <input type="text" value={safeFormatDate(viewPayment.recordedAt, { month: 'long', day: 'numeric', year: 'numeric' })} disabled style={{ padding: '12px 16px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0F172A', background: '#F8FAFC', outline: 'none' }} />
                   </div>
                 )}
               </div>
@@ -426,7 +432,7 @@ export const Payments: React.FC = () => {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>DATE ISSUED</label>
-                  <input type="text" value={new Date(viewPayment.recordedAt || Date.now()).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })} disabled style={{ padding: '12px 16px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0F172A', background: '#F8FAFC', outline: 'none' }} />
+                  <input type="text" value={safeFormatDate(viewPayment.recordedAt || Date.now())} disabled style={{ padding: '12px 16px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0F172A', background: '#F8FAFC', outline: 'none' }} />
                 </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
@@ -610,65 +616,164 @@ export const Payments: React.FC = () => {
     );
   }
 
-  // --- List View ---
-  const grouped = new Map<string, any[]>();
-  payments.forEach(p => {
-    if (!grouped.has(p.clientId)) grouped.set(p.clientId, []);
-    grouped.get(p.clientId)!.push(p);
-  });
-  
-  const listData = Array.from(grouped.entries()).map(([clientId, recs]) => {
-    const cli = SEEDED_CLIENTS.find(c => c.id === clientId);
-    
-    let computedStatus = 'Validated';
-    if (recs.some(r => r.status === 'Pending Validation')) {
-      computedStatus = 'Pending Validation';
-    } else if (recs.some(r => r.status === 'Rejected')) {
-      computedStatus = 'Rejected';
-    }
-
+  // --- List View — Cash Flow Table ---
+  // Build a flat per-transaction cash flow list from real payments
+  const cashFlowRows = payments.map(p => {
+    const cli = clients.find(c => c.id === p.clientId) ?? SEEDED_CLIENTS.find(c => c.id === p.clientId);
+    const invoice = invoices.find(i => i.id === p.invoiceId);
     return {
-      id: clientId,
-      clientName: cli?.name ?? 'Unknown',
-      status: computedStatus
+      ...p,
+      clientName: (p as any).clientName ?? cli?.name ?? p.clientId ?? '—',
+      invoiceNumber: (p as any).invoiceNumber ?? invoice?.invoiceNumber ?? p.invoiceId ?? '—',
+      inflowType: 'Client Collection',
     };
   });
 
+  // Also include validated SpeedPay as inflow rows
+  const speedPayRows = speedPay
+    .filter(s => s.status === 'Validated')
+    .map(s => {
+      const invoice = invoices.find(i => i.id === s.invoiceId);
+      const cli = clients.find(c => c.id === (s as any).clientId);
+      return {
+        id: `SP-${s.id}`,
+        clientId: (s as any).clientId ?? '',
+        clientName: cli?.name ?? s.clientName ?? '—',
+        invoiceId: s.invoiceId,
+        invoiceNumber: s.invoiceNumber ?? invoice?.invoiceNumber ?? s.invoiceId ?? '—',
+        amount: s.amountPaid ?? 0,
+        paymentMethod: s.paymentMethod,
+        referenceNumber: s.referenceNumber,
+        recordedAt: s.submittedAt,
+        status: 'Validated' as const,
+        inflowType: 'SpeedPay Collection',
+        proofOfPaymentUrl: s.proofFileUrl,
+      };
+    });
+
+  const allCashFlowRows = [...cashFlowRows, ...speedPayRows]
+    .sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime());
+
+  const totalInflow = allCashFlowRows
+    .filter(r => r.status === 'Validated' || r.status === 'Approved')
+    .reduce((sum, r) => sum + r.amount, 0);
+  const pendingInflow = allCashFlowRows
+    .filter(r => r.status === 'Pending Validation')
+    .reduce((sum, r) => sum + r.amount, 0);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      
 
+      {/* KPI Summary Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+        {[
+          { label: 'Total Cash Inflow', value: `₱${totalInflow.toLocaleString('en-PH', { maximumFractionDigits: 0 })}`, color: '#10B981', icon: 'ti-trending-up', sub: 'Validated & Approved' },
+          { label: 'Pending Validation', value: `₱${pendingInflow.toLocaleString('en-PH', { maximumFractionDigits: 0 })}`, color: '#F59E0B', icon: 'ti-clock', sub: 'Awaiting verification' },
+          { label: 'Total Transactions', value: allCashFlowRows.length, color: '#6366F1', icon: 'ti-list', sub: `${cashFlowRows.length} manual + ${speedPayRows.length} SpeedPay` },
+          { label: 'SpeedPay Collections', value: speedPayRows.length, color: '#0EA5E9', icon: 'ti-device-mobile-message', sub: 'Via SpeedPay portal' },
+        ].map(kpi => (
+          <div key={kpi.label} style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '20px 24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: kpi.color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <i className={`ti ${kpi.icon}`} style={{ fontSize: 20, color: kpi.color }} />
+              </div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#0F172A' }}>{kpi.value}</div>
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#64748B' }}>{kpi.label}</div>
+            <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>{kpi.sub}</div>
+          </div>
+        ))}
+      </div>
 
+      {/* Cash Flow Table */}
       <TableContainer>
-        <DataTable 
-          data={listData} 
+        <DataTable
+          data={allCashFlowRows}
           columns={[
-            { key: 'id', label: 'CLIENT ID', sortable: true },
-            { key: 'clientName', label: 'CLIENT NAME', sortable: true, render: (row: any) => (
-              <span onClick={() => navigate(`/payments/${row.id}`)} style={{ color: '#0F172A', fontWeight: 700, cursor: 'pointer', textDecoration: 'none' }}>
-                {row.clientName}
-              </span>
-            ) },
-            { key: 'status', label: 'STATUS', render: (row: any) => <StatusBadge status={row.status} /> }
-          ]} 
+            {
+              key: 'clientName', label: 'CLIENT', sortable: true,
+              render: (row: any) => (
+                <div>
+                  <div style={{ fontWeight: 700, color: '#0F172A' }}>{row.clientName}</div>
+                  {row.clientId && <div style={{ fontSize: 11, color: '#94A3B8' }}>{row.clientId}</div>}
+                </div>
+              )
+            },
+            {
+              key: 'invoiceNumber', label: 'TRANSACTION / INVOICE',
+              render: (row: any) => (
+                <div>
+                  <div style={{ fontWeight: 600, color: '#0F172A', fontFamily: 'monospace', fontSize: 12 }}>{row.invoiceNumber}</div>
+                  <div style={{
+                    display: 'inline-block', marginTop: 2, padding: '1px 8px', borderRadius: 20,
+                    fontSize: 10, fontWeight: 700,
+                    background: row.inflowType === 'SpeedPay Collection' ? '#EEF2FF' : '#F0FDF4',
+                    color: row.inflowType === 'SpeedPay Collection' ? '#4338CA' : '#047857'
+                  }}>
+                    {row.inflowType}
+                  </div>
+                </div>
+              )
+            },
+            {
+              key: 'amount', label: 'AMOUNT', sortable: true,
+              render: (row: any) => (
+                <span style={{ fontWeight: 800, color: '#10B981', fontSize: 14 }}>
+                  +₱{Number(row.amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                </span>
+              )
+            },
+            {
+              key: 'paymentMethod', label: 'METHOD',
+              render: (row: any) => {
+                const colors: Record<string, string> = { GCash: '#007AFF', Maya: '#00AA6C', 'Bank Transfer': '#1E3A5F', Cash: '#047857', Check: '#7C3AED' };
+                const c = colors[row.paymentMethod] ?? '#64748B';
+                return <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: c + '18', color: c }}>{row.paymentMethod}</span>;
+              }
+            },
+            {
+              key: 'referenceNumber', label: 'REFERENCE NO.',
+              render: (row: any) => <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#475569' }}>{row.referenceNumber || '—'}</span>
+            },
+            {
+              key: 'recordedAt', label: 'DATE', sortable: true,
+              render: (row: any) => safeFormatDate(row.recordedAt)
+            },
+            {
+              key: 'status', label: 'STATUS',
+              render: (row: any) => <StatusBadge status={row.status} />
+            },
+          ]}
           rowKey="id"
-          title="Payment Transactions"
-          searchPlaceholder="Search clients..."
-          searchFields={['clientName'] as any}
-          emptyMessage="No payment records found."
+          title="Cash Flow — Payment Transactions"
+          searchPlaceholder="Search by client, invoice, or reference..."
+          searchFields={['clientName', 'invoiceNumber', 'referenceNumber'] as any}
+          emptyMessage="No payment transactions found. Payments will appear here once clients submit via SpeedPay or records are manually entered."
           columnToggle={true} densityToggle={true} exportable={false}
           filters={[{
             key: 'status', label: 'All Statuses', options: [
               { label: 'Pending Validation', value: 'Pending Validation' },
               { label: 'Validated', value: 'Validated' },
+              { label: 'Approved', value: 'Approved' },
               { label: 'Rejected', value: 'Rejected' }
             ],
             filterFn: (row: any, val: string) => row.status === val
           }]}
+          actions={[
+            {
+              label: 'View Details',
+              icon: 'ti-eye',
+              onClick: (row: any) => {
+                const sourceId = row.id.startsWith('SP-') ? row.id.slice(3) : row.id;
+                navigate(`/payments/${row.clientId}?paymentId=${sourceId}&action=view`);
+              }
+            }
+          ]}
         />
       </TableContainer>
     </div>
   );
+
 };
 
 export default Payments;

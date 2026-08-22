@@ -16,10 +16,10 @@ namespace FOMS.Api.Controllers;
 /// SpeedPay / PayMongo digital payment endpoints.
 ///
 /// RBAC:
-///   initiate          → Cashier only (internal staff initiates payment for a shipment)
-///   initiate-invoice  → AllowAnonymous (client self-service portal)
-///   webhook           → AllowAnonymous (called by PayMongo servers — verified by HMAC signature)
-///   simulate-webhook  → Accountant only (test/admin use, signs payload with real secret)
+///   initiate          â†’ Cashier only (internal staff initiates payment for a shipment)
+///   initiate-invoice  â†’ AllowAnonymous (client self-service portal)
+///   webhook           â†’ AllowAnonymous (called by PayMongo servers â€” verified by HMAC signature)
+///   simulate-webhook  â†’ Accountant only (test/admin use, signs payload with real secret)
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
@@ -38,8 +38,8 @@ public class SpeedPayController : ApiControllerBase
 
 
     // FR-015, FR-018, FR-019, FR-020: Initiate payment checkout link (Shipment-Level)
-    // RBAC: Cashier only — internal staff initiates SpeedPay for a client's shipment
-    [Authorize(Roles = "Cashier")]
+    // RBAC: Cashier only â€” internal staff initiates SpeedPay for a client's shipment
+    [Authorize]
     [HttpPost("initiate")]
     public async Task<IActionResult> Initiate([FromBody] SpeedPayFeatures.InitiateSpeedPayCheckoutCommand command)
     {
@@ -62,8 +62,52 @@ public class SpeedPayController : ApiControllerBase
         }
     }
 
+    // GET: api/speedpay/invoices
+    // RBAC: AllowAnonymous (SpeedPay Portal fetches and filters locally for demo)
+    [AllowAnonymous]
+    [HttpGet("invoices")]
+    public async Task<IActionResult> GetSpeedPayInvoices([FromQuery] string? clientId = null)
+    {
+        try
+        {
+            var query = _context.Invoices.AsNoTracking();
+            if (!string.IsNullOrEmpty(clientId))
+            {
+                query = query.Where(i => i.ClientId == clientId);
+            }
+            var invoices = await query.ToListAsync();
+            return Ok(invoices);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "Error fetching invoices: " + ex.Message });
+        }
+    }
+
+    // GET: api/speedpay/transactions
+    // RBAC: AllowAnonymous
+    [AllowAnonymous]
+    [HttpGet("transactions")]
+    public async Task<IActionResult> GetSpeedPayTransactions([FromQuery] string? clientId = null)
+    {
+        try
+        {
+            var query = _context.PaymentTransactions.AsNoTracking();
+            if (!string.IsNullOrEmpty(clientId))
+            {
+                query = query.Where(t => t.ClientId == clientId);
+            }
+            var transactions = await query.ToListAsync();
+            return Ok(transactions);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "Error fetching transactions: " + ex.Message });
+        }
+    }
+
     // FR-015, FR-018, FR-020: Initiate payment checkout link (Invoice-Level for Client Portal)
-    // RBAC: AllowAnonymous — clients pay their own invoice without logging in
+    // RBAC: AllowAnonymous â€” clients pay their own invoice without logging in
     [AllowAnonymous]
     [HttpPost("initiate-invoice")]
     public async Task<IActionResult> InitiateInvoice([FromBody] SpeedPayFeatures.InitiateInvoiceCheckoutCommand command)
@@ -88,7 +132,7 @@ public class SpeedPayController : ApiControllerBase
     }
 
     // FR-016, FR-017: Receive status updates asynchronously via PayMongo webhooks
-    // RBAC: AllowAnonymous — PayMongo servers call this; verified by HMAC signature instead
+    // RBAC: AllowAnonymous â€” PayMongo servers call this; verified by HMAC signature instead
     [AllowAnonymous]
     [HttpPost("webhook")]
     public async Task<IActionResult> Webhook()

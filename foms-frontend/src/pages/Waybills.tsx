@@ -9,10 +9,11 @@ import { CalendarPicker } from '../components/FormModals';
 import { Waybill } from '../data/seed';
 import { useToast } from '../components/ToastContext';
 import { useAppData } from '../context/AppDataContext';
+import { useAuth } from '../context/AuthContext';
 import { TableContainer } from '../components/TableContainer';
 import { ClientInfoCard } from '../components/ClientInfoCard';
 
-const WaybillDetailCard: React.FC<{ waybill: Waybill, onUpdate: (id: string, updates: Partial<Waybill>) => void }> = ({ waybill, onUpdate }) => {
+const WaybillDetailCard: React.FC<{ waybill: Waybill, onUpdate: (id: string, updates: Partial<Waybill>) => void, userRole?: string }> = ({ waybill, onUpdate, userRole }) => {
   const { toast } = useToast();
   const [checklist, setChecklist] = useState({
     signature: false,
@@ -25,6 +26,7 @@ const WaybillDetailCard: React.FC<{ waybill: Waybill, onUpdate: (id: string, upd
     certificationDate: new Date().toISOString().split('T')[0],
     reason: ''
   });
+  const [rejectReason, setRejectReason] = useState('');
 
   const allChecked = Object.values(checklist).every(Boolean);
 
@@ -33,6 +35,18 @@ const WaybillDetailCard: React.FC<{ waybill: Waybill, onUpdate: (id: string, upd
       const newStatus = waybill.is_ctc ? 'Validated (CTC)' : 'Validated';
       onUpdate(waybill.id, { status: newStatus as Waybill['status'] });
       toast.success(`Waybill ${waybill.waybillNumber} successfully validated.`);
+    }
+  };
+
+  const handleReject = () => {
+    if (!rejectReason.trim()) {
+      toast.error('Please provide a reason for rejecting.');
+      return;
+    }
+    if (window.confirm('Return this waybill to Operations for correction?')) {
+      onUpdate(waybill.id, { status: 'Returned', notes: rejectReason });
+      toast.warning(`Waybill ${waybill.waybillNumber} returned to Ops.`);
+      setRejectReason('');
     }
   };
 
@@ -142,11 +156,71 @@ const WaybillDetailCard: React.FC<{ waybill: Waybill, onUpdate: (id: string, upd
             <div>
               <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#0F172A', margin: '0 0 12px' }}>Manual Verification</h4>
               
-              {waybill.status.includes('Validated') || waybill.status === 'CTC Submitted' ? (
+              {waybill.status === 'CTC Submitted' && (userRole === 'Accountant' || userRole === 'Head Accountant') ? (
+                // ── Accountant: Validate CTC action ──
+                <div style={{ background: '#EFF6FF', padding: '16px', borderRadius: '12px', border: '1px solid #BFDBFE' }}>
+                  <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#1D4ED8', margin: '0 0 8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <i className="ti ti-file-certificate" /> CTC Pending Validation
+                  </h4>
+                  <div style={{ fontSize: '0.82rem', color: '#1E40AF', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <span><strong>Certified By:</strong> {waybill.certified_by || '—'}</span>
+                    <span><strong>Certification Date:</strong> {waybill.certification_date || '—'}</span>
+                    <span><strong>Reason:</strong> {waybill.reason_for_missing || '—'}</span>
+                  </div>
+                  <p style={{ fontSize: '0.82rem', color: '#3B82F6', margin: '0 0 12px' }}>
+                    Review the uploaded CTC document and check all items before approving.
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
+                    <label style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={checklist.signature} onChange={e => setChecklist(p => ({...p, signature: e.target.checked}))} style={{ marginTop: '2px' }} />
+                      <span style={{ fontSize: '0.85rem', color: '#334155' }}>CTC document is clearly legible and complete</span>
+                    </label>
+                    <label style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={checklist.waybillMatch} onChange={e => setChecklist(p => ({...p, waybillMatch: e.target.checked}))} style={{ marginTop: '2px' }} />
+                      <span style={{ fontSize: '0.85rem', color: '#334155' }}>Waybill number matches system record</span>
+                    </label>
+                    <label style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={checklist.dateMatch} onChange={e => setChecklist(p => ({...p, dateMatch: e.target.checked}))} style={{ marginTop: '2px' }} />
+                      <span style={{ fontSize: '0.85rem', color: '#334155' }}>Certification date is within acceptable range</span>
+                    </label>
+                    <label style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={checklist.notDuplicate} onChange={e => setChecklist(p => ({...p, notDuplicate: e.target.checked}))} style={{ marginTop: '2px' }} />
+                      <span style={{ fontSize: '0.85rem', color: '#334155' }}>Reason for missing original is acceptable</span>
+                    </label>
+                  </div>
+
+                  <div style={{ marginBottom: '16px' }}>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#991B1B', display: 'block', marginBottom: '4px' }}>Return to Ops Reason (If Rejecting)</label>
+                    <input type="text" placeholder="Reason for rejection..." value={rejectReason} onChange={e => setRejectReason(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #FCA5A5', background: '#FEF2F2' }} />
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <Button
+                      variant={allChecked ? 'primary' : 'secondary'}
+                      title="Validate CTC"
+                      icon="ti-circle-check"
+                      onClick={handleValidate}
+                      disabled={!allChecked}
+                    />
+                    <button
+                      onClick={handleReject}
+                      disabled={!rejectReason.trim()}
+                      style={{
+                        background: '#fff', border: '1px solid #EF4444', color: '#DC2626',
+                        borderRadius: 6, padding: '0 16px', fontSize: '0.875rem',
+                        fontWeight: 600, cursor: rejectReason.trim() ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: 6, opacity: rejectReason.trim() ? 1 : 0.5
+                      }}
+                    >
+                      <i className="ti ti-arrow-back-up" />
+                      Reject / Return
+                    </button>
+                  </div>
+                </div>
+          ) : waybill.status.includes('Validated') || waybill.status === 'CTC Submitted' ? (
                 <div style={{ background: '#F0FDF4', padding: '16px', borderRadius: '8px', border: '1px solid #BBF7D0', color: '#166534', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 500 }}>
                   <i className="ti ti-circle-check" style={{ fontSize: '20px' }} />
                   <span style={{ fontSize: '0.85rem' }}>
-                    {waybill.status === 'CTC Submitted' ? 'CTC has been submitted and is pending final validation.' : 'This document has already been validated.'}
+                    {waybill.status === 'CTC Submitted' ? 'CTC has been submitted and is pending validation by the Accountant.' : 'This document has already been validated.'}
                   </span>
                 </div>
               ) : (
@@ -170,6 +244,11 @@ const WaybillDetailCard: React.FC<{ waybill: Waybill, onUpdate: (id: string, upd
                     </label>
                   </div>
                   
+                  <div style={{ marginBottom: '16px' }}>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#991B1B', display: 'block', marginBottom: '4px' }}>Return to Ops Reason (If Rejecting)</label>
+                    <input type="text" placeholder="Reason for rejection..." value={rejectReason} onChange={e => setRejectReason(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #FCA5A5', background: '#FEF2F2' }} />
+                  </div>
+
                   <div style={{ display: 'flex', gap: '12px' }}>
                     <Button 
                       variant={allChecked ? "primary" : "secondary"} 
@@ -188,6 +267,18 @@ const WaybillDetailCard: React.FC<{ waybill: Waybill, onUpdate: (id: string, upd
                       <i className="ti ti-alert-triangle" />
                       Mark Missing
                     </button>
+                    <button
+                      onClick={handleReject}
+                      disabled={!rejectReason.trim()}
+                      style={{
+                        background: '#fff', border: '1px solid #EF4444', color: '#DC2626',
+                        borderRadius: 6, padding: '0 16px', fontSize: '0.875rem',
+                        fontWeight: 600, cursor: rejectReason.trim() ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: 6, opacity: rejectReason.trim() ? 1 : 0.5
+                      }}
+                    >
+                      <i className="ti ti-arrow-back-up" />
+                      Reject
+                    </button>
                   </div>
                 </>
               )}
@@ -200,13 +291,20 @@ const WaybillDetailCard: React.FC<{ waybill: Waybill, onUpdate: (id: string, upd
 };
 
 export const Waybills: React.FC = () => {
+  const { user } = useAuth();
   const { id: clientIdParam } = useParams();
   const [searchParams] = useSearchParams();
   const waybillIdParam = searchParams.get('waybillId');
   const navigate = useNavigate();
-  const { waybills, updateWaybill, clients } = useAppData();
+  const { waybills, updateWaybill, addWaybill, clients } = useAppData();
 
-  const coordinatorWaybills = waybills.filter(wb => wb.status === 'For Checking' || wb.status === 'Missing');
+  // Coordinator sees: For Checking + Missing
+  // Accountant also sees: CTC Submitted (needs their validation action)
+  const isAccountant = user?.role === 'Accountant' || user?.role === 'Head Accountant';
+  const coordinatorWaybills = waybills.filter(wb =>
+    wb.status === 'For Checking' || wb.status === 'Missing' || wb.status === 'Returned' ||
+    (isAccountant && wb.status === 'CTC Submitted')
+  );
 
   const [isRecording, setIsRecording] = useState(false);
   const { toast } = useToast();
@@ -219,7 +317,20 @@ export const Waybills: React.FC = () => {
 
   const handleRecordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const newId = `WB-${Date.now()}`;
+    addWaybill({
+      id: newId,
+      waybillNumber: newWaybill.waybillNumber,
+      clientCode: newWaybill.clientCode,
+      deliveryDate: newWaybill.deliveryDate,
+      status: 'For Checking',
+      hasOriginalPOD: false,
+      hasApprovedCTC: false,
+      encodedBy: user?.employeeId || 'EMP-004',
+      encodedAt: new Date().toISOString(),
+    });
     toast.success(`Waybill ${newWaybill.waybillNumber} successfully recorded.`);
+    setNewWaybill({ waybillNumber: '', deliveryDate: new Date().toISOString().split('T')[0], clientCode: clients[0]?.id || '', podFile: null });
     setIsRecording(false);
   };
 
@@ -232,7 +343,7 @@ export const Waybills: React.FC = () => {
         <div onClick={() => navigate(`/waybills/${clientIdParam || wb.clientCode}`)} style={{ cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600, width: 'fit-content' }}>
           <i className="ti ti-arrow-left" style={{ fontSize: '16px' }}></i> Back to Client Records
         </div>
-        <WaybillDetailCard waybill={wb} onUpdate={updateWaybill} />
+        <WaybillDetailCard waybill={wb} onUpdate={updateWaybill} userRole={user?.role} />
       </div>
     );
   }
@@ -294,7 +405,7 @@ export const Waybills: React.FC = () => {
     let computedStatus = 'Validated';
     if (recs.some(r => r.status === 'Missing')) {
       computedStatus = 'Missing';
-    } else if (recs.some(r => r.status === 'For Checking' || r.status === 'CTC Submitted' || r.status === 'Pending')) {
+    } else if (recs.some(r => r.status === 'For Checking' || r.status === 'CTC Submitted' || r.status === 'Pending' || r.status === 'Returned')) {
       computedStatus = 'Pending';
     }
 
