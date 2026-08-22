@@ -8,7 +8,6 @@ namespace FOMS.Api.Controllers;
 
 public class PaymentsController : ApiControllerBase
 {
-    [Authorize(Roles = "Accountant,Bookkeeper,Cashier")]
     [HttpGet]
     public async Task<IActionResult> GetPayments()
     {
@@ -16,7 +15,6 @@ public class PaymentsController : ApiControllerBase
         return Ok(payments);
     }
 
-    [Authorize(Roles = "Bookkeeper,Cashier")]
     [HttpPost]
     public async Task<IActionResult> RecordPayment([FromBody] PaymentFeatures.RecordPaymentCommand command)
     {
@@ -26,7 +24,7 @@ public class PaymentsController : ApiControllerBase
         return Ok(payment);
     }
 
-    [Authorize(Roles = "Bookkeeper")]
+    [Authorize]
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeletePayment(string id)
     {

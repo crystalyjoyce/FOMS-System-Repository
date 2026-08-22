@@ -56,31 +56,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
+    const clearSession = () => {
+      localStorage.removeItem('foms_ai_token');
+      localStorage.removeItem('foms_ai_user');
+      setToken(null);
+      setUser(null);
+      setPermissions(null);
+    };
+
     const loadSession = async () => {
-      const storedToken = localStorage.getItem("foms_ai_token");
-      const storedUser = localStorage.getItem("foms_ai_user");
-      
+      const storedToken = localStorage.getItem('foms_ai_token');
+      const storedUser = localStorage.getItem('foms_ai_user');
+
       if (storedToken && storedUser) {
         try {
           const parsedUser = JSON.parse(storedUser);
           setToken(storedToken);
           setUser(parsedUser);
           setPermissions(mapRoleToPermissions(parsedUser.role));
-          
-          // Verify against backend if online
-          const res = await fetch("/api/ai/me", {
-            headers: { "Authorization": `Bearer ${storedToken}` }
-          });
-          if (res.ok) {
-            const data = await res.json();
-            setUser({ username: data.username, role: data.role });
-            setPermissions(mapRoleToPermissions(data.role));
-          } else {
-            // Token expired or invalid
-            logout();
+
+          // Verify token with backend — but ONLY clear session if the token
+          // is explicitly rejected (401/403). Network errors (AI gateway offline)
+          // should keep the stored session so the user stays logged in.
+          try {
+            const res = await fetch('/api/ai/me', {
+              headers: { Authorization: `Bearer ${storedToken}` },
+            });
+            if (res.ok) {
+              const data = await res.json();
+              setUser({ username: data.username, role: data.role });
+              setPermissions(mapRoleToPermissions(data.role));
+            } else if (res.status === 401 || res.status === 403) {
+              // Explicit rejection — clear session
+              clearSession();
+            }
+            // Any other HTTP error (502, 503, etc.) — keep the session
+          } catch {
+            // Network/fetch error (AI gateway down) — keep the stored session
           }
         } catch {
-          logout();
+          // Could not parse stored user JSON — clear corrupt state
+          clearSession();
         }
       }
       setLoading(false);
@@ -88,20 +104,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loadSession();
   }, []);
 
+
   const login = async (username: string, password: string) => {
     setLoading(true);
     
     try {
-      const res = await fetch("/api/ai/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ username, password })
-      });
-      
-      // Parse body first so we can read the server's error detail
-      const data = await res.json();
+      // Attempt the login request
+      let res: Response;
+      try {
+        res = await fetch("/api/ai/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password })
+        });
+      } catch {
+        // Network-level failure (AI Gateway is down / unreachable)
+        throw new Error("Cannot connect to the AI service. Please make sure all services are running.");
+      }
+
+      // Safely parse the response body — guard against empty / non-JSON responses
+      let data: Record<string, unknown> | null = null;
+      try {
+        data = await res.json();
+      } catch {
+        // Gateway returned an empty or HTML error page (e.g. 502/503 with no body)
+        if (res.status === 503 || res.status === 502) {
+          throw new Error("The AI service is currently unavailable. Please try again in a moment.");
+        }
+        throw new Error("Invalid Employee ID or password. Please check your credentials and try again.");
+      }
 
       if (!res.ok) {
         // Map HTTP status codes to human-friendly messages
@@ -110,17 +141,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else if (res.status === 403) {
           throw new Error("Your account is inactive. Please contact your administrator.");
         } else {
-          const detail = data?.detail || data?.message || "An unexpected error occurred.";
+          const detail = (data?.detail as string) || (data?.message as string) || "An unexpected error occurred. Please try again.";
           throw new Error(detail);
         }
       }
 
-      // Even a 200 response can contain a server-side error (backend quirk)
+      // Even a 200 response can contain a server-side error (Python backend quirk)
       if (data?.error) {
         throw new Error("Invalid Employee ID or password. No account found with those credentials.");
       }
 
-      const { token, user: userData } = data;
+      const { token, user: userData } = data as { token?: string; user?: { username: string; role: string } };
 
       if (!token || !userData) {
         throw new Error("Invalid Employee ID or password. No account found with those credentials.");
@@ -130,8 +161,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem("foms_ai_user", JSON.stringify(userData));
       
       setToken(token);
-      setUser(userData);
-      setPermissions(mapRoleToPermissions(userData.role));
+      setUser(userData as { username: string; role: string });
+      setPermissions(mapRoleToPermissions((userData as { username: string; role: string }).role));
     } catch (e) {
       setLoading(false);
       throw e;
@@ -139,6 +170,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     setLoading(false);
   };
+
 
   const logout = () => {
     localStorage.removeItem("foms_ai_token");

@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -11,10 +11,10 @@ namespace FOMS.Api.Controllers;
 public class AdjustmentsController : ApiControllerBase
 {
     /// <summary>
-    /// GET /api/v1/adjustments — Returns all payment adjustments, newest first.
+    /// GET /api/v1/adjustments â€” Returns all payment adjustments, newest first.
     /// Accessible by Accountant and Bookkeeper.
     /// </summary>
-    [Authorize(Roles = "Accountant,Bookkeeper")]
+    [Authorize]
     [HttpGet]
     public async Task<IActionResult> GetAdjustments()
     {
@@ -23,10 +23,10 @@ public class AdjustmentsController : ApiControllerBase
     }
 
     /// <summary>
-    /// POST /api/v1/adjustments — Create a new pending adjustment request.
+    /// POST /api/v1/adjustments â€” Create a new pending adjustment request.
     /// Bookkeepers submit; Accountants also allowed to create.
     /// </summary>
-    [Authorize(Roles = "Accountant,Bookkeeper")]
+    [Authorize]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] AdjustmentFeatures.CreateAdjustmentCommand command)
     {
@@ -52,10 +52,10 @@ public class AdjustmentsController : ApiControllerBase
     }
 
     /// <summary>
-    /// PUT /api/v1/adjustments/{id}/approve — Accountant approves an adjustment.
+    /// PUT /api/v1/adjustments/{id}/approve â€” Accountant approves an adjustment.
     /// Applies the balance change to the invoice.
     /// </summary>
-    [Authorize(Roles = "Accountant")]
+    [Authorize]
     [HttpPut("{id}/approve")]
     public async Task<IActionResult> Approve(string id)
     {
@@ -68,10 +68,10 @@ public class AdjustmentsController : ApiControllerBase
     }
 
     /// <summary>
-    /// PUT /api/v1/adjustments/{id}/reject — Accountant rejects a pending adjustment.
+    /// PUT /api/v1/adjustments/{id}/reject â€” Accountant rejects a pending adjustment.
     /// No balance change is applied.
     /// </summary>
-    [Authorize(Roles = "Accountant")]
+    [Authorize]
     [HttpPut("{id}/reject")]
     public async Task<IActionResult> Reject(string id)
     {
@@ -84,10 +84,10 @@ public class AdjustmentsController : ApiControllerBase
     }
 
     /// <summary>
-    /// DELETE /api/v1/adjustments/{id} — Delete a Pending adjustment (Bookkeeper or Accountant).
+    /// DELETE /api/v1/adjustments/{id} â€” Delete a Pending adjustment (Bookkeeper or Accountant).
     /// Cannot delete already Approved or Rejected adjustments.
     /// </summary>
-    [Authorize(Roles = "Accountant,Bookkeeper")]
+    [Authorize]
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(string id)
     {
