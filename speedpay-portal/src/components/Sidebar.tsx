@@ -1,6 +1,6 @@
-import React from 'react';
-import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, FileText, CreditCard, History } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { LayoutDashboard, FileText, CreditCard, History, ChevronUp, User, Settings, LogOut } from 'lucide-react';
 import { useClientContext } from '../context/ClientContext';
 
 export const Sidebar: React.FC = () => {
@@ -12,6 +12,21 @@ export const Sidebar: React.FC = () => {
     { name: 'Pay an Invoice', path: '/pay', icon: <CreditCard size={20} /> },
     { name: 'Payment History', path: '/history', icon: <History size={20} /> },
   ];
+
+  const navigate = useNavigate();
+  const { logout } = useClientContext();
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   return (
     <div style={{
@@ -68,8 +83,42 @@ export const Sidebar: React.FC = () => {
         </nav>
       </div>
 
-      <div style={{ padding: '8px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 10px', borderRadius: '8px', background: 'transparent' }}>
+      <div className="sidebar-footer" ref={profileMenuRef} style={{ position: 'relative', padding: '8px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+        {isProfileMenuOpen && (
+            <div style={{
+              position: 'absolute',
+              bottom: 'calc(100% + 8px)',
+              left: '8px',
+              right: '8px',
+              background: '#fff',
+              borderRadius: '12px',
+              padding: '16px 0',
+              boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+              zIndex: 100,
+              color: '#0F172A'
+            }}>
+              <div style={{ padding: '0 16px 12px 16px', borderBottom: '1px solid #E2E8F0', marginBottom: '8px' }}>
+                <div style={{ fontWeight: 700, color: '#1B254B', fontSize: '14px', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.name}</div>
+                <div style={{ color: '#64748B', fontSize: '12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.companyName}</div>
+              </div>
+              
+              <button style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 16px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#1B254B', fontSize: '14px', fontWeight: 600, textAlign: 'left' }} onClick={() => { setIsProfileMenuOpen(false); }}>
+                <User size={18} color="#64748B" /> My Profile
+              </button>
+              
+              <button style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 16px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#1B254B', fontSize: '14px', fontWeight: 600, textAlign: 'left' }}>
+                <Settings size={18} color="#64748B" /> System Settings
+              </button>
+              
+              <div style={{ height: '1px', background: '#E2E8F0', margin: '8px 0' }}></div>
+              
+              <button style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 16px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#EF4444', fontSize: '14px', fontWeight: 600, textAlign: 'left' }} onClick={() => { logout(); setIsProfileMenuOpen(false); navigate('/login'); }}>
+                <LogOut size={18} /> Log Out
+              </button>
+            </div>
+          )}
+
+        <div onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 10px', borderRadius: '8px', background: 'transparent' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
             <div style={{ 
               width: '32px', height: '32px', borderRadius: '8px', 
@@ -86,6 +135,7 @@ export const Sidebar: React.FC = () => {
               <span style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.35)' }}>{user?.companyName}</span>
             </div>
           </div>
+          <ChevronUp size={14} color="#94A3B8" />
         </div>
       </div>
     </div>

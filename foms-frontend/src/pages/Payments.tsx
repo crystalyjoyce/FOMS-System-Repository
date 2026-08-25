@@ -672,7 +672,27 @@ export const Payments: React.FC = () => {
           { label: 'Total Transactions', value: allCashFlowRows.length, color: '#6366F1', icon: 'ti-list', sub: `${cashFlowRows.length} manual + ${speedPayRows.length} SpeedPay` },
           { label: 'SpeedPay Collections', value: speedPayRows.length, color: '#0EA5E9', icon: 'ti-device-mobile-message', sub: 'Via SpeedPay portal' },
         ].map(kpi => (
-          <div key={kpi.label} style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '20px 24px' }}>
+          <div 
+            key={kpi.label} 
+            style={{ 
+              background: '#fff', 
+              border: '1px solid #E2E8F0', 
+              borderTop: '4px solid transparent',
+              borderRadius: 12, 
+              padding: '16px 24px', 
+              transition: 'all 0.3s ease'
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.transform = 'translateY(-5px)';
+              e.currentTarget.style.boxShadow = '0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)';
+              e.currentTarget.style.borderTop = `4px solid ${kpi.color}`;
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = 'none';
+              e.currentTarget.style.borderTop = '4px solid transparent';
+            }}
+          >
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
               <div style={{ width: 40, height: 40, borderRadius: 10, background: kpi.color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <i className={`ti ${kpi.icon}`} style={{ fontSize: 20, color: kpi.color }} />

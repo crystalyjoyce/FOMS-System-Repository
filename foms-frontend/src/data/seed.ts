@@ -60,8 +60,23 @@ export interface FeatureHighlight {
   description: string;
 }
 
-export const FEATURE_HIGHLIGHTS: FeatureHighlight[] = [];
-
+export const FEATURE_HIGHLIGHTS: FeatureHighlight[] = [
+  {
+    step: 1,
+    title: 'Enter Credentials',
+    description: 'Use your assigned Employee ID and password to access the secure portal.'
+  },
+  {
+    step: 2,
+    title: 'Manage Receivables',
+    description: 'Create invoices, track customer accounts, and monitor outstanding balances.'
+  },
+  {
+    step: 3,
+    title: 'Track Collections',
+    description: 'Review real-time collection aging analytics, duplicates, and AI predictions.'
+  }
+];
 // ─── Session Config ───────────────────────────────────────────────
 
 export const SESSION_CONFIG = {

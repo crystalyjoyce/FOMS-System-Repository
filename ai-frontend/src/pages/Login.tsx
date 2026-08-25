@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Lock, User, KeyRound, Sparkles, ShieldCheck, HelpCircle, RefreshCw } from 'lucide-react';
+import { Lock, User, KeyRound, Sparkles, ShieldCheck, HelpCircle, RefreshCw, Eye, EyeOff } from 'lucide-react';
 
 export const Login: React.FC = () => {
   const { login } = useAuth();
@@ -11,6 +11,7 @@ export const Login: React.FC = () => {
   const [password, setPassword] = useState<string>('Password@123');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const roles = [
     "Financial Manager",
@@ -289,21 +290,37 @@ export const Login: React.FC = () => {
                 <Lock size={16} style={{ position: 'absolute', left: '14px', top: '13px', color: 'var(--ts)' }} />
                 <input
                   id="ai-password"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   className="form-control"
                   style={{
                     paddingLeft: '42px',
+                    paddingRight: '42px',
                     height: '42px',
                     borderRadius: '8px',
                     fontSize: '14px',
                     fontFamily: 'var(--fb)',
-                    border: '1px solid var(--border)'
+                    border: '1px solid var(--border)',
+                    width: '100%',
+                    boxSizing: 'border-box'
                   }}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
                 />
+                <button 
+                  type="button" 
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{
+                    position: 'absolute', right: '14px', top: '13px',
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: 'var(--ts)', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center'
+                  }}
+                  tabIndex={-1}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
               </div>
             </div>
 

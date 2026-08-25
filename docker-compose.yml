@@ -84,7 +84,7 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__DefaultConnection=Server=foms-sqlserver;Database=FOMSDB;User Id=sa;Password=Postgres2026!;TrustServerCertificate=True
+      - ConnectionStrings__DefaultConnection=Server=foms-sqlserver;Database=FOMSDB;User Id=sa;Password=Postgres2026!;Encrypt=False;TrustServerCertificate=True
       - PayMongo__SecretKey=${PAYMONGO_SECRET_KEY:-sk_test_fyNzfY2nbwdhfgUcoMmWoZJq}
       - PayMongo__WebhookSecret=${PAYMONGO_WEBHOOK_SECRET:-whsk_AhGd2fDaqcnLia9sJ79EHsL2}
     depends_on:

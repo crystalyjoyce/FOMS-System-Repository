@@ -685,7 +685,7 @@ export const DuplicateAlerts: React.FC = () => {
         // Require BOTH status AND documentType to be INVALID_DOCUMENT to avoid false rejections
         // (e.g. when Gemini quota is exhausted and the heuristic fallback is used).
         if (scanData.status === 'INVALID_DOCUMENT' && extracted.documentType === 'INVALID_DOCUMENT') {
-          toast.warning("Not a financial document. Please scan an invoice, official receipt, or waybill.", "Invalid Document");
+          toast.warning("INVALID DOCUMENT: Uploaded file is a photo/image and does not contain valid financial document metadata (Official Receipt, Invoice, Waybill, Proof of Payment). Random pictures are strictly prohibited.", "Invalid Document");
           setScanResultMode('INVALID');
           setExtractionDone(false); // Don't show extraction form
         } else if (scanData.status === 'FLAGGED_DUPLICATE') {
@@ -1253,8 +1253,9 @@ export const DuplicateAlerts: React.FC = () => {
                 className={`card ${dragActive ? 'drag-active' : ''}`}
                 style={{
                   padding: '56px 24px', borderRadius: '16px',
-                  border: dragActive ? '2px dashed var(--teal)' : '2px dashed var(--border)',
+                  border: dragActive ? '2px dashed var(--teal)' : '2px dashed #CBD5E1',
                   background: dragActive ? 'var(--teal-bg)' : '#ffffff',
+                  boxShadow: '0 10px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.01)',
                   textAlign: 'center', cursor: 'pointer', transition: 'all 0.2s ease',
                   position: 'relative'
                 }}
@@ -1411,20 +1412,16 @@ export const DuplicateAlerts: React.FC = () => {
 
             {/* FLOW 3.5: INVALID / NON-OFFICIAL RECEIPT DOCUMENT RESULT */}
             {scanResultMode === 'INVALID' && (
-              <div className="card fade-in" style={{ padding: '32px', borderRadius: '16px', border: '1px solid rgba(225, 29, 72, 0.3)', background: 'linear-gradient(135deg, #fff1f2 0%, #fff 100%)' }}>
-                <div style={{ display: 'flex', gap: '16px', marginBottom: '24px' }}>
-                  <div style={{
-                    width: '52px', height: '52px', borderRadius: '50%',
-                    backgroundColor: '#ffe4e6', color: 'var(--err)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
-                  }}>
-                    <AlertTriangle size={26} />
+              <div className="card fade-in" style={{ padding: '32px', borderRadius: '16px', border: '1px solid #fca5a5', background: '#fff1f2' }}>
+                <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', alignItems: 'center' }}>
+                  <div style={{ color: 'var(--err)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <AlertTriangle size={26} strokeWidth={2.5} />
                   </div>
                   <div>
-                    <h3 style={{ margin: '0 0 4px', fontSize: '18px', fontWeight: 800, color: 'var(--err)' }}>
+                    <h3 style={{ margin: '0 0 4px', fontSize: '17px', fontWeight: 800, color: '#9f1239' }}>
                       Unacceptable Document: Not an Official Receipt / Billing Invoice
                     </h3>
-                    <p style={{ margin: 0, fontSize: '14px', color: 'var(--ts)' }}>
+                    <p style={{ margin: 0, fontSize: '13.5px', color: '#475569', lineHeight: 1.5 }}>
                       The AI document validator determined that this file is <strong>NOT an acceptable Official Receipt or Billing Invoice</strong>. Non-financial images or unofficial notes cannot be processed for duplicate validation.
                     </p>
                   </div>
@@ -1432,37 +1429,39 @@ export const DuplicateAlerts: React.FC = () => {
 
                 {/* Preview of what was scanned */}
                 {previewDocUrl && (
-                  <div style={{ display: 'flex', gap: '20px', marginBottom: '24px', alignItems: 'flex-start' }}>
-                    <div style={{ flex: '0 0 160px', background: '#fff', border: '1px solid var(--err-bg)', borderRadius: '10px', padding: '8px', textAlign: 'center' }}>
-                      <img src={previewDocUrl} alt="Rejected scan" style={{ maxHeight: '120px', maxWidth: '100%', objectFit: 'contain', borderRadius: '6px' }} />
-                      <p style={{ fontSize: '11px', color: 'var(--err)', marginTop: '6px', fontWeight: 600 }}>Image Submitted</p>
+                  <div style={{ display: 'flex', gap: '20px', marginBottom: '24px', alignItems: 'stretch' }}>
+                    <div style={{ flex: '0 0 160px', background: '#fff', borderRadius: '10px', padding: '16px', textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                      <img src={previewDocUrl} alt="Rejected scan" style={{ maxHeight: '110px', maxWidth: '100%', objectFit: 'contain', borderRadius: '4px' }} />
+                      <p style={{ fontSize: '11.5px', color: '#dc2626', marginTop: '12px', marginBottom: 0, fontWeight: 700 }}>Image Submitted</p>
                     </div>
-                    <div style={{ flex: 1, background: '#fef2f2', borderRadius: '10px', padding: '16px 18px', border: '1px solid #fecaca' }}>
-                      <p style={{ fontSize: '13.5px', fontWeight: 700, color: '#991b1b', margin: '0 0 8px 0' }}>⚠️ Validation Requirement Notice:</p>
-                      <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', color: '#7f1d1d', lineHeight: 1.8 }}>
-                        <li>This document does <strong>NOT match the official receipt or billing invoice format</strong>.</li>
-                        <li>Please upload or scan an official <strong>Speedex Official Receipt, Billing Invoice, or Waybill</strong>.</li>
-                        <li>Ensure all text fields, OR number, and total amounts are clear and readable.</li>
-                        <li>Non-financial images, personal photos, or unofficial notes are strictly rejected.</li>
+                    <div style={{ flex: 1, background: '#fff7ed', borderRadius: '10px', padding: '18px 20px', border: '1px solid #fed7aa' }}>
+                      <p style={{ fontSize: '13.5px', fontWeight: 700, color: '#9a3412', margin: '0 0 10px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <AlertTriangle size={15} style={{ color: '#ea580c' }} /> Validation Requirement Notice:
+                      </p>
+                      <ul style={{ margin: 0, paddingLeft: '22px', fontSize: '13px', color: '#7c2d12', lineHeight: 1.7, fontWeight: 500 }}>
+                        <li style={{ paddingLeft: '4px' }}>This document does <strong>NOT match the official receipt or billing invoice format</strong>.</li>
+                        <li style={{ paddingLeft: '4px' }}>Please upload or scan an official <strong>Speedex Official Receipt, Billing Invoice, or Waybill</strong>.</li>
+                        <li style={{ paddingLeft: '4px' }}>Ensure all text fields, OR number, and total amounts are clear and readable.</li>
+                        <li style={{ paddingLeft: '4px' }}>Non-financial images, personal photos, or unofficial notes are strictly rejected.</li>
                       </ul>
                     </div>
                   </div>
                 )}
 
                 <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                  <button className="btn btn-outline" onClick={handleResetScanConsole}>Clear / Reset</button>
+                  <button className="btn" onClick={handleResetScanConsole} style={{ background: '#fff', border: '1px solid var(--border)', color: 'var(--ts)', padding: '0 16px', height: '38px', borderRadius: '8px', fontWeight: 600 }}>Clear / Reset</button>
                   <button
                     className="btn btn-primary"
                     onClick={() => { handleResetScanConsole(); setTimeout(() => handleOpenScanner(), 100); }}
-                    style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px', height: '38px', borderRadius: '8px', padding: '0 20px' }}
                   >
                     <Camera size={15} />
                     Scan Again
                   </button>
                   <button
-                    className="btn btn-outline"
-                    onClick={() => { handleResetScanConsole(); document.getElementById('file-upload-input')?.click(); }}
-                    style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                    className="btn"
+                    onClick={() => { handleResetScanConsole(); document.getElementById('simplified-uploader')?.click(); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#fff', border: '1px solid var(--border)', color: 'var(--tp)', height: '38px', borderRadius: '8px', padding: '0 16px', fontWeight: 600 }}
                   >
                     <UploadCloud size={15} />
                     Upload Document Instead
