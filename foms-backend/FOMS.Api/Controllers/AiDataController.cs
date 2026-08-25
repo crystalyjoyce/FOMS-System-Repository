@@ -154,7 +154,6 @@ public class AiDataController : ApiControllerBase
                 invoiceId = r.InvoiceId,
                 clientId = r.ClientId,
                 clientName = r.Client != null ? r.Client.Name : "",
-                invoiceId = r.InvoiceId,
                 outstandingBalance = r.BalanceAmount,
                 totalOutstanding = r.BalanceAmount,
                 currentAmount = r.BalanceAmount,

@@ -185,6 +185,8 @@ RECOMMENDATION_VIEW_ROLES = (
     Roles.FINANCIAL_MANAGER,
     Roles.HEAD_ACCOUNTANT,
     Roles.ACCOUNTANT,
+    Roles.COORDINATOR,
+    Roles.ASSISTANT_OF_FINANCIAL_MANAGER,
 )
 
 # Roles allowed to make recommendation decisions

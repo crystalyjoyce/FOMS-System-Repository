@@ -16,8 +16,7 @@
    LEFT PANEL
 ═══════════════════════════════════════ */
 .login-left {
-  width: 40%;
-  max-width: 420px;
+  width: 50%;
   min-width: 340px;
   flex-shrink: 0;
   background: var(--sidebar-bg, #0B1437);

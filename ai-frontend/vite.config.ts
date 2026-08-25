@@ -12,7 +12,7 @@ export default defineConfig({
     host: true,
     proxy: {
       '/api/ai': {
-        target: 'http://localhost:5001',
+        target: 'http://localhost:5002',
         changeOrigin: true,
         secure: false,
       }

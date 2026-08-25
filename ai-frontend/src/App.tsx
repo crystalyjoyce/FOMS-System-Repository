@@ -11,6 +11,7 @@ import { Dashboard } from './pages/Dashboard';
 import { DuplicateAlerts } from './pages/DuplicateAlerts';
 import { CollectionPriorities } from './pages/CollectionPriorities';
 import { CollectionRecommendations } from './pages/CollectionRecommendations';
+import { ForReview } from './pages/ForReview';
 import { ReviewHistory } from './pages/ReviewHistory';
 import { Reports } from './pages/Reports';
 import { Profile } from './pages/Profile';
@@ -95,8 +96,19 @@ const MainLayout: React.FC = () => {
     collectionItems.push({
       label: 'Collection Priorities',
       icon: 'ti ti-trending-up',
-      active: location.pathname === '/ai/collection-priorities' || location.pathname === '/ai/collection-recommendations',
+      active: location.pathname === '/ai/collection-priorities',
       onClick: () => navigate('/ai/collection-priorities'),
+    });
+  }
+
+  // For Review: visible to Accountant, Coordinator, Assistant Finance Manager
+  if (hasPermission('ai.collection.for_review')) {
+    collectionItems.push({
+      label: 'For Review',
+      icon: 'ti ti-clipboard-check',
+      badge: { text: 'Review', color: '#059669' },
+      active: location.pathname === '/ai/for-review',
+      onClick: () => navigate('/ai/for-review'),
     });
   }
   if (collectionItems.length > 0) {
@@ -219,8 +231,14 @@ const MainLayout: React.FC = () => {
             } />
 
             <Route path="collection-recommendations" element={
-              <PermissionGuard permission="ai.collection.view" fallbackRedirect="/unauthorized">
+              <PermissionGuard permission="ai.collection.validate" fallbackRedirect="/unauthorized">
                 <CollectionRecommendations />
+              </PermissionGuard>
+            } />
+
+            <Route path="for-review" element={
+              <PermissionGuard permission="ai.collection.for_review" fallbackRedirect="/unauthorized">
+                <ForReview />
               </PermissionGuard>
             } />
 

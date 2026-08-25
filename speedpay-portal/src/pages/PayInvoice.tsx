@@ -194,7 +194,7 @@ export const PayInvoice: React.FC = () => {
         {selectedInvoice && (
           <div style={{ marginBottom: '32px' }}>
             <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: '#0F172A', color: '#FFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px' }}>3</span>
+              <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: '#0F172A', color: '#FFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px' }}>2</span>
               Payment details & Breakdown
             </h3>
 
@@ -311,13 +311,15 @@ export const PayInvoice: React.FC = () => {
               </div>
             </div>
 
-            <button 
-              onClick={handlePayMongoTrigger}
-              disabled={isLoading}
-              style={{ marginTop: '24px', background: '#0F172A', color: '#FFF', border: 'none', padding: '14px 24px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: isLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
-            >
-              {isLoading ? 'Connecting to PayMongo...' : 'Pay via PayMongo →'}
-            </button>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '24px' }}>
+              <button 
+                onClick={handlePayMongoTrigger}
+                disabled={isLoading}
+                style={{ background: '#0F172A', color: '#FFF', border: 'none', padding: '14px 24px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: isLoading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
+              >
+                {isLoading ? 'Connecting to PayMongo...' : 'Pay via PayMongo →'}
+              </button>
+            </div>
           </div>
         )}
       </div>

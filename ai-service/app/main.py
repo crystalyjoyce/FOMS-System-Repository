@@ -27,6 +27,7 @@ from app.core.rate_limit import limiter
 async def lifespan(app: FastAPI):
     logger.info("Initializing AI Service...")
     logger.info("Creating database tables if they do not exist...")
+    logger.info(f"DEBUG DB URI: {settings.POSTGRES_URI}")
     try:
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables ready.")

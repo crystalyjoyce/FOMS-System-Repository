@@ -61,12 +61,25 @@ export const Dashboard: React.FC = () => {
   ];
 
   // Accounts Aging Distribution
-  const agingData = [
-    { range: '< 30 Days', amount: 0, count: 0, status: 'Current', color: 'var(--ok)' },
-    { range: '30-60 Days', amount: 0, count: 0, status: 'Overdue', color: 'var(--teal)' },
-    { range: '60-90 Days', amount: 0, count: 0, status: 'Delinquent', color: 'var(--warn)' },
-    { range: '90+ Days', amount: 0, count: summary?.urgentCollectionAccounts ?? 0, status: 'Severely Delinquent', color: 'var(--err)' }
-  ];
+  const agingData = useMemo(() => {
+    let b60to90 = 0;
+    let b90Plus = 0;
+    
+    attentionAccounts.forEach(acc => {
+      if (acc.daysOverdue >= 90) {
+        b90Plus += acc.outstandingBalance;
+      } else if (acc.daysOverdue >= 60) {
+        b60to90 += acc.outstandingBalance;
+      }
+    });
+
+    return [
+      { range: '< 30 Days', amount: 0, count: 0, status: 'Current', color: 'var(--ok)' },
+      { range: '30-60 Days', amount: 0, count: 0, status: 'Overdue', color: 'var(--teal)' },
+      { range: '60-90 Days', amount: b60to90, count: attentionAccounts.filter(a => a.daysOverdue >= 60 && a.daysOverdue < 90).length, status: 'Delinquent', color: 'var(--warn)' },
+      { range: '90+ Days', amount: b90Plus, count: attentionAccounts.filter(a => a.daysOverdue >= 90).length || summary?.urgentCollectionAccounts || 0, status: 'Severely Delinquent', color: 'var(--err)' }
+    ];
+  }, [attentionAccounts, summary]);
 
   if (loading) {
     return (
