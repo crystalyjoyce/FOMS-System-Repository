@@ -231,7 +231,7 @@ export const DuplicateAlerts: React.FC = () => {
   // ==========================================
   // ROLE-BASED ACCESS CONTROL (RBAC) GUARDS
   // ==========================================
-  const isFinancialManager = useMemo(() => user?.role === 'Financial Manager', [user]);
+  const isFinancialManager = useMemo(() => user?.role === 'Financial Manager' || user?.role === 'Finance Manager', [user]);
   const isHeadAccountant = useMemo(() => user?.role === 'Head Accountant', [user]);
   const isAccountant = useMemo(() => user?.role === 'Accountant', [user]);
   const isCoordinator = useMemo(() => user?.role === 'Coordinator', [user]);
@@ -797,8 +797,8 @@ export const DuplicateAlerts: React.FC = () => {
         const detailMsg: string = detailIsObject
           ? (detail.message || '')
           : (typeof detail === 'string' ? detail : '');
-        const detailExtracted: any = detailIsObject ? (detail.extracted || {}) : {};
-        const detailReasonCode: string = detailIsObject ? (detail.reason_code || '') : '';
+        const detailExtracted: any = detailIsObject ? (detail.extracted || detail.details || {}) : {};
+        const detailReasonCode: string = detailIsObject ? (detail.details?.reason || detail.reason_code || '') : '';
 
         const is422Invalid =
           res.status === 422 &&
@@ -1707,18 +1707,21 @@ export const DuplicateAlerts: React.FC = () => {
 
                   <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                     <button className="btn btn-outline" onClick={handleResetScanConsole}>Upload Another Document</button>
-                    <button 
-                      className="btn btn-outline" 
-                      onClick={handleSendToManualReview}
-                      disabled={!canValidate}
-                      style={{ borderColor: 'var(--warn)', color: 'var(--warn-dark)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                    >
-                      <Clock size={15} />
-                      Send for Manual Review
-                    </button>
-                    <button className="btn btn-primary" onClick={handleMarkAsUniqueClick} disabled={!canValidate}>
-                      Mark as Unique
-                    </button>
+                    {canValidate && (
+                      <>
+                        <button 
+                          className="btn btn-outline" 
+                          onClick={handleSendToManualReview}
+                          style={{ borderColor: 'var(--warn)', color: 'var(--warn-dark)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                        >
+                          <Clock size={15} />
+                          Send for Manual Review
+                        </button>
+                        <button className="btn btn-primary" onClick={handleMarkAsUniqueClick}>
+                          Mark as Unique
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1890,12 +1893,16 @@ export const DuplicateAlerts: React.FC = () => {
                       <button className="btn btn-outline" onClick={() => setShowManualReviewPanel(true)}>
                         Need Manual Review
                       </button>
-                      <button className="btn btn-secondary animate-hover" onClick={handleMarkAsUniqueClick} disabled={!canValidate}>
-                        Mark as Unique
-                      </button>
-                      <button className="btn btn-primary animate-hover" onClick={handleMarkAsDuplicateClick} disabled={!canValidate}>
-                        Mark as Duplicate
-                      </button>
+                      {canValidate && (
+                        <>
+                          <button className="btn btn-secondary animate-hover" onClick={handleMarkAsUniqueClick}>
+                            Mark as Unique
+                          </button>
+                          <button className="btn btn-primary animate-hover" onClick={handleMarkAsDuplicateClick}>
+                            Mark as Duplicate
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
