@@ -3,10 +3,12 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.models.database import get_db
+from app.core.config import settings
 import bcrypt
 import base64
 import json
 import time
+import httpx
 
 router = APIRouter()
 
@@ -43,11 +45,11 @@ def login(request: LoginRequest):
     try:
         # Developer Simulation Mocks
         mocks = {
-            "EMP-001": ("Financial Manager User", "Financial Manager"),
-            "EMP-002": ("Head Accountant User", "Head Accountant"),
-            "EMP-003": ("Accountant User", "Accountant"),
-            "EMP-004": ("Coordinator User", "Coordinator"),
-            "EMP-005": ("Assistant of Financial Manager", "Assistant of Financial Manager"),
+            "EMP-001": ("Crystalyn Joyce C. Fajardo", "Finance Manager"),
+            "EMP-002": ("Misty", "Head Accountant"),
+            "EMP-003": ("Maria Mariel Jane Anonuevo", "Accountant"),
+            "EMP-004": ("Hannah Estrera", "Coordinator"),
+            "EMP-005": ("Joana Marie Ogaya", "Assistant of Finance Manager"),
             "EMP-006": ("Client User", "Client")
         }
         
@@ -77,7 +79,9 @@ def login(request: LoginRequest):
         raise
     except Exception as e:
         import traceback
-        return {"error": str(e), "traceback": traceback.format_exc()}
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
 
 @router.post("/change-password")
 def change_password(request: ChangePasswordRequest, db: Session = Depends(get_db)):

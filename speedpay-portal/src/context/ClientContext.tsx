@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { Invoice, PaymentRecord, ClientUser } from '../data/mockData';
-import { MOCK_INVOICES, MOCK_PAYMENTS, MOCK_CLIENT_USER } from '../data/mockData';
 
 interface ClientContextType {
   user: ClientUser | null;
@@ -22,29 +21,15 @@ export const ClientProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return saved ? JSON.parse(saved) : null;
   });
   
-  // Use localStorage to persist state across reloads for the demo
+  // Use localStorage to persist registered client accounts across reloads
   const [clients, setClients] = useState<ClientUser[]>(() => {
     const saved = localStorage.getItem('speedpay_clients');
-    const savedList: ClientUser[] = saved ? JSON.parse(saved) : [];
-    // Always ensure the seeded demo account is available
-    const demoExists = savedList.some(c => c.id === MOCK_CLIENT_USER.id);
-    if (MOCK_CLIENT_USER.id && !demoExists) {
-      return [MOCK_CLIENT_USER, ...savedList];
-    }
-    return savedList.length > 0 ? savedList : (MOCK_CLIENT_USER.id ? [MOCK_CLIENT_USER] : []);
+    return saved ? JSON.parse(saved) : [];
   });
 
-  const [invoices, setInvoices] = useState<Invoice[]>(() => {
-    const saved = localStorage.getItem('speedpay_invoices');
-    const savedList = saved ? JSON.parse(saved) : [];
-    return savedList.length > 0 ? savedList : MOCK_INVOICES;
-  });
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
 
-  const [payments, setPayments] = useState<PaymentRecord[]>(() => {
-    const saved = localStorage.getItem('speedpay_payments');
-    const savedList = saved ? JSON.parse(saved) : [];
-    return savedList.length > 0 ? savedList : MOCK_PAYMENTS;
-  });
+  const [payments, setPayments] = useState<PaymentRecord[]>([]);
 
   useEffect(() => {
     localStorage.setItem('speedpay_clients', JSON.stringify(clients));
@@ -71,7 +56,7 @@ export const ClientProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     fetch(`/api/speedpay/invoices?clientId=${clientIdParam}`)
       .then(res => res.json())
       .then((data: any[]) => {
-        if (data && Array.isArray(data) && data.length > 0) {
+        if (data && Array.isArray(data)) {
           const mapped = data.map(inv => ({
             id: inv.id,
             invoiceNumber: inv.invoiceNo ?? inv.id,
@@ -79,27 +64,25 @@ export const ClientProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             amount: inv.totalAmount ?? inv.amount ?? 0,
             dueDate: inv.dueDate ?? new Date().toISOString(),
             routeArea: inv.routeArea ?? 'National Capital Region',
-            status: (inv.paymentStatus === 'Unpaid' ? 'Unpaid' 
+            status: (inv.paymentStatus === 'Unpaid' ? 'Unpaid'
                   : inv.paymentStatus === 'Partially Paid' ? 'Due Soon'
-                  : 'Paid') as 'Unpaid' | 'Due Soon' | 'Paid'
+                  : inv.paymentStatus === 'Pending Payment Validation' ? 'Pending Validation'
+                  : 'Paid') as Invoice['status']
           }));
-          // Merge real data with mock data so tests always have the Unpaid invoice
-          setInvoices([...MOCK_INVOICES, ...mapped]);
+          setInvoices(mapped);
         } else {
-          // setInvoices([]); // Commented out to preserve mock data if API is empty/offline
+          setInvoices([]);
         }
       })
       .catch((err) => {
-        console.log('API offline, using mock invoices:', err);
-        const saved = localStorage.getItem('speedpay_invoices');
-        const savedList = saved ? JSON.parse(saved) : [];
-        setInvoices(savedList.length > 0 ? savedList : MOCK_INVOICES);
+        console.error('Failed to fetch invoices:', err);
+        setInvoices([]);
       });
-      
+
     fetch(`/api/speedpay/transactions?clientId=${clientIdParam}`)
       .then(res => res.json())
       .then((data: any[]) => {
-        if (data && Array.isArray(data) && data.length > 0) {
+        if (data && Array.isArray(data)) {
           const mapped = data.map(p => ({
             id: p.transactionId ?? p.id,
             invoiceId: p.invoiceId,
@@ -107,20 +90,22 @@ export const ClientProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             paymentMethod: p.paymentMethod ?? 'Bank Transfer',
             dateSubmitted: p.submittedAt ?? p.createdAt ?? new Date().toISOString(),
             amount: p.amountPaid ?? p.amount ?? 0,
-            status: (p.status === 'Completed' ? 'Validated' : p.status === 'Rejected' ? 'Rejected' : 'Pending Validation') as any,
+            status: (p.status === 'Completed' || p.status === 'Validated'
+              ? 'Validated'
+              : p.status === 'Rejected'
+              ? 'Rejected'
+              : 'Pending Validation') as PaymentRecord['status'],
             officialReceipt: p.receiptUrl,
             rejectionReason: p.remarks
           }));
-          setPayments([...MOCK_PAYMENTS, ...mapped]);
+          setPayments(mapped);
         } else {
-          // setPayments([]); // Commented out to preserve mock data if API is empty/offline
+          setPayments([]);
         }
       })
       .catch((err) => {
-        console.log('API offline, using mock payments:', err);
-        const saved = localStorage.getItem('speedpay_payments');
-        const savedList = saved ? JSON.parse(saved) : [];
-        setPayments(savedList.length > 0 ? savedList : MOCK_PAYMENTS);
+        console.error('Failed to fetch payment transactions:', err);
+        setPayments([]);
       });
   }, [user]);
 

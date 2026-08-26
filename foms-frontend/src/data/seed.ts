@@ -113,18 +113,8 @@ export interface Client {
   createdAt: string;
 }
 
-export const SEEDED_CLIENTS: Client[] = [
-  { id: 'CLI-001', name: 'Acme Logistics Inc.', contactPerson: 'Jane Smith', email: 'billing@acme.com', phone: '09171234567', address: '123 Ayala Ave, Makati', region: 'Metro Manila', billingSchedule: 'Monthly', status: 'Active', vatStatus: 'VATable', vatRate: 12, createdAt: '2026-08-01T00:00:00Z' },
-  { id: 'CLI-002', name: 'Global Supply Co.', contactPerson: 'Mark Johnson', email: 'finance@globalsupply.com', phone: '09189876543', address: 'Cebu Business Park, Cebu', region: 'Visayas', billingSchedule: 'Semi-monthly', status: 'Active', vatStatus: 'VATable', vatRate: 12, createdAt: '2026-08-05T00:00:00Z' },
-  { id: 'CLI-003', name: 'Lazada Philippines', contactPerson: 'Rayner M.', email: 'billing@lazada.ph', phone: '09170001111', address: 'BGC, Taguig City', region: 'Metro Manila', billingSchedule: 'Monthly', status: 'Active', vatStatus: 'VATable', vatRate: 12, createdAt: '2026-08-10T00:00:00Z' },
-  { id: 'CLI-004', name: 'Shopee Philippines', contactPerson: 'Martin L.', email: 'finance@shopee.ph', phone: '09172223333', address: 'Ortigas Center, Pasig City', region: 'Metro Manila', billingSchedule: 'Weekly', status: 'Active', vatStatus: 'VATable', vatRate: 12, createdAt: '2026-08-10T00:00:00Z' },
-  { id: 'CLI-005', name: 'Zalora Logistics', contactPerson: 'Sarah K.', email: 'accounts@zalora.com.ph', phone: '09184445555', address: 'Mandaluyong City', region: 'Metro Manila', billingSchedule: 'Semi-monthly', status: 'Active', vatStatus: 'VATable', vatRate: 12, createdAt: '2026-08-11T00:00:00Z' },
-  { id: 'CLI-006', name: 'SM Retail Inc.', contactPerson: 'Sy Henry', email: 'ap@smretail.com', phone: '09196667777', address: 'Pasay City', region: 'Metro Manila', billingSchedule: 'Monthly', status: 'Active', vatStatus: 'VATable', vatRate: 12, createdAt: '2026-08-12T00:00:00Z' },
-  { id: 'CLI-007', name: 'Robinsons Supermarket', contactPerson: 'Gokongwei', email: 'finance@robinsons.com.ph', phone: '09178889999', address: 'Quezon City', region: 'Metro Manila', billingSchedule: 'Weekly', status: 'Active', vatStatus: 'VATable', vatRate: 12, createdAt: '2026-08-13T00:00:00Z' },
-  { id: 'CLI-008', name: 'Puregold Price Club', contactPerson: 'Lucio Co', email: 'billing@puregold.com.ph', phone: '09180002222', address: 'Manila City', region: 'Metro Manila', billingSchedule: 'Monthly', status: 'Active', vatStatus: 'VATable', vatRate: 12, createdAt: '2026-08-14T00:00:00Z' },
-  { id: 'CLI-009', name: 'Mercury Drug Corp', contactPerson: 'Vivian Q.', email: 'ap@mercurydrug.com', phone: '09204446666', address: 'San Juan City', region: 'Metro Manila', billingSchedule: 'Semi-monthly', status: 'Active', vatStatus: 'VATable', vatRate: 12, createdAt: '2026-08-15T00:00:00Z' },
-  { id: 'CLI-010', name: 'Watsons Philippines', contactPerson: 'John Doe', email: 'finance@watsons.ph', phone: '09179998888', address: 'Makati City', region: 'Metro Manila', billingSchedule: 'Weekly', status: 'Active', vatStatus: 'VATable', vatRate: 12, createdAt: '2026-08-16T00:00:00Z' },
-];
+export const SEEDED_CLIENTS: Client[] = [];
+
 
 // ─── Billing Rates ────────────────────────────────────────────────
 
@@ -142,7 +132,7 @@ export const SEEDED_RATES: BillingRate[] = [];
 
 // ─── Waybills ─────────────────────────────────────────────────────
 
-export type WaybillStatus = 'For Checking' | 'Validated' | 'Validated (CTC)' | 'Missing' | 'CTC Submitted' | 'Billed' | 'Failed' | 'Pending Validation';
+export type WaybillStatus = 'For Checking' | 'Validated' | 'Validated (CTC)' | 'Missing' | 'CTC Submitted' | 'Billed' | 'Failed' | 'Pending Validation' | 'Returned';
 
 export interface Waybill {
   id: string;
@@ -165,248 +155,11 @@ export interface Waybill {
   certification_date?: string;
   reason_for_missing?: string;
   invoiceId?: string | null;
+  notes?: string;
 }
 
-export const SEEDED_WAYBILLS: Waybill[] = [
-  {
-    id: 'WB-001',
-    waybillNumber: 'WAY-2026-001',
-    clientCode: 'CLI-001',
-    deliveryDate: '2026-08-10',
-    status: 'Validated',
-    hasOriginalPOD: true,
-    hasApprovedCTC: false,
-    encodedBy: 'EMP-004',
-    encodedAt: '2026-08-11T10:00:00Z',
-    destinationArea: 'Quezon City',
-    pod_image_url: '/test-pod.png',
-    uploaded_by: 'EMP-004',
-    uploaded_date: '2026-08-11T10:00:00Z',
-    invoiceId: 'INV-001'
-  },
-  {
-    id: 'WB-002',
-    waybillNumber: 'WAY-2026-002',
-    clientCode: 'CLI-002',
-    deliveryDate: '2026-08-12',
-    status: 'For Checking',
-    hasOriginalPOD: false,
-    hasApprovedCTC: false,
-    encodedBy: 'EMP-004',
-    encodedAt: '2026-08-12T14:30:00Z',
-    destinationArea: 'Mandaue City',
-    pod_image_url: '/test-pod.png',
-    uploaded_by: 'EMP-004',
-    uploaded_date: '2026-08-12T14:30:00Z'
-  },
-  {
-    id: 'WB-003',
-    waybillNumber: 'WAY-2026-003',
-    clientCode: 'CLI-001',
-    deliveryDate: '2026-08-13',
-    status: 'Missing',
-    hasOriginalPOD: false,
-    hasApprovedCTC: false,
-    encodedBy: 'EMP-004',
-    encodedAt: '2026-08-13T09:00:00Z',
-    destinationArea: 'Makati City'
-  },
-  {
-    id: 'WB-004',
-    waybillNumber: 'WAY-2026-004',
-    clientCode: 'CLI-002',
-    deliveryDate: '2026-08-14',
-    status: 'CTC Submitted',
-    hasOriginalPOD: false,
-    hasApprovedCTC: false,
-    encodedBy: 'EMP-004',
-    encodedAt: '2026-08-14T08:00:00Z',
-    destinationArea: 'Cebu City',
-    is_ctc: true,
-    certified_by: 'Hannah Estrera',
-    certification_date: '2026-08-15',
-    reason_for_missing: 'Lost in transit during delivery handoff',
-    pod_image_url: '/test-pod.png',
-    uploaded_by: 'EMP-004',
-    uploaded_date: '2026-08-15T10:00:00Z'
-  },
-  {
-    id: 'WB-005',
-    waybillNumber: 'WAY-2026-005',
-    clientCode: 'CLI-001',
-    deliveryDate: '2026-08-15',
-    status: 'Validated (CTC)',
-    hasOriginalPOD: false,
-    hasApprovedCTC: true,
-    encodedBy: 'EMP-004',
-    encodedAt: '2026-08-15T11:00:00Z',
-    destinationArea: 'Pasig City',
-    is_ctc: true,
-    certified_by: 'Hannah Estrera',
-    certification_date: '2026-08-16',
-    reason_for_missing: 'Original document damaged during flood',
-    pod_image_url: '/test-pod.png',
-    uploaded_by: 'EMP-004',
-    uploaded_date: '2026-08-16T08:00:00Z'
-  },
+export const SEEDED_WAYBILLS: Waybill[] = [];
 
-  // ── E2E Test Waybills ─────────────────────────────────────────────
-  // Dedicated waybills for Playwright end-to-end tests.
-  // Always 'For Checking' in the seed so Module 1 always finds
-  // pending work on every fresh page load (React resets from here).
-
-  {
-    id: 'WB-CHK-001',
-    waybillNumber: 'WAY-2026-100',
-    clientCode: 'CLI-001',
-    deliveryDate: '2026-08-20',
-    status: 'For Checking',
-    hasOriginalPOD: false,
-    hasApprovedCTC: false,
-    encodedBy: 'EMP-004',
-    encodedAt: '2026-08-20T08:00:00Z',
-    destinationArea: 'Taguig City',
-    pod_image_url: '/test-pod.png',
-    uploaded_by: 'EMP-004',
-    uploaded_date: '2026-08-20T08:00:00Z'
-  },
-  {
-    id: 'WB-CHK-002',
-    waybillNumber: 'WAY-2026-101',
-    clientCode: 'CLI-002',
-    deliveryDate: '2026-08-20',
-    status: 'For Checking',
-    hasOriginalPOD: false,
-    hasApprovedCTC: false,
-    encodedBy: 'EMP-004',
-    encodedAt: '2026-08-20T09:00:00Z',
-    destinationArea: 'Mandaluyong City',
-    pod_image_url: '/test-pod.png',
-    uploaded_by: 'EMP-004',
-    uploaded_date: '2026-08-20T09:00:00Z'
-  },
-  {
-    id: 'WB-CHK-003',
-    waybillNumber: 'WAY-2026-102',
-    clientCode: 'CLI-003',
-    deliveryDate: '2026-08-20',
-    status: 'For Checking',
-    hasOriginalPOD: false,
-    hasApprovedCTC: false,
-    encodedBy: 'EMP-004',
-    encodedAt: '2026-08-20T10:00:00Z',
-    destinationArea: 'BGC',
-    pod_image_url: '/test-pod.png',
-    uploaded_by: 'EMP-004',
-    uploaded_date: '2026-08-20T10:00:00Z'
-  },
-  {
-    id: 'WB-CHK-004',
-    waybillNumber: 'WAY-2026-103',
-    clientCode: 'CLI-004',
-    deliveryDate: '2026-08-20',
-    status: 'For Checking',
-    hasOriginalPOD: false,
-    hasApprovedCTC: false,
-    encodedBy: 'EMP-004',
-    encodedAt: '2026-08-20T11:00:00Z',
-    destinationArea: 'Ortigas Center',
-    pod_image_url: '/test-pod.png',
-    uploaded_by: 'EMP-004',
-    uploaded_date: '2026-08-20T11:00:00Z'
-  },
-  {
-    id: 'WB-CHK-005',
-    waybillNumber: 'WAY-2026-104',
-    clientCode: 'CLI-005',
-    deliveryDate: '2026-08-20',
-    status: 'For Checking',
-    hasOriginalPOD: false,
-    hasApprovedCTC: false,
-    encodedBy: 'EMP-004',
-    encodedAt: '2026-08-20T12:00:00Z',
-    destinationArea: 'Caloocan City',
-    pod_image_url: '/test-pod.png',
-    uploaded_by: 'EMP-004',
-    uploaded_date: '2026-08-20T12:00:00Z'
-  },
-  {
-    id: 'WB-CHK-006',
-    waybillNumber: 'WAY-2026-105',
-    clientCode: 'CLI-006',
-    deliveryDate: '2026-08-21',
-    status: 'For Checking',
-    hasOriginalPOD: false,
-    hasApprovedCTC: false,
-    encodedBy: 'EMP-004',
-    encodedAt: '2026-08-21T08:00:00Z',
-    destinationArea: 'Valenzuela City',
-    pod_image_url: '/test-pod.png',
-    uploaded_by: 'EMP-004',
-    uploaded_date: '2026-08-21T08:00:00Z'
-  },
-  {
-    id: 'WB-CHK-007',
-    waybillNumber: 'WAY-2026-106',
-    clientCode: 'CLI-007',
-    deliveryDate: '2026-08-21',
-    status: 'For Checking',
-    hasOriginalPOD: false,
-    hasApprovedCTC: false,
-    encodedBy: 'EMP-004',
-    encodedAt: '2026-08-21T09:00:00Z',
-    destinationArea: 'Malabon City',
-    pod_image_url: '/test-pod.png',
-    uploaded_by: 'EMP-004',
-    uploaded_date: '2026-08-21T09:00:00Z'
-  },
-  {
-    id: 'WB-CHK-008',
-    waybillNumber: 'WAY-2026-107',
-    clientCode: 'CLI-008',
-    deliveryDate: '2026-08-21',
-    status: 'For Checking',
-    hasOriginalPOD: false,
-    hasApprovedCTC: false,
-    encodedBy: 'EMP-004',
-    encodedAt: '2026-08-21T10:00:00Z',
-    destinationArea: 'Navotas City',
-    pod_image_url: '/test-pod.png',
-    uploaded_by: 'EMP-004',
-    uploaded_date: '2026-08-21T10:00:00Z'
-  },
-  {
-    id: 'WB-CHK-009',
-    waybillNumber: 'WAY-2026-108',
-    clientCode: 'CLI-009',
-    deliveryDate: '2026-08-21',
-    status: 'For Checking',
-    hasOriginalPOD: false,
-    hasApprovedCTC: false,
-    encodedBy: 'EMP-004',
-    encodedAt: '2026-08-21T11:00:00Z',
-    destinationArea: 'Muntinlupa City',
-    pod_image_url: '/test-pod.png',
-    uploaded_by: 'EMP-004',
-    uploaded_date: '2026-08-21T11:00:00Z'
-  },
-  {
-    id: 'WB-CHK-010',
-    waybillNumber: 'WAY-2026-109',
-    clientCode: 'CLI-010',
-    deliveryDate: '2026-08-21',
-    status: 'For Checking',
-    hasOriginalPOD: false,
-    hasApprovedCTC: false,
-    encodedBy: 'EMP-004',
-    encodedAt: '2026-08-21T12:00:00Z',
-    destinationArea: 'Marikina City',
-    pod_image_url: '/test-pod.png',
-    uploaded_by: 'EMP-004',
-    uploaded_date: '2026-08-21T12:00:00Z'
-  }
-
-];
 
 
 // ─── Invoices ─────────────────────────────────────────────────────
@@ -433,24 +186,8 @@ export interface Invoice {
   proofFileUrl?: string;
 }
 
-export const SEEDED_INVOICES: Invoice[] = [
-  {
-    id: 'INV-001',
-    invoiceNumber: 'INV-2026-0001',
-    clientId: 'CLI-001',
-    waybillIds: ['WB-001'],
-    amount: 50000,
-    vatAmount: 6000,
-    surchargeAmount: 0,
-    totalAmount: 56000,
-    billingSchedule: 'Monthly',
-    billingPeriod: 'August 2026',
-    status: 'Finalized',
-    createdBy: 'EMP-003',
-    createdAt: '2026-08-13T09:00:00Z',
-    dueDate: '2026-09-13T00:00:00Z'
-  }
-];
+export const SEEDED_INVOICES: Invoice[] = [];
+
 
 // ─── Payments ────────────────────────────────────────────────────
 

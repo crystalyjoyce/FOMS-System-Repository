@@ -207,8 +207,8 @@ def review_duplicate_alert(
 
     review = AIDuplicateReview(
         alert_id=alertId,
-        decision=request.decision,
-        justification=request.justification,
+        decision=body.decision,
+        justification=body.justification,
         reviewed_by=reviewer_name,
         reviewed_role=reviewer_role,
         trace_id=str(uuid.uuid4())
@@ -244,7 +244,25 @@ async def scan_document(
     _validate_upload(file, file_bytes)
 
     result = process_scanned_document(db, file_bytes, file.filename, file.content_type)
-    
+
+    # Bug Fix #5: When the document is invalid, return HTTP 422 (Unprocessable Entity)
+    # so both the frontend's data-level gate (scanData.status) AND the HTTP-error
+    # safety-net branch (!res.ok) fire correctly. A random personal photo must never
+    # reach the duplicate-detection stage or show a match score.
+    if result.get("status") == "INVALID_DOCUMENT":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "success": False,
+                "status": "INVALID_DOCUMENT",
+                "reason_code": result.get("reason_code", "INVALID_DOCUMENT"),
+                "message": result.get("message", "Only official receipts, invoices, billing statements, or payment-related finance documents are allowed."),
+                "extracted": result.get("extracted", {}),
+                "duplicate": False,
+                "confidence": result.get("confidence", 0.0),
+            }
+        )
+
     return MessageResponse(
         success=True,
         message=result["message"],

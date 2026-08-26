@@ -21,6 +21,7 @@ public class Invoice
     public decimal AmountPaid { get; set; }
     public decimal Balance { get; set; }
     public string PaymentStatus { get; set; } = "Unpaid"; // "Paid" | "Unpaid" | "Partially Paid" | "Overdue"
+    public string? PaymentValidationStatus { get; set; } // "Pending Validation" | "Validated" | "Rejected" | "Returned for Correction"
     public string AgingBucket { get; set; } = "Current"; // "Current" | "1-30" | "31-60" | "61-90" | "90+"
     public int DaysOverdue { get; set; }
     public string Description { get; set; } = string.Empty;

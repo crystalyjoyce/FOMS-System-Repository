@@ -18,4 +18,15 @@ public class Payment
     public string? Remarks { get; set; }
     public string RecordedBy { get; set; } = string.Empty;
     public string DateRecorded { get; set; } = string.Empty;
+
+    // SpeedPay & Finance Validation Fields
+    public string? SpeedPayReference { get; set; }
+    public string? PayMongoReference { get; set; }
+    public string PaymentStatus { get; set; } = "Pending Finance Validation";
+    public DateTime SubmittedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? ValidatedAt { get; set; }
+    public string? ValidatedBy { get; set; }
+    public DateTime? RejectedAt { get; set; }
+    public string? RejectedBy { get; set; }
+    public string? RejectionReason { get; set; }
 }

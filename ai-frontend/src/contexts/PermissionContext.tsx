@@ -3,6 +3,14 @@ import { useAuth } from './AuthContext';
 
 // Centralized permission matrix matching the RBAC specifications
 export const rolePermissions: Record<string, string[]> = {
+  "Finance Manager": [
+    "ai.dashboard.view",
+    "ai.duplicate.view",
+    "ai.duplicate.review",
+    "ai.collection.for_review",
+    "ai.reports.view",
+    "ai.audit.view",
+  ],
   "Financial Manager": [
     "ai.dashboard.view",
     "ai.duplicate.view",
@@ -30,6 +38,12 @@ export const rolePermissions: Record<string, string[]> = {
   "Coordinator": [
     "ai.dashboard.view_limited",
     "ai.duplicate.waybill.view",
+    "ai.collection.view",
+    "ai.collection.validate",
+  ],
+  "Assistant of Finance Manager": [
+    "ai.dashboard.view_limited",
+    "ai.reports.view_limited",
     "ai.collection.view",
     "ai.collection.validate",
   ],

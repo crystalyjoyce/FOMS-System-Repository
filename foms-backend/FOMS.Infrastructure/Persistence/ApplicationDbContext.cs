@@ -53,6 +53,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<ProcessedWebhookEvent> ProcessedWebhookEvents => Set<ProcessedWebhookEvent>();
     public DbSet<OfficialReceiptSequence> OfficialReceiptSequences => Set<OfficialReceiptSequence>();
     public DbSet<PayrollDeductionLine> PayrollDeductionLines => Set<PayrollDeductionLine>();
+    public DbSet<PaymentHistory> PaymentHistories => Set<PaymentHistory>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

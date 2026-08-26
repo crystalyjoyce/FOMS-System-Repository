@@ -14,7 +14,8 @@ from app.core.config import settings
 from app.models.database import Base, engine
 from app.api.routes import (
     duplicate_routes, collection_routes,
-    recommendation_routes, health_routes, dashboard_routes, auth_routes
+    recommendation_routes, health_routes, dashboard_routes, auth_routes,
+    payment_ai_routes
 )
 
 logging.basicConfig(level=logging.INFO, handlers=[logging.FileHandler("error.log"), logging.StreamHandler()])
@@ -138,4 +139,5 @@ app.include_router(dashboard_routes.router, prefix="/api/ai", tags=["global_ai"]
 app.include_router(duplicate_routes.router, prefix="/api/ai/duplicates", tags=["duplicates"])
 app.include_router(collection_routes.router, prefix="/api/ai/collection", tags=["collection"])
 app.include_router(recommendation_routes.router, prefix="/api/ai/recommendations", tags=["recommendations"])
+app.include_router(payment_ai_routes.router, prefix="/api/ai", tags=["payments"])
 app.include_router(health_routes.router, prefix="/health", tags=["health"])

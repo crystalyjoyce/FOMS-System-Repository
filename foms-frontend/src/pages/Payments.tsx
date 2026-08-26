@@ -316,7 +316,7 @@ export const Payments: React.FC = () => {
                 {isFinanceManager ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>VERIFIED BY</label>
-                    <input type="text" value={`${viewPayment.validatedBy || 'AFM'} on ${safeFormatDate(viewPayment.validatedAt || Date.now(), { month: 'numeric', day: 'numeric', year: 'numeric' })}`} disabled style={{ padding: '12px 16px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0F172A', background: '#F8FAFC', outline: 'none' }} />
+                    <input type="text" value={`${viewPayment.validatedBy || 'AFM'} on ${safeFormatDate(viewPayment.validatedAt || new Date(), { month: 'numeric', day: 'numeric', year: 'numeric' })}`} disabled style={{ padding: '12px 16px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0F172A', background: '#F8FAFC', outline: 'none' }} />
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -432,7 +432,7 @@ export const Payments: React.FC = () => {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>DATE ISSUED</label>
-                  <input type="text" value={safeFormatDate(viewPayment.recordedAt || Date.now())} disabled style={{ padding: '12px 16px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0F172A', background: '#F8FAFC', outline: 'none' }} />
+                  <input type="text" value={safeFormatDate(viewPayment.recordedAt || new Date())} disabled style={{ padding: '12px 16px', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '14px', color: '#0F172A', background: '#F8FAFC', outline: 'none' }} />
                 </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>

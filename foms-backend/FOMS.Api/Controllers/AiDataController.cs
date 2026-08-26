@@ -210,7 +210,7 @@ public class AiDataController : ApiControllerBase
                 amount = p.Amount,
                 paymentMethod = p.PaymentMethod,
                 referenceNumber = p.ReferenceNumber,
-                status = "Completed",
+                status = p.PaymentStatus,
                 date = p.PaymentDate
             })
             .ToListAsync();
