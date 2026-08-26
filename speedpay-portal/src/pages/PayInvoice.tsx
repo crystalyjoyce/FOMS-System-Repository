@@ -146,23 +146,6 @@ export const PayInvoice: React.FC = () => {
     setStep(4);
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const getMethodStyle = (method: string) => {
-    const isSelected = paymentMethod === method;
-    return {
-      flex: 1,
-      padding: '16px',
-      border: isSelected ? '2px solid #0EA5E9' : '1px solid #E2E8F0',
-      borderRadius: '8px',
-      background: isSelected ? '#F0F9FF' : '#FFF',
-      cursor: 'pointer',
-      textAlign: 'center' as const,
-      fontWeight: 600,
-      color: isSelected ? '#0EA5E9' : '#475569',
-      transition: 'all 0.2s'
-    };
-  };
-
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ fontFamily: '"Inter", sans-serif' }}>
       

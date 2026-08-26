@@ -46,6 +46,7 @@ public interface IApplicationDbContext
     DbSet<CashFlowTransaction> CashFlowTransactions { get; }
     DbSet<OfficialReceiptSequence> OfficialReceiptSequences { get; }
     DbSet<PayrollDeductionLine> PayrollDeductionLines { get; }
+    DbSet<PaymentHistory> PaymentHistories { get; }
 
     /// <summary>
     /// Stores processed PayMongo webhook event IDs for replay attack prevention.

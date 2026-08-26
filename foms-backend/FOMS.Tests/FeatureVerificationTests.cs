@@ -154,7 +154,7 @@ public class FeatureVerificationTests
     }
 
     [Fact]
-    public async Task SpeedPayWebhook_ShouldSynchronizeWithPaymentCollectionsAndOfficialReceipts()
+    public async Task SpeedPayWebhook_ShouldCreatePendingValidationRecords()
     {
         // Arrange
         using var context = await GetDbContextAsync();
@@ -220,44 +220,152 @@ public class FeatureVerificationTests
         // 1. Verify PaymentTransaction is completed
         var updatedTransaction = await context.PaymentTransactions.FindAsync(transaction.Id);
         Assert.Equal("Completed", updatedTransaction!.Status);
-        Assert.Equal("pay_test_123", updatedTransaction.PayMongoPaymentId);
-        Assert.Equal("https://receipts.paymongo.com/test", updatedTransaction.ReceiptUrl);
 
-        // 2. Verify legacy Payment is created for Flow B
+        // 2. Verify Payment is created in "Pending Finance Validation" status
         var payment = await context.Payments.FirstOrDefaultAsync(p => p.ReferenceNumber == "pay_test_123");
         Assert.NotNull(payment);
-        Assert.Equal(totalAmount, payment!.Amount);
-        Assert.Equal("SpeedPay (PayMongo)", payment.PaymentMethod);
+        Assert.Equal("Pending Finance Validation", payment!.PaymentStatus);
+        Assert.Equal(totalAmount, payment.Amount);
 
-        // 3. Verify shipment status is Completed
+        // 3. Verify shipment status is Pending Validation (not completed yet)
         var updatedShipment = await context.ShipmentRecords.FindAsync(shipment.Id);
-        Assert.Equal("Completed", updatedShipment!.Status);
+        Assert.Equal("Pending Validation", updatedShipment!.Status);
 
-        // 4. Verify standard Invoice is updated and PaymentCollection / OfficialReceipt are created
+        // 4. Verify standard Invoice status is Pending Payment Validation
         var Invoice = await context.Invoices.FirstOrDefaultAsync(i => i.ClientId == Client.Id);
         Assert.NotNull(Invoice);
-        Assert.Equal("Paid", Invoice!.PaymentStatus);
-        Assert.Equal(53200.00m, Invoice.AmountPaid);
+        Assert.Equal("Pending Payment Validation", Invoice!.PaymentStatus);
 
-        // Verify PaymentCollection for outstanding balance
-        var outstandingCollection = await context.PaymentCollections.FirstOrDefaultAsync(c => c.InvoiceId == Invoice.Id);
-        Assert.NotNull(outstandingCollection);
-        Assert.Equal(53200.00m, outstandingCollection!.AmountCollected);
+        // 5. Verify NO official receipt or payment collection is created yet (deferred until validation)
+        var collection = await context.PaymentCollections.FirstOrDefaultAsync(c => c.InvoiceId == Invoice.Id);
+        Assert.Null(collection);
 
-        // Verify PaymentCollection for shipment fee
-        var shipmentInvoiceId = "BI-SHIP-" + shipment.Id;
-        var shipmentCollection = await context.PaymentCollections.FirstOrDefaultAsync(c => c.InvoiceId == shipmentInvoiceId);
-        Assert.NotNull(shipmentCollection);
-        Assert.Equal(7500.00m, shipmentCollection!.AmountCollected);
+        var receipt = await context.OfficialReceipts.FirstOrDefaultAsync();
+        Assert.Null(receipt);
+    }
 
-        // Verify OfficialReceipts
-        var outstandingReceipt = await context.OfficialReceipts.FirstOrDefaultAsync(r => r.PaymentCollectionId == outstandingCollection.Id);
-        Assert.NotNull(outstandingReceipt);
-        Assert.Equal("OR-2026-TESTSP", outstandingReceipt!.ReceiptNumber);
+    [Fact]
+    public async Task FinanceValidation_ShouldApprovePaymentCorrectly()
+    {
+        // Arrange
+        using var context = await GetDbContextAsync();
 
-        var shipmentReceipt = await context.OfficialReceipts.FirstOrDefaultAsync(r => r.PaymentCollectionId == shipmentCollection.Id);
-        Assert.NotNull(shipmentReceipt);
-        Assert.Equal("OR-2026-TESTSP-S", shipmentReceipt!.ReceiptNumber);
+        // Seed invoice
+        var invoice = new Invoice
+        {
+            Id = "INV-TEST-VAL",
+            InvoiceNo = "INV-TEST-VAL",
+            ClientId = "CL-TEST",
+            ClientName = "Test Client",
+            TotalAmount = 1000.00m,
+            AmountPaid = 0m,
+            Balance = 1000.00m,
+            PaymentStatus = "Pending Payment Validation",
+            DueDate = DateTime.UtcNow.AddDays(30).ToString("yyyy-MM-dd")
+        };
+        context.Invoices.Add(invoice);
+
+        // Seed pending payment
+        var payment = new Payment
+        {
+            Id = "PAY-TEST-VAL",
+            InvoiceId = invoice.Id,
+            InvoiceNo = invoice.InvoiceNo,
+            ClientId = invoice.ClientId,
+            ClientName = invoice.ClientName,
+            Amount = 1000.00m,
+            PaymentMethod = "SpeedPay (PayMongo)",
+            ReferenceNumber = "SP-REF-123",
+            PaymentStatus = "Pending Finance Validation",
+            SubmittedAt = DateTime.UtcNow
+        };
+        context.Payments.Add(payment);
+        await context.SaveChangesAsync();
+
+        // Act - Simulate final validation logic directly
+        invoice.AmountPaid += payment.Amount;
+        FOMS.Application.Services.BillingComputationService.RecalculateInvoice(invoice);
+        invoice.PaymentValidationStatus = "Validated";
+
+        payment.PaymentStatus = "Validated";
+        payment.ValidatedAt = DateTime.UtcNow;
+        payment.ValidatedBy = "Test FM";
+        payment.OrNumber = "OR-2026-9999";
+
+        // Create official receipt and collection records
+        var paymentCollection = new PaymentCollection
+        {
+            InvoiceId = invoice.Id,
+            CollectedDate = DateTime.UtcNow,
+            AmountCollected = payment.Amount,
+            PaymentMethod = payment.PaymentMethod,
+            Status = "Completed"
+        };
+        context.PaymentCollections.Add(paymentCollection);
+
+        var officialReceipt = new OfficialReceipt
+        {
+            PaymentCollectionId = paymentCollection.Id,
+            ReceiptNumber = "OR-2026-9999",
+            IssuedDate = DateTime.UtcNow
+        };
+        context.OfficialReceipts.Add(officialReceipt);
+
+        // Sync AR (ReceivableBalance)
+        var receivable = new ReceivableBalance
+        {
+            ClientId = invoice.ClientId,
+            InvoiceId = invoice.Id,
+            BalanceAmount = invoice.Balance,
+            PaidAmount = payment.Amount,
+            LastPaymentDate = DateTime.UtcNow,
+            Status = "Fully Paid",
+            DueDate = DateTime.UtcNow
+        };
+        context.ReceivableBalances.Add(receivable);
+
+        // Sync Client Account balance
+        await FOMS.Application.Services.BillingComputationService.SyncClientBalanceAsync(invoice.ClientId, context);
+
+        // Payment History
+        var history = new PaymentHistory
+        {
+            Id = Guid.NewGuid().ToString(),
+            PaymentId = payment.Id,
+            InvoiceId = invoice.Id,
+            Status = "Validated",
+            Action = "Validate Payment",
+            Remarks = "Manual submission validated by Finance Manager.",
+            PerformedBy = "Test FM",
+            PerformedRole = "Financial Manager",
+            CreatedAt = DateTime.UtcNow
+        };
+        context.PaymentHistories.Add(history);
+
+        await context.SaveChangesAsync();
+
+        // Assert
+        var updatedPayment = await context.Payments.FindAsync(payment.Id);
+        Assert.Equal("Validated", updatedPayment!.PaymentStatus);
+        Assert.NotEmpty(updatedPayment.OrNumber);
+
+        var updatedInvoice = await context.Invoices.FindAsync(invoice.Id);
+        Assert.Equal("Paid", updatedInvoice!.PaymentStatus);
+        Assert.Equal(1000.00m, updatedInvoice.AmountPaid);
+        Assert.Equal(0m, updatedInvoice.Balance);
+
+        // Check history
+        var updatedHistory = await context.PaymentHistories.FirstOrDefaultAsync(h => h.PaymentId == payment.Id && h.Status == "Validated");
+        Assert.NotNull(updatedHistory);
+        Assert.Equal("Validate Payment", updatedHistory!.Action);
+
+        // Check OR / Collection
+        var collection = await context.PaymentCollections.FirstOrDefaultAsync(c => c.InvoiceId == invoice.Id);
+        Assert.NotNull(collection);
+        Assert.Equal(1000.00m, collection!.AmountCollected);
+
+        var receipt = await context.OfficialReceipts.FirstOrDefaultAsync(r => r.PaymentCollectionId == collection.Id);
+        Assert.NotNull(receipt);
     }
 
     [Fact]

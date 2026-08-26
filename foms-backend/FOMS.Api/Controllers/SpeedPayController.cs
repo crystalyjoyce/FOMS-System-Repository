@@ -92,13 +92,28 @@ public class SpeedPayController : ApiControllerBase
     {
         try
         {
-            var query = _context.PaymentTransactions.AsNoTracking();
+            var query = _context.Payments.AsNoTracking();
             if (!string.IsNullOrEmpty(clientId))
             {
-                query = query.Where(t => t.ClientId == clientId);
+                var cleanId = clientId.Replace("CA-", "").Replace("CL-", "");
+                query = query.Where(t => t.ClientId.Contains(cleanId));
             }
-            var transactions = await query.ToListAsync();
-            return Ok(transactions);
+            var payments = await query.OrderByDescending(p => p.SubmittedAt).ToListAsync();
+            
+            var mapped = payments.Select(p => new
+            {
+                id = p.Id,
+                invoiceId = p.InvoiceNo,
+                referenceNumber = p.ReferenceNumber,
+                paymentMethod = p.PaymentMethod,
+                submittedAt = p.SubmittedAt,
+                amount = p.Amount,
+                status = p.PaymentStatus == "Validated" ? "Completed" : p.PaymentStatus == "Rejected" ? "Rejected" : "Pending Validation",
+                receiptUrl = p.ProofImageUrl,
+                remarks = p.RejectionReason ?? p.Remarks
+            });
+
+            return Ok(mapped);
         }
         catch (Exception ex)
         {

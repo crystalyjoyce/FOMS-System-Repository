@@ -1,4 +1,5 @@
 import re
+import logging
 from typing import List, Dict, Tuple, Optional
 from rapidfuzz import fuzz
 from sqlalchemy.orm import Session
@@ -7,6 +8,8 @@ from app.schemas.schemas import WaybillDuplicateRequest, InvoiceDuplicateRequest
 from datetime import datetime
 from app.core.normalizer import normalize_reference, normalize_invoice
 from app.services.foms_client import FomsClient
+
+logger = logging.getLogger(__name__)
 
 def normalize_string(val: str) -> str:
     """
@@ -198,45 +201,112 @@ def check_speedpay_duplicate(db: Session, request: SpeedPayDuplicateRequest, fom
 
 def process_scanned_document(db: Session, file_bytes: bytes, filename: str, mime_type: str = "image/jpeg") -> Dict:
     """
-    Process document image using Gemini 2.5 Flash for OCR extraction and RapidFuzz for duplicate checking against PostgreSQL database.
+    Process document image using Gemini 2.5 Flash for OCR extraction and RapidFuzz for duplicate checking.
+
+    VALIDATION GATE: Document must be classified as a valid financial document before
+    duplicate detection runs. Random images, personal photos, and non-financial documents
+    are rejected here and do NOT proceed to duplicate matching.
     """
-    from app.services.ocr_service import extract_document_fields
+    from app.services.ocr_service import extract_document_fields, VALID_FINANCE_DOC_TYPES, INVALID_DOC_TYPES
     import uuid
 
-    # 1. OCR Field Extraction via Gemini 2.0 Flash
+    # ── Step 1: AI Document Classification via Gemini ─────────────────────────
     extracted = extract_document_fields(file_bytes, filename, mime_type)
-    
-    doc_type = extracted.get("documentType", "OFFICIAL_RECEIPT")
-    
-    # Only reject if Gemini explicitly classified the document as non-financial.
-    # Valid financial document types are always accepted, even if is_valid is missing.
-    valid_doc_types = {"OFFICIAL_RECEIPT", "INVOICE", "WAYBILL", "PROOF_OF_PAYMENT"}
-    is_financial_doc = doc_type in valid_doc_types
-    is_explicitly_invalid = (doc_type == "INVALID_DOCUMENT") or (
-        extracted.get("is_valid") is False and not is_financial_doc
+
+    doc_type = extracted.get("documentType", "INVALID_OR_UNRELATED_IMAGE")
+    is_valid_flag = extracted.get("is_valid", False)
+    confidence = float(extracted.get("confidence", 0.0))
+    gemini_unavailable = extracted.get("geminiUnavailable", False)
+
+    # ── Step 2: Validation Gate — stop here if document is not a finance doc ──
+    # Reject when ANY of the following is true:
+    #   a) Gemini is unavailable (cannot classify without AI — no auto-approval)
+    #   b) Gemini explicitly says is_valid = False
+    #   c) documentType is in the known invalid set
+    #   d) documentType is NOT in the valid finance set
+    #   e) Confidence is below the minimum threshold (0.70)
+
+    CONFIDENCE_THRESHOLD = 0.70
+
+    is_explicitly_invalid = (
+        gemini_unavailable
+        or not is_valid_flag
+        or doc_type in INVALID_DOC_TYPES
+        or doc_type == "NEEDS_GEMINI_REVIEW"
+        or (doc_type not in VALID_FINANCE_DOC_TYPES and doc_type != "NEEDS_GEMINI_REVIEW")
+        or (confidence > 0 and confidence < CONFIDENCE_THRESHOLD)
     )
 
     if is_explicitly_invalid:
+        # Determine reason and user message
+        if gemini_unavailable:
+            reason_code = "GEMINI_UNAVAILABLE"
+            user_message = (
+                "AI document classification is temporarily unavailable. "
+                "The duplicate scan has been stopped to prevent false results. "
+                "Please try again in a few minutes."
+            )
+        elif doc_type in INVALID_DOC_TYPES or not is_valid_flag:
+            reason_code = "INVALID_DOCUMENT"
+            user_message = (
+                "The uploaded image is not a valid financial document. "
+                "Only official receipts, invoices, billing statements, waybills, "
+                "or payment-related documents are accepted."
+            )
+        elif confidence > 0 and confidence < CONFIDENCE_THRESHOLD:
+            reason_code = "LOW_CONFIDENCE"
+            user_message = (
+                f"AI confidence ({confidence:.0%}) is below the required threshold. "
+                "The document could not be reliably classified. "
+                "Please upload a clearer image of the financial document."
+            )
+        else:
+            reason_code = "UNRECOGNIZED_DOCUMENT_TYPE"
+            user_message = (
+                "The uploaded file does not appear to be a supported financial document. "
+                "Accepted types: Official Receipt, Invoice, Billing Statement, Waybill, Proof of Payment."
+            )
+
+        logger.info(
+            f"[SCAN] Document rejected: type={doc_type} valid={is_valid_flag} "
+            f"confidence={confidence:.2f} reason={reason_code} file={filename}"
+        )
+
         return {
             "status": "INVALID_DOCUMENT",
             "is_valid": False,
-            "message": "INVALID DOCUMENT: The uploaded file is not a valid financial receipt, invoice, or waybill. Please upload a clear financial document.",
+            "reason_code": reason_code,
+            "message": user_message,
             "extracted": {
-                "documentType": "INVALID_DOCUMENT",
-                "documentNumber": "N/A - Non-Financial Image",
-                "clientName": "Unrecognized Document",
-                "amount": "0.00",
+                # ── Bug Fix #3: is_valid MUST be present so the frontend gate
+                # can evaluate `extracted.is_valid === false` correctly.
+                # Without this key the frontend receives `undefined`, not `false`,
+                # and the duplicate-scan gate silently passes — allowing random
+                # personal photos to show a duplicate result.
+                "is_valid": False,
+                "documentType": doc_type,
+                "documentNumber": None,
+                "clientName": None,
+                "amount": None,
                 "transactionDate": datetime.utcnow().strftime("%Y-%m-%d"),
-                "referenceNumber": "N/A"
+                "referenceNumber": None,
+                "validationMessage": extracted.get("validationMessage", user_message),
+                "geminiUnavailable": extracted.get("geminiUnavailable", False),
+                "geminiError": extracted.get("geminiError"),
             },
             "duplicate": False,
-            "confidence": 0
+            "confidence": confidence,
         }
+
+
 
     doc_num = extracted.get("documentNumber", f"DOC-{uuid.uuid4().hex[:6].upper()}")
     client_name = extracted.get("clientName", "Unknown Client")
     amount = extracted.get("amount", "0.00")
     tx_date = extracted.get("transactionDate", datetime.utcnow().strftime("%Y-%m-%d"))
+    # Bug Fix #2: `ref` was used inside the matched-record payload on line ~366
+    # but was never defined, causing a NameError that crashed the duplicate result.
+    ref = extracted.get("referenceNumber") or f"REF-{doc_num}"
 
 
     # 2. RapidFuzz check against existing matches in PostgreSQL

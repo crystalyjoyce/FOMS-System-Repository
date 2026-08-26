@@ -9,11 +9,11 @@ from typing import Dict, FrozenSet
 
 class Roles(str, Enum):
     """Official FOMS system roles — §3 of security specification."""
-    FINANCIAL_MANAGER = "Financial Manager"
+    FINANCIAL_MANAGER = "Finance Manager"
     HEAD_ACCOUNTANT = "Head Accountant"
     ACCOUNTANT = "Accountant"
     COORDINATOR = "Coordinator"
-    ASSISTANT_OF_FINANCIAL_MANAGER = "Assistant of Financial Manager"
+    ASSISTANT_OF_FINANCIAL_MANAGER = "Assistant of Finance Manager"
     CLIENT = "Client"
 
 

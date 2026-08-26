@@ -27,11 +27,11 @@ logger = logging.getLogger(__name__)
 
 # Valid FOMS roles — must match constants/roles.py
 _VALID_ROLES = {
-    "Financial Manager",
+    "Finance Manager",
     "Head Accountant",
     "Accountant",
     "Coordinator",
-    "Assistant of Financial Manager",
+    "Assistant of Finance Manager",
     "Client",
 }
 
