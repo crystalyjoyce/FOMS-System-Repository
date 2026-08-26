@@ -33,54 +33,31 @@ INVALID_DOC_TYPES = {
 
 # Gemini classification prompt — strict finance-document gate
 _CLASSIFICATION_PROMPT = """
-You are a strict financial document classifier for a Finance Operations Management System (FOMS).
+You are a finance document classifier for a Finance Operations Management System. Analyze the uploaded image or PDF and determine whether it is a valid financial document. Only classify it as valid if it clearly appears to be an invoice, official receipt, billing statement, statement of account, or payment receipt. If the image is a selfie, person photo, random picture, scenery, meme, unrelated screenshot, or any non-financial content, return INVALID_OR_UNRELATED_IMAGE. Do not guess. If there are no clear financial document indicators such as invoice number, receipt number, amount, company header, billing table, payment reference, or official receipt details, reject the file.
 
-Your ONLY job is to determine whether the uploaded image is a valid financial document.
-
-VALID FINANCIAL DOCUMENTS (classify as valid if the image clearly shows one of these):
-- Official Receipt (OR) — any receipt issued by a business for payment received, including handwritten ones
-- Sales Invoice or Billing Invoice — document billing a client for goods/services
-- Delivery Receipt, Waybill, or Airwaybill — logistics/delivery document with consignment number
-- Proof of Payment — bank slip, GCash screenshot, PayMaya confirmation, SpeedPay receipt, online banking confirmation
-- Billing Statement or Statement of Account — a summary of charges from a company to a client
-- Purchase Order or Payment Voucher — internal finance control documents
-
-REQUIRED financial document indicators (at least 2 must be present):
-- Invoice number / OR number / Receipt number / Waybill number / Reference number
-- Company name / Business name / Merchant header
-- Client name or customer name
-- Amount, Total, or Grand Total (numeric currency value)
-- Date of issue or transaction date
-- Payment method (cash, check, bank transfer, GCash, etc.)
-- Billing table or itemized charges
-- Official stamp, watermark, or signature field
-
-INVALID — reject and return INVALID_OR_UNRELATED_IMAGE if the image is:
-- A selfie, portrait, or any photo of a human face or person (even partially visible)
-- A photo of an animal, food, scenery, place, or object
-- A blank or nearly blank white/dark image
-- A meme, wallpaper, or decorative image
-- A screenshot of a social media app, gaming app, or entertainment platform
-- A school photo, ID photo, event photo
-- A diagram, flowchart, organizational chart, or technical schematic
-- A photo of a product (grocery item, appliance, clothing, etc.)
-- Any image where NO financial document indicators are visible
-
-STRICT RULE: Do NOT guess. Do NOT be lenient. If you cannot clearly identify at least 2 required financial document indicators listed above, return INVALID_OR_UNRELATED_IMAGE.
-
-Return ONLY a valid JSON object (no markdown, no extra text):
+Return ONLY a valid JSON object (no markdown, no extra text) matching this EXACT schema:
 {
-    "is_valid": true or false,
-    "documentType": "OFFICIAL_RECEIPT | INVOICE | BILLING_STATEMENT | WAYBILL | PROOF_OF_PAYMENT | STATEMENT_OF_ACCOUNT | INVALID_OR_UNRELATED_IMAGE",
-    "confidence": 0.0 to 1.0,
-    "documentNumber": "Extracted invoice/receipt/waybill/OR number, or null if not found",
-    "clientName": "Extracted client or company name, or null if not found",
-    "amount": "FINAL GRAND TOTAL / TOTAL AMOUNT only — never subtotal, VAT, or line-item. Return a numeric float string if clearly labeled, otherwise null",
-    "transactionDate": "YYYY-MM-DD format, or null if not found",
-    "referenceNumber": "Extracted reference/transaction ID, or null if not found",
-    "detectedFinancialIndicators": ["list", "of", "indicators", "found"],
-    "validationMessage": "Brief explanation of what was detected or why the document was rejected"
+  "documentType": "OFFICIAL_RECEIPT | INVOICE | BILLING_STATEMENT | PAYMENT_RECEIPT | STATEMENT_OF_ACCOUNT | INVALID_OR_UNRELATED_IMAGE | UNKNOWN_FINANCE_DOCUMENT",
+  "isAllowed": true or false,
+  "confidence": 0.0 to 1.0,
+  "detectedFields": {
+    "invoiceNumber": "string or null",
+    "officialReceiptNumber": "string or null",
+    "paymentReference": "string or null",
+    "companyName": "string or null",
+    "clientName": "string or null",
+    "amount": "string or null",
+    "dateIssued": "YYYY-MM-DD or null"
+  },
+  "reason": "Explain what was found or why it is rejected",
+  "shouldProceedToDuplicateScan": true or false
 }
+
+Rules:
+- If isAllowed is false, shouldProceedToDuplicateScan must be false.
+- If documentType is INVALID_OR_UNRELATED_IMAGE, stop the scan (isAllowed=false).
+- If detectedFields are mostly null, stop the scan (isAllowed=false).
+- If image contains a person/photo but no finance fields, reject it (isAllowed=false, documentType=INVALID_OR_UNRELATED_IMAGE).
 """
 
 
@@ -141,24 +118,28 @@ def extract_document_fields(file_bytes: bytes, filename: str, mime_type: str = "
                     extracted = json.loads(candidate_text)
 
                     doc_type = extracted.get("documentType", "INVALID_OR_UNRELATED_IMAGE")
-                    is_valid_flag = extracted.get("is_valid", False)
+                    is_allowed_flag = extracted.get("isAllowed", False)
                     confidence = float(extracted.get("confidence", 0.0))
 
-                    # Final gate: override is_valid based on doc type and confidence
-                    if doc_type in VALID_FINANCE_DOC_TYPES and is_valid_flag and confidence >= 0.70:
-                        extracted["is_valid"] = True
-                    elif doc_type in INVALID_DOC_TYPES or not is_valid_flag or confidence < 0.70:
-                        extracted["is_valid"] = False
+                    # Final gate: override isAllowed based on doc type and confidence
+                    if doc_type in VALID_FINANCE_DOC_TYPES and is_allowed_flag and confidence >= 0.75:
+                        extracted["isAllowed"] = True
+                    elif doc_type in INVALID_DOC_TYPES or not is_allowed_flag or confidence < 0.75:
+                        extracted["isAllowed"] = False
+                        extracted["shouldProceedToDuplicateScan"] = False
+                        
                         # Normalise invalid doc type to standard value
                         if doc_type not in INVALID_DOC_TYPES:
                             extracted["documentType"] = "INVALID_OR_UNRELATED_IMAGE"
-                        extracted["documentNumber"] = None
-                        extracted["clientName"] = None
-                        extracted["amount"] = None
-                        extracted["referenceNumber"] = None
+                        
+                        if "detectedFields" not in extracted:
+                            extracted["detectedFields"] = {}
+                        
+                        for field in ["invoiceNumber", "officialReceiptNumber", "paymentReference", "companyName", "clientName", "amount", "dateIssued"]:
+                            extracted["detectedFields"][field] = None
 
                     logger.info(
-                        f"[OCR] Gemini classification: type={doc_type} valid={extracted['is_valid']} "
+                        f"[OCR] Gemini classification: type={doc_type} allowed={extracted.get('isAllowed')} "
                         f"confidence={confidence:.2f} file={filename}"
                     )
                     return extracted
@@ -202,20 +183,24 @@ def _gemini_unavailable_response(filename: str, reason: str) -> Dict[str, Any]:
     when we cannot visually inspect its content with AI.
     """
     return {
-        "is_valid": False,
+        "isAllowed": False,
         "documentType": "NEEDS_GEMINI_REVIEW",
         "confidence": 0.0,
-        "documentNumber": None,
-        "clientName": None,
-        "amount": None,
-        "transactionDate": datetime.utcnow().strftime("%Y-%m-%d"),
-        "referenceNumber": None,
-        "detectedFinancialIndicators": [],
-        "validationMessage": (
+        "detectedFields": {
+            "invoiceNumber": None,
+            "officialReceiptNumber": None,
+            "paymentReference": None,
+            "companyName": None,
+            "clientName": None,
+            "amount": None,
+            "dateIssued": datetime.utcnow().strftime("%Y-%m-%d"),
+        },
+        "reason": (
             "AI document classification is temporarily unavailable. "
             "The duplicate scan has been stopped to prevent false results. "
             "Please try again in a few minutes or contact your system administrator."
         ),
+        "shouldProceedToDuplicateScan": False,
         "geminiUnavailable": True,
         "geminiError": reason[:300],
     }
