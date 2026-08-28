@@ -30,6 +30,70 @@ function statusBadge(status: string): React.CSSProperties {
   return { background: '#E0E7FF', color: '#3730A3' };
 }
 
+// ─── Mini Bar Chart ───────────────────────────────────────────────
+function BarChart({ data, color = '#6366F1', height = 120 }: { data: { label: string; value: number }[]; color?: string; height?: number }) {
+  const max = Math.max(...data.map(d => d.value), 1);
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height, padding: '0 4px' }}>
+      {data.map((d, i) => (
+        <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+          <div style={{ fontSize: 9, color: '#64748B', fontWeight: 700, textAlign: 'center' }}>
+            {d.value > 0 ? (d.value >= 1000 ? `₱${(d.value / 1000).toFixed(0)}k` : `₱${d.value}`) : ''}
+          </div>
+          <div
+            style={{
+              width: '100%',
+              background: `linear-gradient(180deg, ${color}, ${color}99)`,
+              borderRadius: '4px 4px 0 0',
+              height: `${(d.value / max) * (height - 30)}px`,
+              minHeight: d.value > 0 ? 4 : 0,
+              transition: 'height 0.4s ease',
+            }}
+          />
+          <div style={{ fontSize: 9, color: '#94A3B8', fontWeight: 600, textAlign: 'center', lineHeight: 1.2 }}>{d.label}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Mini Donut Chart ──────────────────────────────────────────────
+function DonutChart({ segments, size = 100 }: { segments: { label: string; value: number; color: string }[]; size?: number }) {
+  const total = segments.reduce((s, d) => s + d.value, 0) || 1;
+  const r = size / 2 - 10;
+  const cx = size / 2;
+  const cy = size / 2;
+  const strokeWidth = 16;
+  let cumulative = 0;
+
+  const arcs = segments.map(seg => {
+    const pct = seg.value / total;
+    const startAngle = cumulative * 2 * Math.PI - Math.PI / 2;
+    cumulative += pct;
+    const endAngle = cumulative * 2 * Math.PI - Math.PI / 2;
+    const x1 = cx + r * Math.cos(startAngle);
+    const y1 = cy + r * Math.sin(startAngle);
+    const x2 = cx + r * Math.cos(endAngle);
+    const y2 = cy + r * Math.sin(endAngle);
+    const largeArc = pct > 0.5 ? 1 : 0;
+    return { ...seg, d: pct > 0.001 ? `M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2}` : '' };
+  });
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="#F1F5F9" strokeWidth={strokeWidth} />
+      {arcs.map((arc, i) =>
+        arc.d ? (
+          <path key={i} d={arc.d} fill="none" stroke={arc.color} strokeWidth={strokeWidth} strokeLinecap="round" />
+        ) : null
+      )}
+      <text x={cx} y={cy + 5} textAnchor="middle" fontSize={12} fontWeight={800} fill="#0F172A">
+        {total}
+      </text>
+    </svg>
+  );
+}
+
 export const SpeedPay: React.FC = () => {
   const { toast } = useToast();
   const { invoices, clients, speedPay, addPayment } = useAppData();
@@ -145,10 +209,52 @@ export const SpeedPay: React.FC = () => {
     setShowProfileMenu(false);
   };
 
-  const handleSelectInvoice = (inv: Invoice) => {
-    const existing = speedPay.find(s =>
+  const clientRecentPayments = useMemo(() => {
+    if (!loggedInClient) return [];
+    return [...speedPay]
+      .filter(s => (s as any).clientId === loggedInClient.id || invoices.find(i => i.id === s.invoiceId)?.clientId === loggedInClient.id)
+      .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+  }, [loggedInClient, speedPay, invoices]);
+
+  // Client Dashboard Charts Data
+  const totalOutstanding = useMemo(() =>
+    clientInvoices.reduce((sum, i) => sum + (i.totalAmount ?? 0), 0),
+    [clientInvoices]
+  );
+  
+  const totalPaid = useMemo(() =>
+    clientRecentPayments.filter(p => p.status === 'Validated' as any || (p as any).status === 'Approved').reduce((sum, p) => sum + ((p as any).amountPaid ?? 0), 0),
+    [clientRecentPayments]
+  );
+
+  const monthlyData = useMemo(() => {
+    const months: { label: string; value: number }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date();
+      d.setMonth(d.getMonth() - i);
+      const label = d.toLocaleDateString('en-US', { month: 'short' });
+      const year = d.getFullYear();
+      const month = d.getMonth();
+      const value = clientRecentPayments
+        .filter(s => {
+          const sd = new Date((s as any).submittedAt);
+          return sd.getFullYear() === year && sd.getMonth() === month && (s.status === 'Validated' as any);
+        })
+        .reduce((sum, s) => sum + ((s as any).amountPaid ?? 0), 0);
+      months.push({ label, value });
+    }
+    return months;
+  }, [clientRecentPayments]);
+
+  const existingSubmissionsForInvoice = (inv: Invoice) => {
+    const sub = speedPay.find(s =>
       s.invoiceId === inv.id && (s.status === 'Pending Validation' || s.status === 'Rejected')
     );
+    return sub;
+  };
+
+  const handleSelectInvoice = (inv: Invoice) => {
+    const existing = existingSubmissionsForInvoice(inv);
     setFoundInvoice(inv);
     if (existing) { setExistingSubmission(existing); setReferenceNumber(existing.referenceNumber); setStep('submitted'); }
     else { setExistingSubmission(null); setStep('summary'); }
@@ -422,16 +528,68 @@ export const SpeedPay: React.FC = () => {
           <div style={{ maxWidth: 860, margin: '0 auto', width: '100%' }}>
             
             {step === 'dashboard' && dashTab === 'to_pay' && (
-              clientInvoices.length === 0 ? (
-                <Card>
-                  <div style={emptyState}>
-                    <i className="ti ti-checks" style={{ fontSize: 44, color: '#10B981', display: 'block', marginBottom: 10 }} />
-                    <p style={{ margin: 0, color: '#64748B', fontWeight: 600 }}>You have no outstanding invoices.</p>
+              <>
+                {/* ── Dashboard Charts ── */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+                  <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: 24, display: 'flex', alignItems: 'center', gap: 24 }}>
+                    <div style={{ flex: 1 }}>
+                      <h3 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 700, color: '#0F172A' }}>Outstanding vs Paid</h3>
+                      <p style={{ margin: '0 0 16px', fontSize: 13, color: '#64748B' }}>Your billing and payment overview.</p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#10B981' }} />
+                            <span style={{ fontSize: 13, color: '#475569', fontWeight: 600 }}>Total Paid</span>
+                          </div>
+                          <span style={{ fontSize: 13, color: '#0F172A', fontWeight: 700 }}>₱{totalPaid.toLocaleString('en-PH', { maximumFractionDigits: 0 })}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#F43F5E' }} />
+                            <span style={{ fontSize: 13, color: '#475569', fontWeight: 600 }}>Outstanding</span>
+                          </div>
+                          <span style={{ fontSize: 13, color: '#0F172A', fontWeight: 700 }}>₱{totalOutstanding.toLocaleString('en-PH', { maximumFractionDigits: 0 })}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ flexShrink: 0 }}>
+                      <DonutChart
+                        segments={[
+                          { label: 'Paid', value: totalPaid, color: '#10B981' },
+                          { label: 'Outstanding', value: totalOutstanding, color: '#F43F5E' },
+                        ]}
+                        size={120}
+                      />
+                    </div>
                   </div>
-                </Card>
-              ) : (
-                <div>
-                  <h2 style={{ margin: '0 0 20px', fontSize: '1.25rem', fontWeight: 800, color: '#0F172A' }}>Invoices to Pay</h2>
+
+                  <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: 24 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0F172A' }}>Monthly Payment Summary</h3>
+                        <p style={{ margin: '2px 0 0', fontSize: 12, color: '#94A3B8' }}>Your payment history over time</p>
+                      </div>
+                    </div>
+                    {monthlyData.every(d => d.value === 0) ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 100, color: '#94A3B8', gap: 8 }}>
+                        <span style={{ fontSize: 13 }}>No payment history yet</span>
+                      </div>
+                    ) : (
+                      <BarChart data={monthlyData} color="#6366F1" height={100} />
+                    )}
+                  </div>
+                </div>
+
+                {clientInvoices.length === 0 ? (
+                  <Card>
+                    <div style={emptyState}>
+                      <i className="ti ti-checks" style={{ fontSize: 44, color: '#10B981', display: 'block', marginBottom: 10 }} />
+                      <p style={{ margin: 0, color: '#64748B', fontWeight: 600 }}>You have no outstanding invoices.</p>
+                    </div>
+                  </Card>
+                ) : (
+                  <div>
+                    <h2 style={{ margin: '0 0 20px', fontSize: '1.25rem', fontWeight: 800, color: '#0F172A' }}>Invoices to Pay</h2>
                   {toPayGroups.map(([schedule, groupInvoices]) => (
                     <Card key={schedule} style={{ marginBottom: 24 }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
@@ -471,7 +629,8 @@ export const SpeedPay: React.FC = () => {
                     </Card>
                   ))}
                 </div>
-              )
+              )}
+              </>
             )}
 
             {step === 'dashboard' && dashTab === 'recent' && (

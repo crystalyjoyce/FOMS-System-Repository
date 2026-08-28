@@ -371,70 +371,70 @@ export function LoginPage() {
       {/* ── FORGOT PASSWORD MODAL ── */}
       {showForgotModal && (
         <div className="foms-modal-overlay" onClick={() => setShowForgotModal(false)}>
-          <div className="foms-modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
-            <div className="foms-modal-header">
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>Reset Password</h3>
-              <button className="foms-modal-close" onClick={() => setShowForgotModal(false)}>×</button>
-            </div>
-            <div className="foms-modal-body" style={{ padding: '20px' }}>
-              {forgotSuccess ? (
-                <div style={{ textAlign: 'center', padding: '10px 0' }}>
-                  <div style={{ fontSize: '40px', marginBottom: '10px' }}>✅</div>
-                  <h4 style={{ margin: '0 0 8px 0', fontSize: '16px', color: '#10B981' }}>Reset Request Sent</h4>
-                  <p style={{ fontSize: '14px', color: '#4B5563', lineHeight: '1.5' }}>
-                    If an account matching <strong>{forgotEmpId}</strong> exists, password reset instructions have been sent to your administrator.
-                  </p>
+          <div className="foms-modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px', padding: '32px' }}>
+            {forgotSuccess ? (
+              <div style={{ textAlign: 'center', padding: '10px 0' }}>
+                <div style={{ fontSize: '40px', marginBottom: '10px' }}>✅</div>
+                <h4 style={{ margin: '0 0 8px 0', fontSize: '16px', color: '#10B981' }}>Reset Request Sent</h4>
+                <p style={{ fontSize: '14px', color: '#4B5563', lineHeight: '1.5' }}>
+                  If an account matching <strong>{forgotEmpId}</strong> exists, password reset instructions have been sent to your administrator.
+                </p>
+                <button
+                  className="login-btn"
+                  style={{ marginTop: '24px', width: '100%' }}
+                  onClick={() => setShowForgotModal(false)}
+                >
+                  Return to Login
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleForgotSubmit}>
+                <h3 style={{ margin: '0 0 16px 0', fontSize: '24px', fontWeight: 600, color: '#1F2937' }}>
+                  Forgot your password
+                </h3>
+                <p style={{ fontSize: '13px', color: '#4B5563', margin: '0 0 24px 0', lineHeight: '1.5' }}>
+                  Please enter the email address you'd like your password reset information sent to
+                </p>
+                
+                <div className="login-field" style={{ marginBottom: '24px' }}>
+                  <label className="login-label" style={{ textTransform: 'none', letterSpacing: 'normal', fontSize: '12px', fontWeight: 600, color: '#4B5563' }}>
+                    Enter email address
+                  </label>
+                  <div className="login-input-wrap" style={{ padding: '0 14px' }}>
+                    <input
+                      type="text"
+                      className="login-input"
+                      style={{ height: '44px' }}
+                      value={forgotEmpId}
+                      onChange={(e) => {
+                        setForgotEmpId(e.target.value);
+                        setForgotError(null);
+                      }}
+                      autoFocus
+                    />
+                  </div>
+                  {forgotError && (
+                    <span className="login-field-error" style={{ marginTop: '6px', color: '#EF4444' }}>
+                      <AlertCircle size={13} /> {forgotError}
+                    </span>
+                  )}
+                </div>
+
+                <button type="submit" className="login-btn" style={{ background: '#1F2937', height: '44px', textTransform: 'none', letterSpacing: 'normal', fontSize: '14px', fontWeight: 500 }}>
+                  Request reset link
+                </button>
+
+                <div style={{ textAlign: 'center', marginTop: '24px' }}>
                   <button
-                    className="login-btn"
-                    style={{ marginTop: '16px', width: '100%' }}
+                    type="button"
                     onClick={() => setShowForgotModal(false)}
+                    style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: '13px', fontWeight: 600, cursor: 'pointer', padding: '8px' }}
                   >
-                    Return to Login
+                    Back To Login
                   </button>
                 </div>
-              ) : (
-                <form onSubmit={handleForgotSubmit}>
-                  <p style={{ fontSize: '14px', color: '#6B7280', margin: '0 0 16px 0', lineHeight: '1.5' }}>
-                    Enter your Employee ID or registered email address. We will verify your account and send password reset instructions to your system administrator.
-                  </p>
-                  <div className="login-field">
-                    <label className="login-label">Employee ID or Email</label>
-                    <div className="login-input-wrap">
-                      <span className="login-input-icon"><User size={16} /></span>
-                      <input
-                        type="text"
-                        className="login-input"
-                        placeholder="e.g. EMP-001 or user@speedex.ph"
-                        value={forgotEmpId}
-                        onChange={(e) => {
-                          setForgotEmpId(e.target.value);
-                          setForgotError(null);
-                        }}
-                        autoFocus
-                      />
-                    </div>
-                    {forgotError && (
-                      <span className="login-field-error" style={{ marginTop: '6px', color: '#EF4444' }}>
-                        <AlertCircle size={13} /> {forgotError}
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
-                    <button
-                      type="button"
-                      className="login-btn"
-                      style={{ background: '#F3F4F6', color: '#374151', flex: 1 }}
-                      onClick={() => setShowForgotModal(false)}
-                    >
-                      Cancel
-                    </button>
-                    <button type="submit" className="login-btn" style={{ flex: 1 }}>
-                      Submit Request
-                    </button>
-                  </div>
-                </form>
-              )}
-            </div>
+              </form>
+            )}
           </div>
         </div>
       )}

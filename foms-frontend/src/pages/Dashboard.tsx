@@ -481,6 +481,15 @@ export const Dashboard: React.FC = () => {
   const { user } = useAuth();
   if (!user) return null;
   const RoleDashboard = DASHBOARD_MAP[user.role];
+  if (!RoleDashboard) {
+    return (
+      <div style={{ padding: '40px', textAlign: 'center', color: '#64748B' }}>
+        <i className="ti ti-alert-circle" style={{ fontSize: '2rem', display: 'block', marginBottom: '12px' }} />
+        <p style={{ fontSize: '1rem', fontWeight: 600 }}>Dashboard not available for role: <strong>{user.role}</strong></p>
+        <p style={{ fontSize: '0.85rem' }}>Please contact your system administrator.</p>
+      </div>
+    );
+  }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <RoleDashboard />

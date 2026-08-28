@@ -16,8 +16,7 @@
    LEFT PANEL
 ═══════════════════════════════════════ */
 .login-left {
-  width: 40%;
-  max-width: 420px;
+  width: 50%;
   min-width: 340px;
   flex-shrink: 0;
   background: var(--sidebar-bg, #0B1437);
@@ -470,4 +469,50 @@
     align-items: flex-start;
     gap: 10px;
   }
+}
+
+/* ── Modals ── */
+.foms-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.foms-modal-content {
+  background: #ffffff;
+  border-radius: 12px;
+  width: 100%;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  position: relative;
+}
+
+.foms-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border, #E2E8F0);
+}
+
+.foms-modal-close {
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  color: var(--tt, #6B7280);
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+}
+
+.foms-modal-close:hover {
+  color: var(--tp, #0F172A);
 }

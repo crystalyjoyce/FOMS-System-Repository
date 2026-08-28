@@ -60,8 +60,23 @@ export interface FeatureHighlight {
   description: string;
 }
 
-export const FEATURE_HIGHLIGHTS: FeatureHighlight[] = [];
-
+export const FEATURE_HIGHLIGHTS: FeatureHighlight[] = [
+  {
+    step: 1,
+    title: 'Enter Credentials',
+    description: 'Use your assigned Employee ID and password to access the secure portal.'
+  },
+  {
+    step: 2,
+    title: 'Manage Receivables',
+    description: 'Create invoices, track customer accounts, and monitor outstanding balances.'
+  },
+  {
+    step: 3,
+    title: 'Track Collections',
+    description: 'Review real-time collection aging analytics, duplicates, and AI predictions.'
+  }
+];
 // ─── Session Config ───────────────────────────────────────────────
 
 export const SESSION_CONFIG = {
@@ -100,6 +115,7 @@ export interface Client {
 
 export const SEEDED_CLIENTS: Client[] = [];
 
+
 // ─── Billing Rates ────────────────────────────────────────────────
 
 export interface BillingRate {
@@ -116,7 +132,7 @@ export const SEEDED_RATES: BillingRate[] = [];
 
 // ─── Waybills ─────────────────────────────────────────────────────
 
-export type WaybillStatus = 'For Checking' | 'Validated' | 'Validated (CTC)' | 'Missing' | 'CTC Submitted' | 'Billed' | 'Failed' | 'Pending Validation';
+export type WaybillStatus = 'For Checking' | 'Validated' | 'Validated (CTC)' | 'Missing' | 'CTC Submitted' | 'Billed' | 'Failed' | 'Pending Validation' | 'Returned';
 
 export interface Waybill {
   id: string;
@@ -139,9 +155,12 @@ export interface Waybill {
   certification_date?: string;
   reason_for_missing?: string;
   invoiceId?: string | null;
+  notes?: string;
 }
 
 export const SEEDED_WAYBILLS: Waybill[] = [];
+
+
 
 // ─── Invoices ─────────────────────────────────────────────────────
 
@@ -169,12 +188,15 @@ export interface Invoice {
 
 export const SEEDED_INVOICES: Invoice[] = [];
 
+
 // ─── Payments ────────────────────────────────────────────────────
 
 export interface Payment {
   id: string;
   invoiceId: string;
+  invoiceNumber?: string;
   clientId: string;
+  clientName?: string;
   amount: number;
   paymentMethod: 'Check' | 'Cash' | 'Bank Transfer' | 'Online Bank Transfer' | 'GCash' | 'Maya';
   referenceNumber: string;
@@ -271,6 +293,8 @@ export const SEEDED_RECEIPTS: Receipt[] = [];
 export interface SpeedPaySubmission {
   id: string;
   invoiceId: string;
+  invoiceNumber?: string;
+  clientId?: string;
   clientName: string;
   clientEmail: string;
   paymentMethod: 'GCash' | 'Maya' | 'BDO Online' | 'BPI Online';
