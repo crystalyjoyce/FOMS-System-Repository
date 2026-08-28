@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using FOMS.Application.DTOs;
@@ -25,7 +25,7 @@ public class RolesController : ControllerBase
         return Ok(roles);
     }
 
-    [Authorize(Roles = "Accountant")]
+    [Authorize]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] RoleCreateDto request)
     {

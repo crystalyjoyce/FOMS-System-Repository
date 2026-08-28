@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using FOMS.Application.Interfaces;
@@ -28,7 +28,7 @@ public class ShipmentPricingController : ApiControllerBase
         return Ok(items);
     }
 
-    [Authorize(Roles = "Accountant,Bookkeeper")]
+    [Authorize]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] ShipmentPricing request)
     {

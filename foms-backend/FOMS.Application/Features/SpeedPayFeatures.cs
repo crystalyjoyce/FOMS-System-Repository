@@ -593,387 +593,124 @@ public static class SpeedPayFeatures
                 transaction.ReceiptUrl = receiptUrl;
                 transaction.UpdatedAt = DateTime.UtcNow;
 
-                // Generate SpeedPay Electronic Receipt (FR-017)
-                var receiptNumber = transaction.ReferenceOrNumber ?? await GenerateNextOrNumberAsync(_context, cancellationToken);
-                var receipt = new PaymentReceipt
-                {
-                    PaymentTransactionId = transaction.Id,
-                    ReceiptNumber = receiptNumber,
-                    GeneratedAt = DateTime.UtcNow
-                };
-                _context.PaymentReceipts.Add(receipt);
-
-                var settledInvoices = new List<(Invoice Inv, decimal Applied)>();
-                string? targetInvoiceNo = null;
-                decimal amountToApplyToInvoice = transaction.Amount;
-
-                // --- FLOW A: Invoice-level Checkout ---
+                // Find matching invoice
+                Invoice? invoice = null;
                 if (!string.IsNullOrEmpty(transaction.InvoiceNo))
                 {
-                    targetInvoiceNo = transaction.InvoiceNo;
-                    
-                    var invoice = await _context.Invoices.FirstOrDefaultAsync(i => i.InvoiceNo == transaction.InvoiceNo, cancellationToken);
-                    if (invoice != null)
-                    {
-                        invoice.AmountPaid += transaction.Amount;
-                        BillingComputationService.RecalculateInvoice(invoice);
-                        invoice.UpdatedBy = "SpeedPay Gateway";
-
-                        settledInvoices.Add((invoice, transaction.Amount));
-
-                        // Create legacy Payment record
-                        var payment = new Payment
-                        {
-                            OrNumber = receiptNumber,
-                            InvoiceId = invoice.Id,
-                            InvoiceNo = invoice.InvoiceNo,
-                            ClientId = invoice.ClientId,
-                            ClientName = invoice.ClientName,
-                            PaymentDate = DateTime.UtcNow.ToString("yyyy-MM-dd"),
-                            Amount = transaction.Amount,
-                            PaymentMethod = "SpeedPay (PayMongo)",
-                            ReferenceNumber = paymentId ?? ("SP-" + DateTime.UtcNow.Ticks.ToString().Substring(12, 6)),
-                            Remarks = "SpeedPay Online Checkout Completed",
-                            RecordedBy = "SpeedPay Gateway",
-                            DateRecorded = DateTime.UtcNow.ToString("yyyy-MM-dd")
-                        };
-                        _context.Payments.Add(payment);
-
-                        // TASK 12: Sync client balance authoritatively
-                        await BillingComputationService.SyncClientBalanceAsync(invoice.ClientId, _context, cancellationToken);
-                    }
-
-
+                    invoice = await _context.Invoices.FirstOrDefaultAsync(i => i.InvoiceNo == transaction.InvoiceNo, cancellationToken);
                 }
-                // --- FLOW B: Shipment-level Checkout ---
                 else
                 {
-                    Client? legacyClient = null;
-                    // Update Client Balances
-                    if (transaction.Client != null)
-                    {
-                        transaction.Client.CurrentBalance = Math.Max(0, transaction.Client.CurrentBalance - transaction.Amount);
-
-                        legacyClient = await _context.Clients
-                            .FirstOrDefaultAsync(c => c.BusinessName == transaction.Client.BusinessName, cancellationToken);
-                        if (legacyClient != null)
-                        {
-                            legacyClient.TotalPaid += transaction.Amount;
-                            legacyClient.CurrentBalance = Math.Max(0, legacyClient.CurrentBalance - transaction.Amount);
-                            legacyClient.LastTransaction = DateTime.UtcNow.ToString("MMM dd, yyyy");
-                        }
-                    }
-
-                    // Update Shipment Record status
-                    if (transaction.ShipmentRecord != null)
-                    {
-                        transaction.ShipmentRecord.Status = "Completed";
-                        amountToApplyToInvoice = transaction.Amount - transaction.ShipmentRecord.Cost;
-                    }
-
-                    // Create legacy Payment record for Flow B
-                    var matchingInvoice = await _context.Invoices
-                        .Where(i => i.ClientName == (transaction.Client != null ? transaction.Client.BusinessName : ""))
+                    invoice = await _context.Invoices
+                        .Where(i => i.ClientId == transaction.ClientId)
                         .OrderByDescending(i => i.DueDate)
                         .FirstOrDefaultAsync(cancellationToken);
-
-                    var payment = new Payment
-                    {
-                        OrNumber = receiptNumber,
-                        InvoiceId = matchingInvoice?.Id ?? ("SHIPMENT-" + transaction.ShipmentRecordId),
-                        InvoiceNo = matchingInvoice?.InvoiceNo ?? ("SHIPMENT-" + transaction.ShipmentRecordId),
-                        ClientId = legacyClient?.Id ?? (transaction.ClientId.Replace("CA-", "CL-")),
-                        ClientName = legacyClient?.Name ?? (transaction.Client?.Name ?? "Unknown Client"),
-                        PaymentDate = DateTime.UtcNow.ToString("yyyy-MM-dd"),
-                        Amount = transaction.Amount,
-                        PaymentMethod = "SpeedPay (PayMongo)",
-                        ReferenceNumber = paymentId ?? ("SP-" + DateTime.UtcNow.Ticks.ToString().Substring(12, 6)),
-                        Remarks = "SpeedPay Online Checkout Completed" + (transaction.ShipmentRecordId != null ? $" (Shipment {transaction.ShipmentRecordId})" : ""),
-                        RecordedBy = "SpeedPay Gateway",
-                        DateRecorded = DateTime.UtcNow.ToString("yyyy-MM-dd")
-                    };
-                    _context.Payments.Add(payment);
-
-                    // Settle legacy Invoices table
-                    if (amountToApplyToInvoice > 0 && transaction.Client != null)
-                    {
-                        var invoices = await _context.Invoices
-                            .Where(i => i.ClientName == transaction.Client.BusinessName && i.Balance > 0)
-                            .ToListAsync(cancellationToken);
-                        
-                        var remainingAmount = amountToApplyToInvoice;
-                        foreach (var inv in invoices)
-                        {
-                            if (remainingAmount <= 0) break;
-                            
-                            var applied = Math.Min(remainingAmount, inv.Balance);
-                            inv.AmountPaid += applied;
-                            inv.Balance -= applied;
-                            inv.PaymentStatus = inv.Balance == 0 ? "Paid" : "Partially Paid";
-                            inv.LastUpdated = DateTime.UtcNow.ToString("yyyy-MM-dd");
-                            inv.UpdatedBy = "SpeedPay Gateway";
-                            
-                            settledInvoices.Add((inv, applied));
-                            remainingAmount -= applied;
-                            
-                            if (targetInvoiceNo == null) targetInvoiceNo = inv.InvoiceNo;
-                        }
-                        amountToApplyToInvoice = remainingAmount;
-                    }
                 }
 
-                // --- Flow B Shipment Fee Billing Invoice, Payment Collection, and Official Receipt ---
-                if (transaction.ShipmentRecordId != null && transaction.ShipmentRecord != null)
+                // If shipment is attached, keep status pending until validated
+                if (transaction.ShipmentRecord != null)
                 {
-                    var shipmentInvoiceId = "BI-SHIP-" + transaction.ShipmentRecordId;
-                    var existingShipmentInvoice = await _context.Invoices.FirstOrDefaultAsync(i => i.Id == shipmentInvoiceId, cancellationToken);
-                    
-                    var subtotal = Math.Round(transaction.ShipmentRecord.Cost / 1.12m, 2);
-                    var vatAmount = BillingComputationService.ComputeVat(subtotal);
-                    var totalAmount = subtotal + vatAmount;
-
-                    if (existingShipmentInvoice == null)
-                    {
-                        existingShipmentInvoice = new Invoice
-                        {
-                            Id = shipmentInvoiceId,
-                            InvoiceNo = shipmentInvoiceId,
-                            ClientId = transaction.ClientId,
-                            BillingDate = DateTime.UtcNow.ToString("yyyy-MM-dd"),
-                            DueDate = DateTime.UtcNow.ToString("yyyy-MM-dd"),
-                            FreightCharges = subtotal,
-                            OtherCharges = 0m,
-                            Subtotal = subtotal,
-                            VatRate = BillingComputationService.VAT_RATE,
-                            VatAmount = vatAmount,
-                            TotalAmount = totalAmount,
-                            AmountPaid = totalAmount,
-                            Balance = 0m,
-                            PaymentStatus = "Paid",
-                            Description = $"SpeedPay delivery fee for shipment {transaction.ShipmentRecordId}",
-                            EncodedBy = "SpeedPay Gateway",
-                            DateEncoded = DateTime.UtcNow.ToString("yyyy-MM-dd"),
-                            LastUpdated = DateTime.UtcNow.ToString("yyyy-MM-dd"),
-                            UpdatedBy = "SpeedPay Gateway"
-                        };
-                        _context.Invoices.Add(existingShipmentInvoice);
-                    }
-                    else
-                    {
-                        existingShipmentInvoice.FreightCharges = subtotal;
-                        existingShipmentInvoice.Subtotal = subtotal;
-                        existingShipmentInvoice.VatRate = BillingComputationService.VAT_RATE;
-                        existingShipmentInvoice.VatAmount = vatAmount;
-                        existingShipmentInvoice.TotalAmount = totalAmount;
-                        existingShipmentInvoice.AmountPaid = totalAmount;
-                        existingShipmentInvoice.Balance = 0m;
-                        existingShipmentInvoice.PaymentStatus = "Paid";
-                        existingShipmentInvoice.LastUpdated = DateTime.UtcNow.ToString("yyyy-MM-dd");
-                        existingShipmentInvoice.UpdatedBy = "SpeedPay Gateway";
-                    }
-
-                    var shipmentCollectionExists = await _context.PaymentCollections.AnyAsync(c => c.InvoiceId == shipmentInvoiceId, cancellationToken);
-                    if (!shipmentCollectionExists)
-                    {
-                        var shipmentCollection = new PaymentCollection
-                        {
-                            InvoiceId = existingShipmentInvoice.Id,
-                            CollectedDate = DateTime.UtcNow,
-                            AmountCollected = existingShipmentInvoice.TotalAmount,
-                            PaymentMethod = "SpeedPay (PayMongo)",
-                            Status = "Completed"
-                        };
-                        _context.PaymentCollections.Add(shipmentCollection);
-
-                        var shipmentReceipt = new OfficialReceipt
-                        {
-                            PaymentCollectionId = shipmentCollection.Id,
-                            ReceiptNumber = receiptNumber + "-S",
-                            IssuedDate = DateTime.UtcNow
-                        };
-                        _context.OfficialReceipts.Add(shipmentReceipt);
-                    }
+                    // Keep shipment status as Pending validation
+                    transaction.ShipmentRecord.Status = "Pending Validation";
                 }
 
-                // --- Synchronize Settled Legacy Invoices to Standard Billing Invoices & Payment Collections ---
-                foreach (var settled in settledInvoices)
+                // Update Invoice to show payment is pending validation
+                if (invoice != null)
                 {
-                    var legacyInv = settled.Inv;
-                    var appliedAmt = settled.Applied;
-
-                    string settledInvoiceNo;
-                    var parts = legacyInv.InvoiceNo.Split('-');
-                    if (parts.Length >= 3)
-                    {
-                        settledInvoiceNo = $"BI-{parts[1]}-{parts[2]}";
-                    }
-                    else
-                    {
-                        settledInvoiceNo = legacyInv.InvoiceNo;
-                    }
-
-                    var billingInvoice = await _context.Invoices
-                        .FirstOrDefaultAsync(i => i.InvoiceNo == settledInvoiceNo, cancellationToken);
-
-                    if (billingInvoice == null)
-                    {
-                        billingInvoice = new Invoice
-                        {
-                            Id = settledInvoiceNo,
-                            InvoiceNo = settledInvoiceNo,
-                            ClientId = transaction.ClientId,
-                            BillingDate = legacyInv.BillingDate,
-                            DueDate = legacyInv.DueDate,
-                            FreightCharges = legacyInv.FreightCharges,
-                            OtherCharges = legacyInv.OtherCharges,
-                            Subtotal = legacyInv.Subtotal,
-                            VatRate = legacyInv.VatRate,
-                            VatAmount = legacyInv.VatAmount,
-                            Surcharge = legacyInv.Surcharge,
-                            TotalAmount = legacyInv.TotalAmount,
-                            AmountPaid = legacyInv.AmountPaid - appliedAmt, // amount paid before this webhook application
-                            PaymentStatus = "Unpaid",
-                            Description = legacyInv.Description ?? "Auto-generated from legacy invoice"
-                        };
-                        _context.Invoices.Add(billingInvoice);
-                    }
-
-                    billingInvoice.AmountPaid += appliedAmt;
-                    BillingComputationService.RecalculateInvoice(billingInvoice);
-
-                    // Sync Receivable
-                    var receivableClientId = billingInvoice.ClientId.StartsWith("CL-") 
-                        ? billingInvoice.ClientId.Replace("CL-", "CA-") 
-                        : billingInvoice.ClientId;
-                    DateTime.TryParse(billingInvoice.DueDate, out var parsedDue);
-                    var receivable = await _context.ReceivableBalances
-                        .FirstOrDefaultAsync(r => r.InvoiceId == billingInvoice.Id, cancellationToken);
-                    if (receivable != null)
-                    {
-                        receivable.BalanceAmount = billingInvoice.Balance;
-                        receivable.DueDate = parsedDue;
-                        _context.ReceivableBalances.Update(receivable);
-                    }
-                    else if (billingInvoice.Balance > 0)
-                    {
-                        receivable = new ReceivableBalance
-                        {
-                            ClientId = receivableClientId,
-                            InvoiceId = billingInvoice.Id,
-                            BalanceAmount = billingInvoice.Balance,
-                            DueDate = parsedDue
-                        };
-                        _context.ReceivableBalances.Add(receivable);
-                    }
-                    else if (receivable != null)
-                    {
-                        _context.ReceivableBalances.Remove(receivable);
-                    }
-
-                    var paymentCollection = new PaymentCollection
-                    {
-                        InvoiceId = billingInvoice.Id,
-                        CollectedDate = DateTime.UtcNow,
-                        AmountCollected = appliedAmt,
-                        PaymentMethod = "SpeedPay (PayMongo)",
-                        Status = "Completed"
-                    };
-                    _context.PaymentCollections.Add(paymentCollection);
-
-                    var officialReceipt = new OfficialReceipt
-                    {
-                        PaymentCollectionId = paymentCollection.Id,
-                        ReceiptNumber = receiptNumber,
-                        IssuedDate = DateTime.UtcNow
-                    };
-                    _context.OfficialReceipts.Add(officialReceipt);
+                    invoice.PaymentStatus = "Pending Payment Validation";
+                    invoice.PaymentValidationStatus = "Pending Validation";
+                    invoice.UpdatedBy = "SpeedPay Gateway";
+                    _context.Invoices.Update(invoice);
                 }
 
-                // --- Settle Remaining Outstanding standard Billing Invoices (Leftover Overpayments) ---
-                if (amountToApplyToInvoice > 0 && transaction.ClientId != null)
+                // Create Pending Payment record
+                var payment = new Payment
                 {
-                    // Flow B: Distribute outstanding balance across unpaid billing invoices
-                    var Invoices = await _context.Invoices
-                        .Where(i => i.ClientId == transaction.ClientId && i.PaymentStatus != "Paid")
-                        .OrderBy(i => i.DueDate)
-                        .ToListAsync(cancellationToken);
+                    Id = Guid.NewGuid().ToString(),
+                    OrNumber = string.Empty, // Generated upon final validation
+                    InvoiceId = invoice?.Id ?? string.Empty,
+                    InvoiceNo = invoice?.InvoiceNo ?? transaction.InvoiceNo ?? string.Empty,
+                    ClientId = invoice?.ClientId ?? transaction.ClientId ?? string.Empty,
+                    ClientName = invoice?.ClientName ?? "Unknown Client",
+                    PaymentDate = DateTime.UtcNow.ToString("yyyy-MM-dd"),
+                    Amount = transaction.Amount,
+                    PaymentMethod = "SpeedPay (PayMongo)",
+                    ReferenceNumber = paymentId ?? ("SP-" + DateTime.UtcNow.Ticks.ToString().Substring(12, 6)),
+                    Remarks = "SpeedPay Online Checkout Completed via PayMongo. Awaiting finance validation.",
+                    RecordedBy = "SpeedPay Gateway",
+                    DateRecorded = DateTime.UtcNow.ToString("yyyy-MM-dd"),
+                    SpeedPayReference = transaction.PayMongoCheckoutId,
+                    PayMongoReference = paymentId,
+                    PaymentStatus = "Pending Finance Validation",
+                    SubmittedAt = DateTime.UtcNow
+                };
+                _context.Payments.Add(payment);
 
-                    var remainingAmount = amountToApplyToInvoice;
-                    foreach (var bInv in Invoices)
-                    {
-                        if (remainingAmount <= 0) break;
+                // Add Payment History record
+                var history = new PaymentHistory
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    PaymentId = payment.Id,
+                    InvoiceId = invoice?.Id ?? string.Empty,
+                    Status = "Pending Validation",
+                    Action = "Payment Submitted",
+                    Remarks = "SpeedPay payment completed via PayMongo. Awaiting finance validation.",
+                    PerformedBy = "System",
+                    PerformedRole = "Client",
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.PaymentHistories.Add(history);
 
-                        var balance = bInv.TotalAmount - bInv.AmountPaid;
-                        if (balance <= 0) continue;
+                // Create Notifications for Financial Manager and Head Accountant
+                var notifFm = new Notification
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Type = "PAYMENT_VALIDATION_REQUIRED",
+                    Title = "Payment Needs Validation",
+                    Description = $"A SpeedPay payment for Invoice {invoice?.InvoiceNo ?? transaction.InvoiceNo} is pending finance validation.",
+                    InvoiceNo = invoice?.InvoiceNo ?? transaction.InvoiceNo,
+                    RecipientRole = "Financial Manager",
+                    RelatedPaymentId = payment.Id,
+                    RelatedInvoiceId = invoice?.Id,
+                    Read = false,
+                    Date = DateTime.UtcNow.ToString("yyyy-MM-dd"),
+                    Timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"),
+                    Source = "SpeedPay Gateway"
+                };
+                _context.Notifications.Add(notifFm);
 
-                        var applied = Math.Min(remainingAmount, balance);
-                        bInv.AmountPaid += applied;
-                        BillingComputationService.RecalculateInvoice(bInv);
+                var notifHa = new Notification
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Type = "PAYMENT_VALIDATION_REQUIRED",
+                    Title = "Payment Needs Validation",
+                    Description = $"A SpeedPay payment for Invoice {invoice?.InvoiceNo ?? transaction.InvoiceNo} is pending finance validation.",
+                    InvoiceNo = invoice?.InvoiceNo ?? transaction.InvoiceNo,
+                    RecipientRole = "Head Accountant",
+                    RelatedPaymentId = payment.Id,
+                    RelatedInvoiceId = invoice?.Id,
+                    Read = false,
+                    Date = DateTime.UtcNow.ToString("yyyy-MM-dd"),
+                    Timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"),
+                    Source = "SpeedPay Gateway"
+                };
+                _context.Notifications.Add(notifHa);
 
-                        // Sync Receivable
-                        var receivableClientId = bInv.ClientId.StartsWith("CL-") 
-                            ? bInv.ClientId.Replace("CL-", "CA-") 
-                            : bInv.ClientId;
-                        DateTime.TryParse(bInv.DueDate, out var parsedDue);
-                        var receivable = await _context.ReceivableBalances
-                            .FirstOrDefaultAsync(r => r.InvoiceId == bInv.Id, cancellationToken);
-                        if (receivable != null)
-                        {
-                            receivable.BalanceAmount = bInv.Balance;
-                            receivable.DueDate = parsedDue;
-                            _context.ReceivableBalances.Update(receivable);
-                        }
-                        else if (bInv.Balance > 0)
-                        {
-                            receivable = new ReceivableBalance
-                            {
-                                ClientId = receivableClientId,
-                                InvoiceId = bInv.Id,
-                                BalanceAmount = bInv.Balance,
-                                DueDate = parsedDue
-                            };
-                            _context.ReceivableBalances.Add(receivable);
-                        }
-                        else if (receivable != null)
-                        {
-                            _context.ReceivableBalances.Remove(receivable);
-                        }
-
-                        var paymentCollection = new PaymentCollection
-                        {
-                            InvoiceId = bInv.Id,
-                            CollectedDate = DateTime.UtcNow,
-                            AmountCollected = applied,
-                            PaymentMethod = "SpeedPay (PayMongo)",
-                            Status = "Completed"
-                        };
-                        _context.PaymentCollections.Add(paymentCollection);
-
-                        var officialReceipt = new OfficialReceipt
-                        {
-                            PaymentCollectionId = paymentCollection.Id,
-                            ReceiptNumber = receiptNumber,
-                            IssuedDate = DateTime.UtcNow
-                        };
-                        _context.OfficialReceipts.Add(officialReceipt);
-
-                        remainingAmount -= applied;
-                    }
-                }
-
+                // Audit Log
                 var audit = new AuditLog
                 {
+                    Id = Guid.NewGuid().ToString(),
                     UserId = "SpeedPay Gateway",
-                    EntityName = "PaymentTransaction",
-                    EntityId = transaction.Id,
-                    Action = "Digital Payment Success",
-                    Details = $"SpeedPay transaction {transaction.Id} of {transaction.Amount} completed successfully. Receipt generated: {receiptNumber}.",
+                    EntityName = "Payment",
+                    EntityId = payment.Id,
+                    Action = "Digital Payment Submitted",
+                    Details = $"SpeedPay transaction {transaction.Id} of {transaction.Amount} completed on PayMongo. Created pending payment for invoice {invoice?.InvoiceNo ?? transaction.InvoiceNo}.",
                     LoggedAt = DateTime.UtcNow
                 };
                 await _context.AuditLogs.AddAsync(audit, cancellationToken);
 
                 await _context.SaveChangesAsync(cancellationToken);
-                return $"Success: Completed payment for transaction {transaction.Id}. Receipt generated: {receiptNumber}";
+                return $"Success: Submitted SpeedPay payment for transaction {transaction.Id}. Awaiting finance validation.";
             }
             else if (eventType == "checkout.failed" || eventType == "checkout.abandoned" || eventType == "payment.failed")
             {

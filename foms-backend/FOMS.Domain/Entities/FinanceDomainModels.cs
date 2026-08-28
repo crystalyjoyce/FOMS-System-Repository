@@ -108,6 +108,9 @@ public class ReceivableBalance
     public Invoice? Invoice { get; set; }
     public decimal BalanceAmount { get; set; }
     public DateTime DueDate { get; set; } = DateTime.UtcNow;
+    public decimal PaidAmount { get; set; } = 0m;
+    public string Status { get; set; } = "Active";
+    public DateTime? LastPaymentDate { get; set; }
 }
 
 public class AgingAccount

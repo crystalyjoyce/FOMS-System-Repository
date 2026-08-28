@@ -15,6 +15,7 @@ public interface IApplicationDbContext
     DbSet<Notification> Notifications { get; }
     DbSet<ShipmentRate> ShipmentRates { get; }
     DbSet<SpeedPayTransaction> SpeedPayTransactions { get; }
+    DbSet<SpeedPayManualSubmission> SpeedPayManualSubmissions { get; }
     DbSet<PaymentAdjustment> PaymentAdjustments { get; }
     DbSet<BankBalance> BankBalances { get; }
     DbSet<TransportationExpense> TransportationExpenses { get; }
@@ -45,6 +46,7 @@ public interface IApplicationDbContext
     DbSet<CashFlowTransaction> CashFlowTransactions { get; }
     DbSet<OfficialReceiptSequence> OfficialReceiptSequences { get; }
     DbSet<PayrollDeductionLine> PayrollDeductionLines { get; }
+    DbSet<PaymentHistory> PaymentHistories { get; }
 
     /// <summary>
     /// Stores processed PayMongo webhook event IDs for replay attack prevention.
