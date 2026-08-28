@@ -9,11 +9,11 @@ from typing import Dict, FrozenSet
 
 class Roles(str, Enum):
     """Official FOMS system roles — §3 of security specification."""
-    FINANCIAL_MANAGER = "Financial Manager"
+    FINANCIAL_MANAGER = "Finance Manager"
     HEAD_ACCOUNTANT = "Head Accountant"
     ACCOUNTANT = "Accountant"
     COORDINATOR = "Coordinator"
-    ASSISTANT_OF_FINANCIAL_MANAGER = "Assistant of Financial Manager"
+    ASSISTANT_OF_FINANCIAL_MANAGER = "Assistant of Finance Manager"
     CLIENT = "Client"
 
 
@@ -91,7 +91,7 @@ ROLE_PERMISSIONS: Dict[Roles, FrozenSet[Permissions]] = {
     Roles.ACCOUNTANT: frozenset([
         Permissions.DASHBOARD_VIEW,
         Permissions.DUPLICATE_VIEW,
-        # DUPLICATE_REVIEW removed — only Head Accountant & Financial Manager may review
+        Permissions.DUPLICATE_REVIEW,
         Permissions.DUPLICATE_SCAN,
         Permissions.COLLECTION_VIEW,
         Permissions.COLLECTION_GENERATE,
@@ -101,22 +101,18 @@ ROLE_PERMISSIONS: Dict[Roles, FrozenSet[Permissions]] = {
     ]),
 
     Roles.COORDINATOR: frozenset([
-        Permissions.DASHBOARD_VIEW,
         Permissions.DASHBOARD_VIEW_LIMITED,
-        Permissions.COLLECTION_VIEW,
         Permissions.DUPLICATE_WAYBILL_VIEW,
         Permissions.DUPLICATE_VIEW,
-        Permissions.DUPLICATE_SCAN,
+        Permissions.DUPLICATE_SCAN,  # Added for scanning waybills/PODs
     ]),
 
     Roles.ASSISTANT_OF_FINANCIAL_MANAGER: frozenset([
-        Permissions.DASHBOARD_VIEW,
         Permissions.DASHBOARD_VIEW_LIMITED,
-        Permissions.COLLECTION_VIEW,
         Permissions.REPORTS_VIEW_LIMITED,
         Permissions.AUDIT_VIEW_LIMITED,
-        Permissions.DUPLICATE_VIEW,
-        Permissions.DUPLICATE_SCAN,
+        Permissions.DUPLICATE_VIEW,  # Needed for checking liquidation supporting docs
+        Permissions.DUPLICATE_SCAN,  # Added for scanning liquidation receipts
     ]),
 
     Roles.CLIENT: frozenset([
@@ -134,8 +130,6 @@ DASHBOARD_FULL_ROLES = (
     Roles.FINANCIAL_MANAGER,
     Roles.HEAD_ACCOUNTANT,
     Roles.ACCOUNTANT,
-    Roles.COORDINATOR,
-    Roles.ASSISTANT_OF_FINANCIAL_MANAGER,
 )
 
 # Roles allowed limited dashboard view
@@ -156,11 +150,11 @@ DUPLICATE_CHECK_ROLES = (
     Roles.ASSISTANT_OF_FINANCIAL_MANAGER,
 )
 
-# Roles allowed to review/approve duplicate alerts (manual review)
-# Restricted to senior finance roles only — Head Accountant & Financial Manager
+# Roles allowed to review duplicate alerts
 DUPLICATE_REVIEW_ROLES = (
     Roles.FINANCIAL_MANAGER,
     Roles.HEAD_ACCOUNTANT,
+    Roles.ACCOUNTANT,
 )
 
 # Roles allowed to scan documents (OCR)

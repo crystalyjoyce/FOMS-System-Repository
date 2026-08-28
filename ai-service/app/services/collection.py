@@ -12,17 +12,6 @@ def calculate_collection_priorities(db: Session, foms_client: FomsClient, trace_
     Generates a new AICollectionRun and ranks invoices.
     """
     ar_data = foms_client.get_accounts_receivable()
-    if not ar_data:
-        invoices = foms_client.get_invoices()
-        ar_data = [
-            {
-                "invoiceId": inv.get("invoiceNo", inv.get("id")),
-                "clientId": inv.get("clientName", inv.get("clientId", "UNKNOWN")),
-                "outstandingBalance": float(inv.get("balance", inv.get("amount", 0))),
-                "dueDate": str(inv.get("dueDate", ""))
-            }
-            for inv in invoices
-        ]
     collection_history = foms_client.get_collection_history()
     
     # Map collection history by invoiceId

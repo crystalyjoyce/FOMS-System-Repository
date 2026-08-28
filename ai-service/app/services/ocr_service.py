@@ -9,50 +9,76 @@ from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
+# Document types that are valid financial documents
+VALID_FINANCE_DOC_TYPES = {
+    "OFFICIAL_RECEIPT",
+    "INVOICE",
+    "BILLING_STATEMENT",
+    "WAYBILL",
+    "PROOF_OF_PAYMENT",
+    "PAYMENT_RECEIPT",
+    "STATEMENT_OF_ACCOUNT",
+}
+
+# Document types that explicitly signal an invalid upload
+INVALID_DOC_TYPES = {
+    "INVALID_DOCUMENT",
+    "INVALID_OR_UNRELATED_IMAGE",
+    "PERSON_PHOTO",
+    "SELFIE",
+    "NON_FINANCIAL_DOCUMENT",
+    "RANDOM_SCREENSHOT",
+    "UNKNOWN_IMAGE",
+}
+
+# Gemini classification prompt — strict finance-document gate
+_CLASSIFICATION_PROMPT = """
+You are a finance document classifier for a Finance Operations Management System. Analyze the uploaded image or PDF and determine whether it is a valid financial document. Only classify it as valid if it clearly appears to be an invoice, official receipt, billing statement, statement of account, or payment receipt. If the image is a selfie, person photo, random picture, scenery, meme, unrelated screenshot, or any non-financial content, return INVALID_OR_UNRELATED_IMAGE. Do not guess. If there are no clear financial document indicators such as invoice number, receipt number, amount, company header, billing table, payment reference, or official receipt details, reject the file.
+
+Return ONLY a valid JSON object (no markdown, no extra text) matching this EXACT schema:
+{
+  "documentType": "OFFICIAL_RECEIPT | INVOICE | BILLING_STATEMENT | PAYMENT_RECEIPT | STATEMENT_OF_ACCOUNT | INVALID_OR_UNRELATED_IMAGE | UNKNOWN_FINANCE_DOCUMENT",
+  "isAllowed": true or false,
+  "confidence": 0.0 to 1.0,
+  "detectedFields": {
+    "invoiceNumber": "string or null",
+    "officialReceiptNumber": "string or null",
+    "paymentReference": "string or null",
+    "companyName": "string or null",
+    "clientName": "string or null",
+    "amount": "string or null",
+    "dateIssued": "YYYY-MM-DD or null"
+  },
+  "reason": "Explain what was found or why it is rejected",
+  "shouldProceedToDuplicateScan": true or false
+}
+
+Rules:
+- If isAllowed is false, shouldProceedToDuplicateScan must be false.
+- If documentType is INVALID_OR_UNRELATED_IMAGE, stop the scan (isAllowed=false).
+- If detectedFields are mostly null, stop the scan (isAllowed=false).
+- If image contains a person/photo but no finance fields, reject it (isAllowed=false, documentType=INVALID_OR_UNRELATED_IMAGE).
+"""
+
+
 def extract_document_fields(file_bytes: bytes, filename: str, mime_type: str = "image/jpeg") -> Dict[str, Any]:
     """
     Extracts structured financial document fields using Gemini 2.5 Flash Multimodal Vision API.
-    Falls back to a fallback heuristic extractor if GEMINI_API_KEY is not set or API is unreachable.
+
+    IMPORTANT: If Gemini is unavailable (quota, key error, network), this returns a
+    NEEDS_GEMINI_REVIEW response that BLOCKS the duplicate scan. We never auto-approve
+    a document when we cannot visually inspect its content.
     """
     gemini_api_key = os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
-    gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+    gemini_model = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
-    # If valid Gemini API key is configured, try the direct REST API-key flow first.
-    # This avoids the SDK authentication mismatch that can incorrectly send the key as an OAuth bearer token.
-    if gemini_api_key and gemini_api_key != "your_gemini_api_key_here":
+    if gemini_api_key and gemini_api_key not in ("your_gemini_api_key_here", ""):
         try:
-            prompt = """
-            Analyze this uploaded image carefully.
-            
-            Your task is to determine if this is an authentic financial document, and if so, extract its fields.
-            
-            CRITICAL VALIDATION RULE:
-            - You MUST REJECT (is_valid: false, documentType: INVALID_DOCUMENT) any image that is a photo of a person (selfie, portrait, face, human body), outdoor scenery, park, nature, animal, car, food, random object, non-financial screenshot, desktop wallpaper, meme, or blank image. Random photos are strictly prohibited.
-            
-            ACCEPT as valid (is_valid: true) ONLY if the image shows an authentic financial document:
-            - Official Receipt (OR) — receipt issued for payment received
-            - Sales Invoice or Billing Invoice
-            - Delivery Receipt or Waybill or Airwaybill
-            - Proof of Payment (bank slip, GCash, SpeedPay, or payment confirmation slip)
-            
-            Extract the following attributes in strict JSON format:
-            {
-                "is_valid": true or false,
-                "documentType": "OFFICIAL_RECEIPT | INVOICE | WAYBILL | PROOF_OF_PAYMENT | INVALID_DOCUMENT",
-                "documentNumber": "Extracted invoice/receipt/waybill/OR number (or null if not found)",
-                "clientName": "Extracted client or company name (or null if not found)",
-                "amount": "CRITICAL: Extract ONLY the FINAL GRAND TOTAL / TOTAL AMOUNT / TOTAL PAID / AMOUNT DUE value that is explicitly labeled TOTAL. Never return subtotal, VAT, discount, service charge, or any line-item amount. If the document shows only a subtotal and no clear TOTAL/GRAND TOTAL label, return null. Do not guess. Return a numeric float string only when the final total is clearly visible. Otherwise return null.",
-                "transactionDate": "YYYY-MM-DD format (or null if not found)",
-                "referenceNumber": "Extracted reference/transaction ID (or null if not found)",
-                "validationMessage": "Brief explanation of why the document was accepted or why it was rejected as invalid"
-            }
-            """
-
             # Handle mime type fallback
             if not mime_type or mime_type == "application/octet-stream":
-                if filename.endswith(".pdf"):
+                if filename.lower().endswith(".pdf"):
                     mime_type = "application/pdf"
-                elif filename.endswith(".png"):
+                elif filename.lower().endswith(".png"):
                     mime_type = "image/png"
                 else:
                     mime_type = "image/jpeg"
@@ -62,13 +88,14 @@ def extract_document_fields(file_bytes: bytes, filename: str, mime_type: str = "
                 "contents": [
                     {
                         "parts": [
-                            {"text": prompt},
+                            {"text": _CLASSIFICATION_PROMPT},
                             {"inlineData": {"mime_type": mime_type, "data": encoded_image}}
                         ]
                     }
                 ],
                 "generationConfig": {
-                    "responseMimeType": "application/json"
+                    "responseMimeType": "application/json",
+                    "temperature": 0.1  # Low temperature = more deterministic classification
                 }
             }
 
@@ -81,121 +108,99 @@ def extract_document_fields(file_bytes: bytes, filename: str, mime_type: str = "
 
             if response.status_code == 200:
                 result = response.json()
-                candidate_text = result.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text")
+                candidate_text = (
+                    result.get("candidates", [{}])[0]
+                    .get("content", {})
+                    .get("parts", [{}])[0]
+                    .get("text")
+                )
                 if candidate_text:
                     extracted = json.loads(candidate_text)
-                    if extracted.get("is_valid") is False or extracted.get("documentType") == "INVALID_DOCUMENT":
-                        extracted["is_valid"] = False
-                        extracted["documentType"] = "INVALID_DOCUMENT"
-                    elif extracted.get("documentType") in ["OFFICIAL_RECEIPT", "INVOICE", "WAYBILL", "PROOF_OF_PAYMENT"]:
-                        extracted["is_valid"] = True
-                    logger.info(f"Gemini extraction result: {extracted.get('documentType')} - Valid: {extracted.get('is_valid')}")
+
+                    doc_type = extracted.get("documentType", "INVALID_OR_UNRELATED_IMAGE")
+                    is_allowed_flag = extracted.get("isAllowed", False)
+                    confidence = float(extracted.get("confidence", 0.0))
+
+                    # Final gate: override isAllowed based on doc type and confidence
+                    if doc_type in VALID_FINANCE_DOC_TYPES and is_allowed_flag and confidence >= 0.75:
+                        extracted["isAllowed"] = True
+                    elif doc_type in INVALID_DOC_TYPES or not is_allowed_flag or confidence < 0.75:
+                        extracted["isAllowed"] = False
+                        extracted["shouldProceedToDuplicateScan"] = False
+                        
+                        # Normalise invalid doc type to standard value
+                        if doc_type not in INVALID_DOC_TYPES:
+                            extracted["documentType"] = "INVALID_OR_UNRELATED_IMAGE"
+                        
+                        if "detectedFields" not in extracted:
+                            extracted["detectedFields"] = {}
+                        
+                        for field in ["invoiceNumber", "officialReceiptNumber", "paymentReference", "companyName", "clientName", "amount", "dateIssued"]:
+                            extracted["detectedFields"][field] = None
+
+                    logger.info(
+                        f"[OCR] Gemini classification: type={doc_type} allowed={extracted.get('isAllowed')} "
+                        f"confidence={confidence:.2f} file={filename}"
+                    )
                     return extracted
+
+            elif response.status_code == 401:
+                raise RuntimeError(
+                    "Gemini authentication failed: the configured API key is invalid or expired. "
+                    "Update GEMINI_API_KEY with a valid Google AI Studio key."
+                )
             else:
-                if response.status_code == 401:
-                    raise RuntimeError("Gemini authentication failed: the configured API key is invalid or expired. Update GEMINI_API_KEY with a valid Google AI Studio key.")
-                raise RuntimeError(f"Gemini REST call failed with HTTP {response.status_code}: {response.text[:400]}")
+                raise RuntimeError(
+                    f"Gemini REST call failed with HTTP {response.status_code}: {response.text[:400]}"
+                )
 
         except Exception as e:
             err_str = str(e)
             if "RESOURCE_EXHAUSTED" in err_str or "429" in err_str:
-                logger.info("Gemini API quota exhausted (429). Using heuristic fallback for document extraction.")
+                logger.warning(
+                    "[OCR] Gemini API quota exhausted (429). "
+                    "Blocking scan — cannot classify document without AI inspection."
+                )
             else:
-                logger.warning(f"Gemini Flash extraction call failed: ({err_str}). Falling back to heuristic OCR parser.")
+                logger.warning(
+                    f"[OCR] Gemini extraction call failed: ({err_str}). "
+                    "Blocking scan — cannot auto-approve without Gemini."
+                )
+            # CRITICAL: Do NOT fall back to auto-approval.
+            # Return a blocked state so the scan pipeline stops.
+            return _gemini_unavailable_response(filename, err_str)
 
-    # Fallback heuristic parser based on filename & file content
-    return _fallback_heuristic_extraction(filename, file_bytes)
+    # No API key configured at all
+    logger.warning("[OCR] No GEMINI_API_KEY configured. Blocking scan — AI classification required.")
+    return _gemini_unavailable_response(filename, "No Gemini API key configured.")
 
 
-def _fallback_heuristic_extraction(filename: str, file_bytes: bytes) -> Dict[str, Any]:
+def _gemini_unavailable_response(filename: str, reason: str) -> Dict[str, Any]:
     """
-    Heuristic field extraction used when Gemini API is unavailable.
-    Inspects filename for financial document keywords vs non-document photo patterns.
-    Rejects generic non-document image uploads (selfies, random photos of people/landscapes).
+    Returned when Gemini is unavailable (quota exhausted, bad key, network error, not configured).
+
+    This response BLOCKS the duplicate scan pipeline. We never auto-approve a document
+    when we cannot visually inspect its content with AI.
     """
-    clean_name = filename.upper()
-    import hashlib
-
-    # Document type detection based on explicit financial keywords / indicators
-    valid_keywords = [
-        "OR", "RECEIPT", "INV", "INVOICE", "WB", "WBL", "WAYBILL",
-        "AIRWAYBILL", "BILL", "BILLING", "PAY", "PAYMENT", "SPEEDPAY",
-        "SLIP", "SO", "PO", "STATEMENT", "TAX", "DOC", "DOCUMENT",
-        "SCAN", "SCANNED", "WEBCAM", "TEST", "SAMPLE", "REC", "OR-TEST",
-        "INV-TEST", "WB-TEST"
-    ]
-    
-    # Generic photo / non-document patterns to reject (only when NO financial keywords present)
-    non_doc_patterns = [
-        r"\bSELFIE\b", r"\bPORTRAIT\b", r"\bPERSON\b", r"\bGIRL\b", r"\bBOY\b",
-        r"\bFACE\b", r"\bPARK\b", r"\bSCENERY\b", r"\bLANDSCAPE\b", r"\bWALLPAPER\b",
-        r"\bAVATAR\b", r"\bMEME\b", r"\bCAR\b", r"\bFOOD\b", r"\bANIMAL\b"
-    ]
-    
-    has_financial_keyword = any(kw in clean_name for kw in valid_keywords)
-    is_explicit_non_doc = any(re.search(pat, clean_name) for pat in non_doc_patterns)
-    
-    # Check if filename is a raw camera photo prefix with NO document keywords (e.g., IMG_1234.jpg, PXL_098.png, DSC_001.jpg)
-    is_raw_camera_photo = any(clean_name.startswith(prefix) for prefix in ["IMG_", "PXL_", "DSC_", "DCIM_", "PHOTO_"]) and not has_financial_keyword
-
-    # REJECT ONLY if it is an explicit non-document photo (selfie, park, portrait, face) OR a raw camera dump without document keywords
-    if is_explicit_non_doc or is_raw_camera_photo:
-        logger.warning(f"Rejecting uploaded non-financial image: {filename}")
-        return {
-            "is_valid": False,
-            "documentType": "INVALID_DOCUMENT",
-            "documentNumber": "N/A - Non-Financial Image",
-            "clientName": "Unrecognized Document",
-            "amount": "0.00",
-            "transactionDate": datetime.utcnow().strftime("%Y-%m-%d"),
-            "referenceNumber": "N/A",
-            "extractedRawText": f"Uploaded file '{filename}' does not contain recognized financial document structure or keywords.",
-            "validationMessage": "INVALID DOCUMENT: Uploaded file is a photo/image and does not contain valid financial document metadata (Official Receipt, Invoice, Waybill, Proof of Payment). Random pictures are strictly prohibited."
-        }
-
-    doc_type = "OFFICIAL_RECEIPT"
-    if "INV" in clean_name or "INVOICE" in clean_name:
-        doc_type = "INVOICE"
-    elif "WB" in clean_name or "WAYBILL" in clean_name:
-        doc_type = "WAYBILL"
-    elif "PAY" in clean_name or "SPEEDPAY" in clean_name:
-        doc_type = "PROOF_OF_PAYMENT"
-
-    # Deterministic hash from file bytes so scanning the SAME file/photo twice matches 100%
-    content_hash = hashlib.md5(file_bytes).hexdigest()
-    hash_num = int(content_hash[:6], 16) % 900000 + 100000
-
-    # Extract or generate document number from filename pattern or content hash
-    match = re.search(r'(OR|INV|WB|PAY)[-\s]?(?:TEST[-\s]?)?\d+', clean_name)
-    if match:
-        doc_num = match.group(0).replace(" ", "-")
-    else:
-        prefix = "OR-2026" if doc_type == "OFFICIAL_RECEIPT" else ("INV-2026" if doc_type == "INVOICE" else "WBL-2026")
-        doc_num = f"{prefix}-{hash_num}"
-
-    client_name = "Customer Name Not Read"
-    if "ABC" in clean_name:
-        client_name = "ABC Logistics Test Client"
-    elif "GLOBAL" in clean_name:
-        client_name = "Global Logistics Inc."
-    elif "CUSTOMER" in clean_name or "CLIENT" in clean_name:
-        client_name = filename.rsplit(".", 1)[0].replace("_", " ").title()
-
-    amount_match = re.search(
-        r'(?i)(?:grand\s+total|total\s+amount|total\s+paid|amount\s+due|total)(?:[^\d]*)(\d[\d,]*\.\d{2})',
-        clean_name,
-    )
-    amount = amount_match.group(1).replace(",", "") if amount_match else None
-
     return {
-        "is_valid": True,
-        "documentType": doc_type,
-        "documentNumber": doc_num,
-        "clientName": client_name,
-        "amount": amount,
-        "transactionDate": datetime.utcnow().strftime("%Y-%m-%d"),
-        "referenceNumber": f"REF-{doc_num}",
-        "extractedRawText": f"Extracted document metadata for {filename} ({doc_type})",
-        "warning": "OCR amount could not be read because Gemini quota is exhausted. Please check your Gemini billing/quota in Google AI Studio."
+        "isAllowed": False,
+        "documentType": "NEEDS_GEMINI_REVIEW",
+        "confidence": 0.0,
+        "detectedFields": {
+            "invoiceNumber": None,
+            "officialReceiptNumber": None,
+            "paymentReference": None,
+            "companyName": None,
+            "clientName": None,
+            "amount": None,
+            "dateIssued": datetime.utcnow().strftime("%Y-%m-%d"),
+        },
+        "reason": (
+            "AI document classification is temporarily unavailable. "
+            "The duplicate scan has been stopped to prevent false results. "
+            "Please try again in a few minutes or contact your system administrator."
+        ),
+        "shouldProceedToDuplicateScan": False,
+        "geminiUnavailable": True,
+        "geminiError": reason[:300],
     }
-

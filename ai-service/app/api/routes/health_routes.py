@@ -43,20 +43,3 @@ def readiness_check(db: Session = Depends(get_db)):
         "service": "FOMS AI Service"
     }
 
-@router.get("/foms-db")
-def foms_db_health():
-    from app.services.foms_client import FomsClient
-    client = FomsClient()
-    try:
-        invoices = client.get_invoices()
-        foms_status = "connected"
-    except Exception:
-        foms_status = "disconnected"
-
-    return {
-        "service": "ai-layer",
-        "status": "healthy" if foms_status == "connected" else "degraded",
-        "fomsDatabase": foms_status,
-        "accessMode": "read-only"
-    }
-
