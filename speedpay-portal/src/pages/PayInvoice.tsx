@@ -115,32 +115,16 @@ export const PayInvoice: React.FC = () => {
   const handleSubmitProof = async () => {
     if (!selectedInvoice) return;
 
-    // Always save to local context state first (instant feedback)
-    submitPayment(selectedInvoice.id, paymentMethod, referenceNo, selectedInvoice.amount);
-
-    // Send to real FOMS backend using the new submissions endpoint
-    const clientName = user?.name || user?.id || 'Unknown Client';
-    const clientId = user?.id || '';
-    try {
-      await fetch('/api/speedpay/submissions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          invoiceId: selectedInvoice.id,
-          invoiceNumber: selectedInvoice.invoiceNumber,
-          clientName,
-          clientId,
-          paymentMethod,
-          referenceNumber: referenceNo,
-          amountPaid: selectedInvoice.amount,
-          proofFileName: fileName || 'proof.jpg',
-          proofFileUrl: proofFileUrl,
-        })
-      });
-      console.log('[SpeedPay] Successfully submitted to FOMS backend');
-    } catch (err) {
-      console.warn('[SpeedPay] Could not sync to FOMS backend, stored locally only.', err);
-    }
+    // The context's submitPayment will now handle BOTH the local state update AND the backend API call,
+    // including the actual Base64 image instead of the placeholder.
+    submitPayment(
+      selectedInvoice.id, 
+      paymentMethod, 
+      referenceNo, 
+      selectedInvoice.amount, 
+      fileName || 'proof.jpg', 
+      proofFileUrl || `https://placehold.co/600x400?text=Proof+${referenceNo}`
+    );
 
     toast.success('Payment submitted for validation. You will receive an update once it is confirmed.', 'Payment Submitted');
     setStep(4);

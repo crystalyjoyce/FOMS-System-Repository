@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Eye, EyeOff, User, Lock, AlertCircle, Mail, Phone } from 'lucide-react';
 import { useClientContext } from '../context/ClientContext';
 import { useNavigate } from 'react-router-dom';
+import { useToast } from '../components/ToastContext';
 import './Login.css';
 
 interface FormErrors {
@@ -12,6 +13,7 @@ interface FormErrors {
 export const Login: React.FC = () => {
   const { login, createAccount, changePassword } = useClientContext();
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   const [clientId, setClientId] = useState('');
   const [password, setPassword] = useState('');
@@ -36,6 +38,7 @@ export const Login: React.FC = () => {
 
   // Change Password State
   const [changePasswordVal, setChangePasswordVal] = useState('');
+  const [showChangePasswordVal, setShowChangePasswordVal] = useState(false);
 
   const FEATURE_HIGHLIGHTS = [
     { step: '1', title: 'Secure Payment Gateway', description: 'Experience fast, reliable, and secure transactions powered by PayMongo.' },
@@ -90,7 +93,7 @@ export const Login: React.FC = () => {
       return;
     }
 
-    setGlobalSuccess('Account created successfully! You can now log in.');
+    toast.success('Account created successfully! You can now log in.');
     setClientId(newClientId.trim());
     setPassword('');
     setShowCreateAccount(false);
@@ -106,10 +109,11 @@ export const Login: React.FC = () => {
   const handleChangePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (changePasswordVal.length < 8) {
-      alert("Password must be at least 8 characters.");
+      toast.warning("Password must be at least 8 characters.");
       return;
     }
     changePassword(clientId.trim(), changePasswordVal);
+    toast.success('Password changed successfully.');
     setShowChangePassword(false);
     navigate('/');
   };
@@ -407,7 +411,22 @@ export const Login: React.FC = () => {
                 <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#374151', marginBottom: '6px', textTransform: 'uppercase' }}>New Password</label>
                 <div className="login-input-wrap">
                   <Lock size={16} className="login-input-icon" />
-                  <input type="password" minLength={8} className="login-input" required value={changePasswordVal} onChange={e => setChangePasswordVal(e.target.value)} placeholder="Minimum 8 characters" />
+                  <input 
+                    type={showChangePasswordVal ? 'text' : 'password'} 
+                    minLength={8} 
+                    className="login-input" 
+                    required 
+                    value={changePasswordVal} 
+                    onChange={e => setChangePasswordVal(e.target.value)} 
+                    placeholder="Minimum 8 characters" 
+                  />
+                  <button
+                    type="button"
+                    className="login-eye-btn"
+                    onClick={() => setShowChangePasswordVal((v) => !v)}
+                  >
+                    {showChangePasswordVal ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
                 </div>
               </div>
               
