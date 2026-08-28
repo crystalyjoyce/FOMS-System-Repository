@@ -41,6 +41,12 @@ var aiServiceApiKey = builder.Configuration["AI_SERVICE_API_KEY"] ?? "change-me"
 // Centralized permission matrix mapping as defined by the RBAC specification
 var RolePermissionsMatrix = new Dictionary<string, string[]>
 {
+    { "Finance Manager", new[] {
+        "ai.dashboard.view", "ai.duplicate.view", "ai.duplicate.review", "ai.duplicate.scan",
+        "ai.collection.view", "ai.collection.generate", "ai.collection.validate", 
+        "ai.recommendation.view", "ai.recommendation.decide", "ai.recommendation.export",
+        "ai.reports.view", "ai.reports.export", "ai.audit.view", "ai.system.health.view"
+    }},
     { "Financial Manager", new[] {
         "ai.dashboard.view", "ai.duplicate.view", "ai.duplicate.review", "ai.duplicate.scan",
         "ai.collection.view", "ai.collection.generate", "ai.collection.validate", 
@@ -59,6 +65,9 @@ var RolePermissionsMatrix = new Dictionary<string, string[]>
     }},
     { "Coordinator", new[] {
         "ai.dashboard.view_limited", "ai.duplicate.waybill.view", "ai.duplicate.view", "ai.duplicate.scan"
+    }},
+    { "Assistant of Finance Manager", new[] {
+        "ai.dashboard.view_limited", "ai.reports.view_limited", "ai.audit.view_limited", "ai.duplicate.view", "ai.duplicate.scan"
     }},
     { "Assistant of Financial Manager", new[] {
         "ai.dashboard.view_limited", "ai.reports.view_limited", "ai.audit.view_limited", "ai.duplicate.view", "ai.duplicate.scan"
@@ -171,7 +180,7 @@ app.Map("/{*path}", async (string? path, HttpContext context, IHttpClientFactory
     var pathLower = path.ToLowerInvariant();
 
     // 2. Enforce Authentication check
-    if (role == "Anonymous" && !pathLower.StartsWith("auth/login") && !pathLower.StartsWith("health"))
+    if (role == "Anonymous" && !pathLower.StartsWith("auth/login"))
     {
         context.Response.StatusCode = 401;
         await context.Response.WriteAsJsonAsync(new { code = "UNAUTHORIZED", message = "Authentication token is missing or invalid." });
@@ -240,6 +249,16 @@ app.Map("/{*path}", async (string? path, HttpContext context, IHttpClientFactory
         {
             requiredPermission = "ai.duplicate.view";
         }
+    }
+    else if (pathLower.StartsWith("payments/check-duplicate-reference"))
+    {
+        requiredPermission = "ai.duplicate.view";
+    }
+    else if (pathLower.StartsWith("payments/check-amount-mismatch") || 
+             pathLower.StartsWith("payments/validation-assist") || 
+             pathLower.StartsWith("payment-validation-alerts"))
+    {
+        requiredPermission = "ai.collection.view";
     }
     else if (pathLower.StartsWith("collection-reports") || pathLower.StartsWith("reports"))
     {
