@@ -62,6 +62,7 @@ public class SpeedPaySubmissionsController : ControllerBase
         var payment = new Payment
         {
             Id = submission.Id, // Link IDs directly for simple tracking
+            OrNumber = $"PENDING-{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}", // temp; replaced on validation
             InvoiceId = invoice.Id,
             InvoiceNo = invoice.InvoiceNo,
             ClientId = invoice.ClientId,
@@ -71,7 +72,7 @@ public class SpeedPaySubmissionsController : ControllerBase
             ReferenceNumber = submission.ReferenceNumber,
             ProofImageUrl = submission.ProofFileUrl,
             Remarks = "Manual payment submission proof uploaded.",
-            PaymentStatus = "Submitted", // Awaiting initial Accountant check
+            PaymentStatus = "Pending Validation", // Awaiting initial Accountant check
             SubmittedAt = DateTime.UtcNow,
             PaymentDate = DateTime.UtcNow.ToString("yyyy-MM-dd"),
             DateRecorded = DateTime.UtcNow.ToString("yyyy-MM-dd"),

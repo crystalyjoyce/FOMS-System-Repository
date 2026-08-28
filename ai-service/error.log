@@ -1822,3 +1822,97 @@ ERROR:foms_client:Error fetching from FOMS API /api/ai-data/accounts-receivable:
 ERROR:foms_client:Error fetching from FOMS API /api/ai-data/accounts-receivable: HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/ai-data/accounts-receivable?page=1&pageSize=100 (Caused by NewConnectionError("HTTPConnection(host='localhost', port=5000): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
 ERROR:foms_client:Error fetching from FOMS API /api/ai-data/accounts-receivable: HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/ai-data/accounts-receivable?page=1&pageSize=100 (Caused by NewConnectionError("HTTPConnection(host='localhost', port=5000): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
 ERROR:foms_client:Error fetching from FOMS API /api/ai-data/accounts-receivable: HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/ai-data/accounts-receivable?page=1&pageSize=100 (Caused by NewConnectionError("HTTPConnection(host='localhost', port=5000): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+INFO:app.main:Initializing AI Service...
+INFO:app.main:Creating database tables if they do not exist...
+INFO:app.main:DEBUG DB URI: postgresql://postgres:hanamarie@localhost:5432/foms_ai_db
+INFO:app.main:Database tables ready.
+INFO:app.main:Shutting down AI Service...
+INFO:app.main:Initializing AI Service...
+INFO:app.main:Creating database tables if they do not exist...
+INFO:app.main:DEBUG DB URI: postgresql://postgres:hanamarie@localhost:5432/foms_ai_db
+INFO:app.main:Database tables ready.
+INFO:app.main:Initializing AI Service...
+INFO:app.main:Creating database tables if they do not exist...
+INFO:app.main:DEBUG DB URI: postgresql://postgres:hanamarie@localhost:5432/foms_ai_db
+INFO:app.main:Database tables ready.
+INFO:app.main:Shutting down AI Service...
+INFO:app.main:Initializing AI Service...
+INFO:app.main:Creating database tables if they do not exist...
+INFO:app.main:DEBUG DB URI: postgresql://postgres:hanamarie@localhost:5432/foms_ai_db
+INFO:app.main:Database tables ready.
+INFO:app.main:Shutting down AI Service...
+INFO:app.main:Initializing AI Service...
+INFO:app.main:Creating database tables if they do not exist...
+INFO:app.main:DEBUG DB URI: postgresql://postgres:hanamarie@localhost:5432/foms_ai_db
+INFO:app.main:Database tables ready.
+ERROR:foms_client:Error fetching from FOMS API /api/ai-data/accounts-receivable: 401 Client Error: Unauthorized for url: http://localhost:5000/api/ai-data/accounts-receivable?page=1&pageSize=100
+ERROR:foms_client:Error fetching from FOMS API /api/ai-data/accounts-receivable: 401 Client Error: Unauthorized for url: http://localhost:5000/api/ai-data/accounts-receivable?page=1&pageSize=100
+INFO:app.main:Shutting down AI Service...
+INFO:app.main:Initializing AI Service...
+INFO:app.main:Creating database tables if they do not exist...
+INFO:app.main:DEBUG DB URI: postgresql://postgres:hanamarie@localhost:5432/foms_ai_db
+INFO:app.main:Database tables ready.
+INFO:app.main:Shutting down AI Service...
+INFO:app.main:Initializing AI Service...
+INFO:app.main:Creating database tables if they do not exist...
+INFO:app.main:DEBUG DB URI: postgresql://postgres:hanamarie@localhost:5432/foms_ai_db
+INFO:app.main:Database tables ready.
+INFO:app.main:Shutting down AI Service...
+INFO:app.main:Initializing AI Service...
+INFO:app.main:Creating database tables if they do not exist...
+INFO:app.main:DEBUG DB URI: postgresql://postgres:hanamarie@localhost:5432/foms_ai_db
+INFO:app.main:Database tables ready.
+ERROR:foms_client:Error fetching from FOMS API /api/ai-data/accounts-receivable: 401 Client Error: Unauthorized for url: http://localhost:5000/api/ai-data/accounts-receivable?page=1&pageSize=100
+ERROR:foms_client:Error fetching from FOMS API /api/ai-data/accounts-receivable: 401 Client Error: Unauthorized for url: http://localhost:5000/api/ai-data/accounts-receivable?page=1&pageSize=100
+ERROR:foms_client:Error fetching from FOMS API /api/ai-data/accounts-receivable: 401 Client Error: Unauthorized for url: http://localhost:5000/api/ai-data/accounts-receivable?page=1&pageSize=100
+ERROR:foms_client:Error fetching from FOMS API /api/ai-data/accounts-receivable: 401 Client Error: Unauthorized for url: http://localhost:5000/api/ai-data/accounts-receivable?page=1&pageSize=100
+ERROR:foms_client:Error fetching from FOMS API /api/ai-data/accounts-receivable: 401 Client Error: Unauthorized for url: http://localhost:5000/api/ai-data/accounts-receivable?page=1&pageSize=100
+ERROR:foms_client:Error fetching from FOMS API /api/ai-data/accounts-receivable: 401 Client Error: Unauthorized for url: http://localhost:5000/api/ai-data/accounts-receivable?page=1&pageSize=100
+ERROR:foms_client:Error fetching from FOMS API /api/ai-data/accounts-receivable: 401 Client Error: Unauthorized for url: http://localhost:5000/api/ai-data/accounts-receivable?page=1&pageSize=100
+ERROR:foms_client:Error fetching from FOMS API /api/ai-data/accounts-receivable: 401 Client Error: Unauthorized for url: http://localhost:5000/api/ai-data/accounts-receivable?page=1&pageSize=100
+ERROR:foms_client:Error fetching from FOMS API /api/ai-data/accounts-receivable: 401 Client Error: Unauthorized for url: http://localhost:5000/api/ai-data/accounts-receivable?page=1&pageSize=100
+ERROR:foms_client:Error fetching from FOMS API /api/ai-data/accounts-receivable: 401 Client Error: Unauthorized for url: http://localhost:5000/api/ai-data/accounts-receivable?page=1&pageSize=100
+WARNING:app.services.ocr_service:[OCR] Gemini extraction call failed: (Gemini REST call failed with HTTP 404: {
+  "error": {
+    "code": 404,
+    "message": "This model models/gemini-2.0-flash is no longer available. Please update your code to use models/gemini-3.6-flash for the latest features and improvements.",
+    "status": "NOT_FOUND"
+  }
+}
+). Blocking scan — cannot auto-approve without Gemini.
+INFO:app.services.duplicate_check:[SCAN] Document rejected: type=NEEDS_GEMINI_REVIEW allowed=False confidence=0.00 reason=GEMINI_UNAVAILABLE file=766319898_1715025806381824_669586738529465948_n.png
+WARNING:app.services.ocr_service:[OCR] Gemini extraction call failed: (Gemini REST call failed with HTTP 404: {
+  "error": {
+    "code": 404,
+    "message": "This model models/gemini-2.0-flash is no longer available. Please update your code to use models/gemini-3.6-flash for the latest features and improvements.",
+    "status": "NOT_FOUND"
+  }
+}
+). Blocking scan — cannot auto-approve without Gemini.
+INFO:app.services.duplicate_check:[SCAN] Document rejected: type=NEEDS_GEMINI_REVIEW allowed=False confidence=0.00 reason=GEMINI_UNAVAILABLE file=775567009_1069501755532401_543973577196879463_n (1).jpg
+WARNING:app.services.ocr_service:[OCR] Gemini extraction call failed: (Gemini REST call failed with HTTP 404: {
+  "error": {
+    "code": 404,
+    "message": "This model models/gemini-2.0-flash is no longer available. Please update your code to use models/gemini-3.6-flash for the latest features and improvements. We recommend you to use the Interactions API.",
+    "status": "NOT_FOUND"
+  }
+}
+). Blocking scan — cannot auto-approve without Gemini.
+INFO:app.services.duplicate_check:[SCAN] Document rejected: type=NEEDS_GEMINI_REVIEW allowed=False confidence=0.00 reason=GEMINI_UNAVAILABLE file=776200072_1742388346802728_5398883325903367462_n (1).jpg
+INFO:app.main:Initializing AI Service...
+INFO:app.main:Creating database tables if they do not exist...
+INFO:app.main:DEBUG DB URI: postgresql://postgres:hanamarie@localhost:5432/foms_ai_db
+INFO:app.main:Database tables ready.
+INFO:app.main:Shutting down AI Service...
+INFO:app.main:Initializing AI Service...
+INFO:app.main:Creating database tables if they do not exist...
+INFO:app.main:DEBUG DB URI: postgresql://postgres:hanamarie@localhost:5432/foms_ai_db
+INFO:app.main:Database tables ready.
+ERROR:foms_client:Error fetching from FOMS API /api/ai-data/accounts-receivable: HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/ai-data/accounts-receivable?page=1&pageSize=100 (Caused by NewConnectionError("HTTPConnection(host='localhost', port=5000): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+ERROR:foms_client:Error fetching from FOMS API /api/ai-data/accounts-receivable: HTTPConnectionPool(host='localhost', port=5000): Max retries exceeded with url: /api/ai-data/accounts-receivable?page=1&pageSize=100 (Caused by NewConnectionError("HTTPConnection(host='localhost', port=5000): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+INFO:app.services.ocr_service:[OCR] Gemini classification: type=OFFICIAL_RECEIPT allowed=True confidence=0.98 file=766319898_1715025806381824_669586738529465948_n.png
+INFO:app.services.ocr_service:[OCR] Gemini classification: type=OFFICIAL_RECEIPT allowed=True confidence=0.98 file=766319898_1715025806381824_669586738529465948_n.png
+INFO:app.services.ocr_service:[OCR] Gemini classification: type=INVALID_OR_UNRELATED_IMAGE allowed=False confidence=0.99 file=Screenshot 2024-03-22 183128.png
+INFO:app.services.duplicate_check:[SCAN] Document rejected: type=INVALID_OR_UNRELATED_IMAGE allowed=False confidence=0.99 reason=INVALID_DOCUMENT file=Screenshot 2024-03-22 183128.png
+INFO:app.services.ocr_service:[OCR] Gemini classification: type=INVALID_OR_UNRELATED_IMAGE allowed=False confidence=0.99 file=Screenshot 2024-03-22 183128.png
+INFO:app.services.duplicate_check:[SCAN] Document rejected: type=INVALID_OR_UNRELATED_IMAGE allowed=False confidence=0.99 reason=INVALID_DOCUMENT file=Screenshot 2024-03-22 183128.png

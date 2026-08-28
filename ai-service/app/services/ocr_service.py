@@ -70,7 +70,7 @@ def extract_document_fields(file_bytes: bytes, filename: str, mime_type: str = "
     a document when we cannot visually inspect its content.
     """
     gemini_api_key = os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
-    gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+    gemini_model = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
     if gemini_api_key and gemini_api_key not in ("your_gemini_api_key_here", ""):
         try:

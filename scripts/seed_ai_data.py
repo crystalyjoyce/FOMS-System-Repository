@@ -9,9 +9,12 @@ def seed_ai_data():
         conn = psycopg2.connect(CONN_STR)
         cur = conn.cursor()
         
+        cur.execute("TRUNCATE TABLE ai_collection_runs, ai_collection_priorities, ai_duplicate_alerts, ai_audit_events CASCADE;")
+        
         # Insert a collection run
         cur.execute("""
             INSERT INTO ai_collection_runs (as_of_date, model_version, status, record_count, generated_at, trace_id)
+
             VALUES (%s, %s, %s, %s, %s, %s) RETURNING id;
         """, (datetime.utcnow(), 'v1.0.0', 'Completed', 10, datetime.utcnow(), 'trace-12345'))
         run_id = cur.fetchone()[0]

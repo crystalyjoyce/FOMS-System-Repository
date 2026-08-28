@@ -1398,7 +1398,7 @@ export const DuplicateAlerts: React.FC = () => {
         {activeTab === 'scan' && (
           <div className="tab-pane fade-in">
             {/* Scan Step 0: Upload dropzone/Scan button console */}
-            {!extractionDone && checkingStep === 0 && (
+            {!extractionDone && checkingStep === 0 && scanResultMode === 'NONE' && (
               <div
                 className={`card ${dragActive ? 'drag-active' : ''}`}
                 style={{

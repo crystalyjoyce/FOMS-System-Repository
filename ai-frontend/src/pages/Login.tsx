@@ -2,15 +2,16 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Lock, User, KeyRound, Sparkles, ShieldCheck, HelpCircle, RefreshCw, Eye, EyeOff } from 'lucide-react';
+import { useToast } from '../components';
 
 export const Login: React.FC = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [selectedRole, setSelectedRole] = useState<string>('Financial Manager');
   const [username, setUsername] = useState<string>('EMP-001');
   const [password, setPassword] = useState<string>('Password@123');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
   const roles = [
@@ -52,13 +53,13 @@ export const Login: React.FC = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password.trim()) {
-      setError("Please fill in both Employee ID and password fields.");
+      toast.warning("Please fill in both Employee ID and password fields.");
       return;
     }
-    setError(null);
     setLoading(true);
     try {
       await login(username, password);
+      toast.success("Successfully logged in!");
       if (selectedRole === 'Client') {
         navigate('/unauthorized');
       } else {
@@ -66,9 +67,9 @@ export const Login: React.FC = () => {
       }
     } catch (e) {
       if (e instanceof Error) {
-        setError(e.message);
+        toast.error(e.message);
       } else {
-        setError("Invalid Employee ID or password. No account found with those credentials.");
+        toast.error("Invalid Employee ID or password. No account found with those credentials.");
       }
     } finally {
       setLoading(false);
@@ -246,12 +247,6 @@ export const Login: React.FC = () => {
           <p style={{ fontSize: '14px', color: 'var(--ts)', margin: '0 0 28px 0' }}>
             Enter your employee credentials below to connect to Speedex operations.
           </p>
-
-          {error && (
-            <div id="ai-login-error" className="advisory-banner danger" style={{ padding: '12px 16px', marginBottom: '24px', borderRadius: '10px', fontSize: '13.5px', boxSizing: 'border-box' }}>
-              <strong>Error:</strong> {error}
-            </div>
-          )}
 
           <form onSubmit={handleLogin}>
             {/* Employee ID */}

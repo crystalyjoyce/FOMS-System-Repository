@@ -264,8 +264,6 @@ const MainLayout: React.FC = () => {
             <Route path="profile" element={<Profile />} />
           </Routes>
         </main>
-
-        <ToastBar />
       </div>
     </div>
   );
@@ -293,6 +291,7 @@ function App() {
               <Route path="*" element={<Navigate to="/login" replace />} />
             </Routes>
           </Router>
+          <ToastBar />
         </ToastProvider>
       </PermissionProvider>
     </AuthProvider>

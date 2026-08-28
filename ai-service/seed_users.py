@@ -11,9 +11,9 @@ import sys
 # ── Config ─────────────────────────────────────────────────────────────────
 DB_CONFIG = {
     "host": "127.0.0.1",
-    "port": 5433,
-    "user": "foms_ai",
-    "password": "foms_ai_password",
+    "port": 5432,
+    "user": "postgres",
+    "password": "hanamarie",
     "dbname": "foms_ai_db"
 }
 
@@ -50,6 +50,7 @@ def main():
 
     # ── Create users table ───────────────────────────────────────────────────
     print("Creating 'users' table...")
+    cur.execute("DROP TABLE IF EXISTS users CASCADE;")
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id                  SERIAL PRIMARY KEY,

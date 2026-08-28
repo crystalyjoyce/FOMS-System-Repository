@@ -178,7 +178,33 @@ export const ClientProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   // Payment function
-  const submitPayment = (invoiceId: string, paymentMethod: 'GCash' | 'Maya' | 'Bank Transfer', referenceNo: string, amount: number) => {
+  const submitPayment = async (invoiceId: string, paymentMethod: 'GCash' | 'Maya' | 'Bank Transfer', referenceNo: string, amount: number, proofFileName?: string, proofFileUrl?: string) => {
+    
+    // Call the backend endpoint to persist payment manually
+    try {
+      const response = await fetch('/api/speedpay/submissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          InvoiceId: invoiceId,
+          ClientId: user?.id,
+          ClientName: user?.companyName ?? user?.name,
+          PaymentMethod: paymentMethod,
+          ReferenceNumber: referenceNo,
+          AmountPaid: amount,
+          ProofFileName: proofFileName || 'uploaded-proof.png',
+          ProofFileUrl: proofFileUrl || `https://placehold.co/600x400?text=Proof+${referenceNo}`
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to submit payment to backend');
+      }
+    } catch (err) {
+      console.error(err);
+      // Fallback or handle error if needed
+    }
+
     const newPayment: PaymentRecord = {
       id: `PAY-${Date.now()}`,
       invoiceId,

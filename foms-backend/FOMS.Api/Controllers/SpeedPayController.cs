@@ -84,6 +84,56 @@ public class SpeedPayController : ApiControllerBase
         }
     }
 
+    [AllowAnonymous]
+    [HttpPost("seed-client-invoices")]
+    public async Task<IActionResult> SeedClientInvoices([FromQuery] string clientId, [FromQuery] string clientName, [FromQuery] string email)
+    {
+        try
+        {
+            // Add client if not exists
+            var client = await _context.Clients.FirstOrDefaultAsync(c => c.Id == clientId);
+            if (client == null)
+            {
+                client = new Client
+                {
+                    Id = clientId,
+                    ClientCode = clientId,
+                    Name = clientName,
+                    BusinessName = clientName,
+                    Email = email
+                };
+                _context.Clients.Add(client);
+            }
+
+            // Add invoices
+            for (int i = 1; i <= 10; i++)
+            {
+                var invoice = new Invoice
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    InvoiceNo = $"INV-{clientId}-{i}-{DateTime.UtcNow.Ticks}",
+                    ClientId = clientId,
+                    ClientName = clientName,
+                    BillingDate = DateTime.UtcNow.AddDays(-i).ToString("O"),
+                    DueDate = DateTime.UtcNow.AddDays(30 - i).ToString("O"),
+                    TotalAmount = i * 1250m,
+                    Balance = i * 1250m,
+                    PaymentStatus = "Unpaid",
+                    Description = $"Logistics Services Route {i}",
+                    DateEncoded = DateTime.UtcNow.ToString("O")
+                };
+                _context.Invoices.Add(invoice);
+            }
+
+            await _context.SaveChangesAsync(default);
+            return Ok(new { message = $"Seeded client {clientId} with 10 invoices." });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "Error seeding: " + ex.Message });
+        }
+    }
+
     // GET: api/speedpay/transactions
     // RBAC: AllowAnonymous
     [AllowAnonymous]
@@ -145,6 +195,10 @@ public class SpeedPayController : ApiControllerBase
             return StatusCode(500, new { message = "An error occurred while initiating invoice payment: " + ex.Message });
         }
     }
+
+
+
+
 
     // FR-016, FR-017: Receive status updates asynchronously via PayMongo webhooks
     // RBAC: AllowAnonymous â€” PayMongo servers call this; verified by HMAC signature instead

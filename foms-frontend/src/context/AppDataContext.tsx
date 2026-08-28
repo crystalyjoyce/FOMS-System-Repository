@@ -234,8 +234,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       .catch(() => { /* keep static seed as fallback */ });
   }, []);
 
-  // ── Fetch SpeedPay from real backend on mount ──
-  useEffect(() => {
+  // ── Fetch SpeedPay from real backend — polls every 15s so new submissions show up automatically ──
+  const fetchSpeedPay = useCallback(() => {
     api.get('/speedpay/submissions')
       .then((res) => {
         const mapped: SpeedPaySubmission[] = res.data.map((s: any) => ({
@@ -253,13 +253,16 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
           submittedAt: s.submittedAt ?? s.createdAt ?? new Date().toISOString(),
           status: s.status ?? 'Pending Validation',
         }));
-        console.log('[AppDataContext] mapped speedPay:', mapped);
-        if (mapped.length > 0) setSpeedPay(mapped);
+        setSpeedPay(mapped);
       })
-      .catch((err) => { 
-        console.error('[AppDataContext] Failed to fetch speedPay:', err);
-      });
+      .catch(() => { /* keep current state on error */ });
   }, []);
+
+  useEffect(() => {
+    fetchSpeedPay(); // initial fetch
+    const interval = setInterval(fetchSpeedPay, 15000); // poll every 15 seconds
+    return () => clearInterval(interval);
+  }, [fetchSpeedPay]);
 
   // ── Fetch Payments from real backend on mount ──
   useEffect(() => {

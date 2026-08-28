@@ -26,8 +26,7 @@ def seed_db():
             invoice_id="INV-2026-JNT-0050",
             client_id="C-001",
             priority="High priority",
-            priority_score=92.5,
-            factors_json='[{"name": "Amount", "value": 1500000, "contribution": 40}]',
+            score=92.5,
             explanation="High outstanding amount with past due date."
         )
         db.add(p1)
@@ -46,8 +45,7 @@ def seed_db():
             invoice_id="INV-2026-LBC-0120",
             client_id="C-002",
             priority="High priority",
-            priority_score=85.0,
-            factors_json='[{"name": "Delays", "value": "3 Reminders ignored", "contribution": 50}]',
+            score=85.0,
             explanation="Client has ignored 3 previous reminders."
         )
         db.add(p2)
@@ -66,8 +64,7 @@ def seed_db():
             invoice_id="INV-2026-SHP-0220",
             client_id="C-003",
             priority="Medium priority",
-            priority_score=60.0,
-            factors_json='[{"name": "Communication", "value": "Responsive", "contribution": 30}]',
+            score=60.0,
             explanation="Client is responsive but payment is slightly delayed."
         )
         db.add(p3)
