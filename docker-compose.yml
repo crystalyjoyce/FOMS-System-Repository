@@ -19,6 +19,17 @@ services:
       - pgdata:/var/lib/postgresql/data
     restart: unless-stopped
 
+  # SQL Server Database (Core FOMS C# Backend Relational DB)
+  foms-sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: foms-sqlserver
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=Postgres2026!
+    ports:
+      - "14333:1433"
+    restart: unless-stopped
+
   # pgAdmin 4 Web GUI for PostgreSQL (http://localhost:5050)
   foms-pgadmin:
     image: dpage/pgadmin4
@@ -73,12 +84,11 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__DefaultConnection=Server=host.docker.internal\\SQLEXPRESS;Database=FOMSDB;Trusted_Connection=True;TrustServerCertificate=True;
-      - JwtSettings__Secret=${JWT_SECRET:-FOMS_Capstone_JWT_SecureKey_2026!!}
-      - JwtSettings__Issuer=FOMS.Api
-      - JwtSettings__Audience=FOMS.Api
+      - ConnectionStrings__DefaultConnection=Server=foms-sqlserver;Database=FOMSDB;User Id=sa;Password=Postgres2026!;Encrypt=False;TrustServerCertificate=True
       - PayMongo__SecretKey=${PAYMONGO_SECRET_KEY:-sk_test_fyNzfY2nbwdhfgUcoMmWoZJq}
       - PayMongo__WebhookSecret=${PAYMONGO_WEBHOOK_SECRET:-whsk_AhGd2fDaqcnLia9sJ79EHsL2}
+    depends_on:
+      - foms-sqlserver
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
@@ -115,14 +125,12 @@ services:
     container_name: foms-ai-service
     ports:
       - "8000:8000"
-    volumes:
-      - ./ai-service:/app
     env_file:
       - .env
     environment:
       - POSTGRES_CONNECTION_STRING=postgresql://postgres:postgres@foms-ai-postgres:5432/foms_ai_db
       - MONGODB_URI=mongodb://foms-ai-mongodb:27017/
-      - FOMS_READ_API_URL=${FOMS_READ_API_URL:-http://host.docker.internal:5007}
+      - FOMS_READ_API_URL=http://foms-backend:8080
       - FOMS_AI_SERVICE_API_KEY=${FOMS_AI_SERVICE_API_KEY}
       - AI_SERVICE_API_KEY=${AI_SERVICE_API_KEY}
       - SYNC_INTERVAL_MINUTES=${SYNC_INTERVAL_MINUTES}
@@ -139,8 +147,6 @@ services:
       - AUDIT_RETENTION_YEARS=${AUDIT_RETENTION_YEARS}
       - LOG_ROTATION_MAX_SIZE_MB=${LOG_ROTATION_MAX_SIZE_MB}
       - LOG_ROTATION_DAILY=${LOG_ROTATION_DAILY}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     depends_on:
       - foms-backend
       - foms-ai-postgres

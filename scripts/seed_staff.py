@@ -5,15 +5,15 @@ Run from within the project directory or via docker exec.
 import psycopg2
 import bcrypt
 
-CONN_STR = "postgresql://postgres:Postgres2026!@host.docker.internal:5432/foms_ai_db"
+CONN_STR = "postgresql://postgres:hanamarie@localhost:5432/foms_ai_db"
 
 staff = [
-    ("EMP-001", "Financial Manager User",  "Financial Manager"),
-    ("EMP-002", "Head Accountant User",    "Head Accountant"),
-    ("EMP-003", "Accountant User",         "Accountant"),
-    ("EMP-004", "Coordinator User",        "Coordinator"),
-    ("EMP-005", "Assistant FM User",       "Assistant of Financial Manager"),
-    ("EMP-006", "Client User",             "Client"),
+    ("EMP-001", "Crystalyn Joyce C. Fajardo",  "Financial Manager"),
+    ("EMP-002", "Misty",                       "Head Accountant"),
+    ("EMP-003", "Maria Mariel Jane Anonuevo",  "Accountant"),
+    ("EMP-004", "Hannah Estrera",              "Coordinator"),
+    ("EMP-005", "Joana Marie Ogaya",           "Assistant of Financial Manager"),
+    ("EMP-006", "Client User",                 "Client"),
 ]
 
 PASSWORD = "Password@123"
