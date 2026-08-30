@@ -41,30 +41,36 @@ def create_app_jwt(username: str, role: str, permissions: list, client_id: str, 
     return f"{header_b64}.{payload_b64}."
 
 @router.post("/login")
-def login(request: LoginRequest):
+def login(request: LoginRequest, db: Session = Depends(get_db)):
     try:
-        # Developer Simulation Mocks
-        mocks = {
-            "EMP-001": ("Crystalyn Joyce C. Fajardo", "Finance Manager"),
-            "EMP-002": ("Misty", "Head Accountant"),
-            "EMP-003": ("Maria Mariel Jane Anonuevo", "Accountant"),
-            "EMP-004": ("Hannah Estrera", "Coordinator"),
-            "EMP-005": ("Joana Marie Ogaya", "Assistant of Finance Manager"),
-            "EMP-006": ("Client User", "Client")
-        }
-        
-        if request.username not in mocks or request.password != "Password@123":
+        # Check against database
+        result = db.execute(
+            text("SELECT * FROM users WHERE login_id = :login_id"), 
+            {"login_id": request.username}
+        ).mappings().first()
+
+        if not result:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-            
-        full_name, role_name = mocks[request.username]
+
+        # Compare passwords
+        if not bcrypt.checkpw(request.password.encode('utf-8'), result["password_hash"].encode('utf-8')):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+        if not result.get("is_active", True):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is inactive")
+
+        full_name = result["full_name"]
+        role_name = result["role_name"]
         client_id = request.username if role_name == "Client" else ""
+        password_version = result.get("password_version", 2)
+        must_change_password = result.get("must_change_password", False)
         
         token = create_app_jwt(
             username=full_name,
             role=role_name,
             permissions=[],
             client_id=client_id,
-            password_version=2
+            password_version=password_version
         )
         
         return {
@@ -72,7 +78,7 @@ def login(request: LoginRequest):
             "user": {
                 "username": full_name,
                 "role": role_name,
-                "must_change_password": False
+                "must_change_password": must_change_password
             }
         }
     except HTTPException:
