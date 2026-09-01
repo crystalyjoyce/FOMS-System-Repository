@@ -219,6 +219,14 @@ public class SpeedPaySubmissionsController : ControllerBase
         else
         {
             payment.PaymentStatus = request.Status == "Validated" ? "Validated" : request.Status == "Rejected" ? "Rejected" : "Submitted";
+            if (request.Status == "Rejected") {
+                payment.RejectionReason = request.Remarks ?? "Manual submission rejected.";
+                payment.RejectedAt = DateTime.UtcNow;
+                payment.RejectedBy = "Finance Manager";
+            }
+            if (!string.IsNullOrWhiteSpace(request.Remarks)) {
+                payment.Remarks = request.Remarks;
+            }
         }
 
         var invoice = await _context.Invoices.FirstOrDefaultAsync(i => i.Id == submission.InvoiceId);
@@ -315,6 +323,26 @@ public class SpeedPaySubmissionsController : ControllerBase
                     AfterValue = $"Balance: {invoice.Balance:N2} | Status: {invoice.PaymentStatus}"
                 };
                 await _context.AuditLogs.AddAsync(audit);
+
+                // Notify the client: payment validated
+                var notifValidated = new Notification
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Type = "success",
+                    Title = "Payment Validated",
+                    Description = $"Your payment of \u20b1{submission.AmountPaid:N2} for Invoice {invoice.InvoiceNo} has been validated and marked as Paid.",
+                    InvoiceNo = invoice.InvoiceNo,
+                    RecipientUserId = submission.ClientId,
+                    RecipientRole = "Client",
+                    RelatedPaymentId = payment.Id,
+                    RelatedInvoiceId = invoice.Id,
+                    Read = false,
+                    Date = DateTime.UtcNow.ToString("yyyy-MM-dd"),
+                    Timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"),
+                    Source = "Finance Department",
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.Notifications.Add(notifValidated);
             }
         }
         else if (request.Status == "Rejected")
@@ -338,6 +366,30 @@ public class SpeedPaySubmissionsController : ControllerBase
                     CreatedAt = DateTime.UtcNow
                 };
                 _context.PaymentHistories.Add(history);
+
+                // Notify the client: payment rejected
+                var rejectionMessage = !string.IsNullOrWhiteSpace(request.Remarks)
+                    ? $"Payment failed due to: {request.Remarks}. Please try again."
+                    : $"Your payment for Invoice {invoice.InvoiceNo} was rejected. Please try again.";
+
+                var notifRejected = new Notification
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Type = "alert",
+                    Title = "Payment Rejected",
+                    Description = rejectionMessage,
+                    InvoiceNo = invoice.InvoiceNo,
+                    RecipientUserId = submission.ClientId,
+                    RecipientRole = "Client",
+                    RelatedPaymentId = payment.Id,
+                    RelatedInvoiceId = invoice.Id,
+                    Read = false,
+                    Date = DateTime.UtcNow.ToString("yyyy-MM-dd"),
+                    Timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"),
+                    Source = "Finance Department",
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.Notifications.Add(notifRejected);
             }
         }
 
@@ -351,28 +403,100 @@ public class SpeedPaySubmissionsController : ControllerBase
         });
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
+    // GET api/speedpay/notifications?clientId=
+    // Returns notifications for a specific client (used by SpeedPay portal)
+    // ──────────────────────────────────────────────────────────────────────────
+    [HttpGet("/api/speedpay/notifications")]
+    public async Task<IActionResult> GetClientNotifications([FromQuery] string clientId)
+    {
+        if (string.IsNullOrWhiteSpace(clientId))
+            return BadRequest(new { message = "clientId is required." });
+
+        var notifications = await _context.Notifications
+            .AsNoTracking()
+            .Where(n => n.RecipientUserId == clientId && n.RecipientRole == "Client")
+            .OrderByDescending(n => n.CreatedAt)
+            .Select(n => new
+            {
+                n.Id,
+                n.Type,
+                n.Title,
+                n.Description,
+                n.InvoiceNo,
+                n.Read,
+                n.Date,
+                n.Timestamp,
+                n.Source,
+                n.RelatedPaymentId,
+                n.RelatedInvoiceId,
+                n.CreatedAt
+            })
+            .ToListAsync();
+
+        return Ok(notifications);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // PUT api/speedpay/notifications/{id}/read
+    // Marks a single notification as read
+    // ──────────────────────────────────────────────────────────────────────────
+    [HttpPut("/api/speedpay/notifications/{id}/read")]
+    public async Task<IActionResult> MarkNotificationRead(string id)
+    {
+        var notif = await _context.Notifications.FirstOrDefaultAsync(n => n.Id == id);
+        if (notif == null) return NotFound(new { message = "Notification not found." });
+
+        notif.Read = true;
+        _context.Notifications.Update(notif);
+        await _context.SaveChangesAsync(default);
+        return Ok(new { message = "Notification marked as read.", id = notif.Id });
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // PUT api/speedpay/notifications/mark-all-read?clientId=
+    // Marks all notifications for a client as read
+    // ──────────────────────────────────────────────────────────────────────────
+    [HttpPut("/api/speedpay/notifications/mark-all-read")]
+    public async Task<IActionResult> MarkAllNotificationsRead([FromQuery] string clientId)
+    {
+        if (string.IsNullOrWhiteSpace(clientId))
+            return BadRequest(new { message = "clientId is required." });
+
+        var notifs = await _context.Notifications
+            .Where(n => n.RecipientUserId == clientId && n.RecipientRole == "Client" && !n.Read)
+            .ToListAsync();
+
+        foreach (var n in notifs) n.Read = true;
+        await _context.SaveChangesAsync(default);
+        return Ok(new { message = $"{notifs.Count} notifications marked as read." });
+    }
+
     private async Task<string> GenerateNextOrNumberAsync()
     {
         var currentYear = DateTime.UtcNow.Year;
         var yearPrefix = $"OR-{currentYear}-";
 
-        var lastPayment = await _context.Payments
+        var orNumbers = await _context.Payments
             .AsNoTracking()
             .Where(p => p.OrNumber.StartsWith(yearPrefix))
-            .OrderByDescending(p => p.OrNumber)
-            .FirstOrDefaultAsync();
+            .Select(p => p.OrNumber)
+            .ToListAsync();
 
-        int nextSeqNum = 1;
-        if (lastPayment != null && lastPayment.OrNumber.Length > yearPrefix.Length)
+        int maxSeq = 0;
+        foreach (var orNum in orNumbers)
         {
-            var seqPart = lastPayment.OrNumber.Substring(yearPrefix.Length);
-            if (int.TryParse(seqPart, out var lastSeq))
+            if (orNum.Length > yearPrefix.Length)
             {
-                nextSeqNum = lastSeq + 1;
+                var seqPart = orNum.Substring(yearPrefix.Length);
+                if (int.TryParse(seqPart, out var seq))
+                {
+                    if (seq > maxSeq) maxSeq = seq;
+                }
             }
         }
 
-        return $"{yearPrefix}{nextSeqNum:D4}";
+        return $"{yearPrefix}{(maxSeq + 1):D4}";
     }
 
     // ──────────────────────────────────────────────────────────────────────────

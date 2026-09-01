@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, LogOut, User, Building, Mail, CheckCheck, AlertTriangle, CheckCircle, Truck, Trash2, ChevronRight, Clock } from 'lucide-react';
+import { Bell, LogOut, User, Building, Mail, CheckCheck, AlertTriangle, CheckCircle, Info, Trash2, ChevronRight, Clock } from 'lucide-react';
 import { useClientContext } from '../context/ClientContext';
-import { useLocation } from 'react-router-dom';
+import type { ClientNotification } from '../context/ClientContext';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 export const TopHeader: React.FC = () => {
-  const { user, logout } = useClientContext();
+  const { user, logout, notifications, unreadCount, markAsRead, markAllAsRead } = useClientContext();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const getPageTitle = () => {
     switch (location.pathname) {
@@ -13,6 +15,7 @@ export const TopHeader: React.FC = () => {
       case '/invoices': return 'My Invoices';
       case '/pay': return 'Pay an Invoice';
       case '/history': return 'Payment History';
+      case '/notifications': return 'Notifications';
       default: return '';
     }
   };
@@ -23,8 +26,10 @@ export const TopHeader: React.FC = () => {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [isViewAllHovered, setIsViewAllHovered] = useState(false);
   const [isTrashHovered, setIsTrashHovered] = useState(false);
+  const [activeTab, setActiveTab] = useState<'all' | 'unread'>('all');
 
   const profileRef = useRef<HTMLDivElement>(null);
+  const notifRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentDate(new Date()), 1000);
@@ -36,6 +41,9 @@ export const TopHeader: React.FC = () => {
     const handleClickOutside = (e: MouseEvent) => {
       if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
         setShowProfileMenu(false);
+      }
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setShowNotifications(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -58,6 +66,39 @@ export const TopHeader: React.FC = () => {
     if (!name || !domain) return raw;
     return `${name[0]}***@${domain}`;
   };
+
+  const getTimeAgo = (createdAt: string) => {
+    const now = new Date();
+    const created = new Date(createdAt);
+    const diffMs = now.getTime() - created.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return `${diffDays}d ago`;
+  };
+
+  const getNotifIcon = (type: ClientNotification['type']) => {
+    switch (type) {
+      case 'success': return <CheckCircle size={16} />;
+      case 'alert': return <AlertTriangle size={16} />;
+      default: return <Info size={16} />;
+    }
+  };
+
+  const getNotifColors = (type: ClientNotification['type']) => {
+    switch (type) {
+      case 'success': return { bg: '#D1FAE5', color: '#059669', bar: '#10B981' };
+      case 'alert': return { bg: '#FEE2E2', color: '#EF4444', bar: '#EF4444' };
+      default: return { bg: '#DBEAFE', color: '#2563EB', bar: '#3B82F6' };
+    }
+  };
+
+  const displayedNotifs = activeTab === 'unread'
+    ? notifications.filter(n => !n.read)
+    : notifications;
 
   return (
     <>
@@ -97,91 +138,106 @@ export const TopHeader: React.FC = () => {
             <span>{formattedDateTime}</span>
           </div>
           
-          <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => setShowNotifications(!showNotifications)}>
+          {/* Notification Bell */}
+          <div ref={notifRef} style={{ position: 'relative', cursor: 'pointer' }} onClick={() => setShowNotifications(!showNotifications)}>
             <div style={{ padding: '8px', background: '#F1F5F9', borderRadius: '50%' }}>
               <Bell size={20} color="#475569" />
             </div>
-            <div style={{ position: 'absolute', top: 0, right: 0, width: '18px', height: '18px', background: '#EF4444', borderRadius: '50%', color: '#FFF', fontSize: '10px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #FFF' }}>
-              3
-            </div>
+            {unreadCount > 0 && (
+              <div style={{ position: 'absolute', top: 0, right: 0, width: '18px', height: '18px', background: '#EF4444', borderRadius: '50%', color: '#FFF', fontSize: '10px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #FFF' }}>
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </div>
+            )}
             
             {showNotifications && (
               <div style={{ 
                 position: 'absolute', top: '100%', right: 0, marginTop: '8px', 
-                width: '380px', background: '#FFF', borderRadius: '8px', 
+                width: '400px', background: '#FFF', borderRadius: '8px', 
                 boxShadow: '0 10px 25px rgba(0,0,0,0.1)', border: '1px solid #E2E8F0', 
                 zIndex: 50, cursor: 'default', overflow: 'hidden', display: 'flex', flexDirection: 'column'
               }} onClick={e => e.stopPropagation()}>
                 
-                {/* Header Row 1 */}
+                {/* Header Row */}
                 <div style={{ padding: '16px 16px 12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ fontSize: '15px', fontWeight: 800, color: '#0F172A' }}>Notifications</span>
-                    <span style={{ background: '#E0F2FE', color: '#0284C7', fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '12px' }}>4 new</span>
+                    {unreadCount > 0 && (
+                      <span style={{ background: '#E0F2FE', color: '#0284C7', fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '12px' }}>
+                        {unreadCount} new
+                      </span>
+                    )}
                   </div>
-                  <button style={{ background: 'none', border: 'none', color: '#0EA5E9', fontSize: '13px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', padding: 0 }}>
+                  <button
+                    onClick={async (e) => { e.stopPropagation(); await markAllAsRead(); }}
+                    style={{ background: 'none', border: 'none', color: '#0EA5E9', fontSize: '13px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', padding: 0 }}>
                     <CheckCheck size={14} /> Mark all as read
                   </button>
                 </div>
 
                 {/* Tabs */}
                 <div style={{ padding: '0 16px', display: 'flex', gap: '20px', borderBottom: '1px solid #E2E8F0' }}>
-                  <div style={{ paddingBottom: '8px', borderBottom: '2px solid #0EA5E9', color: '#0EA5E9', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
+                  <div
+                    onClick={() => setActiveTab('all')}
+                    style={{ paddingBottom: '8px', borderBottom: activeTab === 'all' ? '2px solid #0EA5E9' : '2px solid transparent', color: activeTab === 'all' ? '#0EA5E9' : '#64748B', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}>
                     All
                   </div>
-                  <div style={{ paddingBottom: '8px', color: '#64748B', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>
-                    Unread (4)
+                  <div
+                    onClick={() => setActiveTab('unread')}
+                    style={{ paddingBottom: '8px', borderBottom: activeTab === 'unread' ? '2px solid #0EA5E9' : '2px solid transparent', color: activeTab === 'unread' ? '#0EA5E9' : '#64748B', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}>
+                    Unread ({unreadCount})
                   </div>
                 </div>
 
                 {/* Scrollable list */}
                 <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                  <div style={{ padding: '12px 16px 8px 16px', fontSize: '11px', fontWeight: 700, color: '#94A3B8', letterSpacing: '0.05em' }}>
-                    TODAY
-                  </div>
-
-                  {/* Notification 1 */}
-                  <div style={{ display: 'flex', borderBottom: '1px solid #F1F5F9', position: 'relative' }}>
-                    <div style={{ width: '3px', background: '#EF4444', position: 'absolute', left: 0, top: 0, bottom: 0 }} />
-                    <div style={{ padding: '16px', paddingLeft: '20px', display: 'flex', gap: '12px', width: '100%', background: '#FAFAFA' }}>
-                      <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#FEE2E2', color: '#EF4444', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <AlertTriangle size={16} />
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A', marginBottom: '4px' }}>SLA Breach Warning</div>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#F3E8FF', color: '#7E22CE', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700, marginBottom: '8px' }}>
-                          <Truck size={10} /> LOGISTICS
-                        </div>
-                        <div style={{ fontSize: '13px', color: '#475569', lineHeight: '1.4', marginBottom: '12px' }}>
-                          Route #8 is running 35 mins behind schedule. SLA impact imminent.
-                        </div>
-                        <button style={{ background: '#FFF', border: '1px solid #0EA5E9', color: '#0EA5E9', fontSize: '11px', fontWeight: 700, padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', marginBottom: '8px', letterSpacing: '0.02em' }}>
-                          VIEW ROUTE #8 →
-                        </button>
-                        <div style={{ fontSize: '11px', color: '#94A3B8' }}>2m ago</div>
-                      </div>
+                  {displayedNotifs.length === 0 ? (
+                    <div style={{ padding: '40px 16px', textAlign: 'center', color: '#94A3B8', fontSize: '13px' }}>
+                      <Bell size={32} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
+                      <div style={{ fontWeight: 600, marginBottom: '4px' }}>No notifications yet</div>
+                      <div style={{ fontSize: '12px' }}>Payment updates will appear here</div>
                     </div>
-                  </div>
-
-                  {/* Notification 2 */}
-                  <div style={{ display: 'flex', borderBottom: '1px solid #F1F5F9', position: 'relative' }}>
-                    <div style={{ width: '3px', background: '#10B981', position: 'absolute', left: 0, top: 0, bottom: 0 }} />
-                    <div style={{ padding: '16px', paddingLeft: '20px', display: 'flex', gap: '12px', width: '100%' }}>
-                      <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#D1FAE5', color: '#10B981', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <CheckCircle size={16} />
+                  ) : (
+                    <>
+                      <div style={{ padding: '12px 16px 8px 16px', fontSize: '11px', fontWeight: 700, color: '#94A3B8', letterSpacing: '0.05em' }}>
+                        TODAY
                       </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A', marginBottom: '4px' }}>Fleet Report Available</div>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#F3E8FF', color: '#7E22CE', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700, marginBottom: '8px' }}>
-                          <Truck size={10} /> LOGISTICS
-                        </div>
-                        <div style={{ fontSize: '13px', color: '#475569', lineHeight: '1.4', marginBottom: '12px' }}>
-                          Weekly dispatch efficiency audit is ready for download.
-                        </div>
-                        <div style={{ fontSize: '11px', color: '#94A3B8' }}>1h ago</div>
-                      </div>
-                    </div>
-                  </div>
+                      {displayedNotifs.map((notif) => {
+                        const colors = getNotifColors(notif.type);
+                        return (
+                          <div
+                            key={notif.id}
+                            onClick={() => !notif.read && markAsRead(notif.id)}
+                            style={{ display: 'flex', borderBottom: '1px solid #F1F5F9', position: 'relative', cursor: notif.read ? 'default' : 'pointer' }}>
+                            <div style={{ width: '3px', background: notif.read ? '#E2E8F0' : colors.bar, position: 'absolute', left: 0, top: 0, bottom: 0 }} />
+                            <div style={{ padding: '14px 16px 14px 20px', display: 'flex', gap: '12px', width: '100%', background: notif.read ? '#FFF' : '#FAFAFA' }}>
+                              <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: colors.bg, color: colors.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                {getNotifIcon(notif.type)}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>{notif.title}</div>
+                                  {!notif.read && <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#0EA5E9', flexShrink: 0 }} />}
+                                </div>
+                                {notif.invoiceNo && (
+                                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#F0F9FF', color: '#0284C7', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 700, marginBottom: '6px' }}>
+                                    Invoice: {notif.invoiceNo}
+                                  </div>
+                                )}
+                                <div style={{ fontSize: '12px', color: '#475569', lineHeight: '1.5', marginBottom: '6px' }}>
+                                  {notif.description}
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <div style={{ fontSize: '11px', color: '#94A3B8' }}>{getTimeAgo(notif.createdAt)}</div>
+                                  <div style={{ fontSize: '11px', color: '#CBD5E1' }}>•</div>
+                                  <div style={{ fontSize: '11px', color: '#94A3B8' }}>{notif.source}</div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
                 </div>
 
                 {/* Footer */}
@@ -189,6 +245,10 @@ export const TopHeader: React.FC = () => {
                   <button 
                     onMouseEnter={() => setIsViewAllHovered(true)}
                     onMouseLeave={() => setIsViewAllHovered(false)}
+                    onClick={() => {
+                      setShowNotifications(false);
+                      navigate('/notifications');
+                    }}
                     style={{ 
                       flexGrow: 1,
                       display: 'inline-flex',
@@ -212,6 +272,7 @@ export const TopHeader: React.FC = () => {
                   <button 
                     onMouseEnter={() => setIsTrashHovered(true)}
                     onMouseLeave={() => setIsTrashHovered(false)}
+                    onClick={async (e) => { e.stopPropagation(); await markAllAsRead(); }}
                     style={{ 
                       display: 'inline-flex',
                       alignItems: 'center',
@@ -223,7 +284,7 @@ export const TopHeader: React.FC = () => {
                       color: '#DC2626',
                       transition: 'all 150ms'
                     }}
-                    title="Clear all notifications"
+                    title="Mark all as read"
                   >
                     <Trash2 size={14} />
                   </button>

@@ -34,7 +34,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md', c
     tier = 'warning';
   }
   // 2. Critical / Negative / Fallbacks
-  else if (['failed', 'outflow'].includes(normalized)) {
+  else if (['failed', 'outflow', 'rejected', 'missing'].includes(normalized)) {
     tier = 'danger';
   }
   // 3. Positive / Success

@@ -11,8 +11,13 @@ export default defineConfig({
     port: 5175,
     host: true,
     proxy: {
+      '/api/ai-data': {
+        target: 'http://localhost:5007',
+        changeOrigin: true,
+        secure: false,
+      },
       '/api/ai': {
-        target: 'http://localhost:5002',
+        target: 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
       }

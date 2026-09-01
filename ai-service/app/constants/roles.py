@@ -171,6 +171,8 @@ COLLECTION_VIEW_ROLES = (
     Roles.FINANCIAL_MANAGER,
     Roles.HEAD_ACCOUNTANT,
     Roles.ACCOUNTANT,
+    Roles.COORDINATOR,
+    Roles.ASSISTANT_OF_FINANCIAL_MANAGER,
 )
 
 # Roles allowed to generate collection priorities
@@ -189,10 +191,24 @@ RECOMMENDATION_VIEW_ROLES = (
     Roles.ASSISTANT_OF_FINANCIAL_MANAGER,
 )
 
-# Roles allowed to make recommendation decisions
+# Roles allowed to log decisions from Collection Priorities page
+# (Accountant, Coordinator, Assistant FM log initial actions -> goes to ForReview)
+LOG_DECISION_ROLES = (
+    Roles.FINANCIAL_MANAGER,
+    Roles.HEAD_ACCOUNTANT,
+    Roles.ACCOUNTANT,
+    Roles.COORDINATOR,
+    Roles.ASSISTANT_OF_FINANCIAL_MANAGER,
+)
+
+# Roles allowed to approve/finalize decisions in ForReview page
+# (Finance Manager, Head Accountant only)
 RECOMMENDATION_DECIDE_ROLES = (
     Roles.FINANCIAL_MANAGER,
     Roles.HEAD_ACCOUNTANT,
+    Roles.ACCOUNTANT,
+    Roles.COORDINATOR,
+    Roles.ASSISTANT_OF_FINANCIAL_MANAGER,
 )
 
 # Roles allowed to export recommendations/reports

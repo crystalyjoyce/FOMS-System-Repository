@@ -90,12 +90,20 @@ export const SpeedPayValidation: React.FC = () => {
     const invoice = invoices.find(i => i.id === sub.invoiceId);
     const clientId = (sub as any).clientId || (invoice ? invoice.clientId : 'UNKNOWN');
     const client = clients.find(c => c.id === clientId);
+    
+    // Ensure the submittedAt string is treated as UTC if it doesn't have timezone info
+    let submittedTimeStr = sub.submittedAt || new Date().toISOString();
+    if (!submittedTimeStr.endsWith('Z') && !submittedTimeStr.includes('+')) {
+      submittedTimeStr += 'Z';
+    }
+
     return {
       ...sub,
       clientId,
-      clientName: client?.name ?? sub.clientName ?? 'Unknown',
+      clientName: sub.clientName ?? client?.name ?? 'Unknown',
       invoiceNumber: sub.invoiceNumber ?? invoice?.invoiceNumber ?? sub.invoiceId,
       invoiceAmount: invoice?.totalAmount ?? sub.amountPaid ?? 0,
+      submittedAt: submittedTimeStr
     };
   });
   console.log('[SpeedPayValidation] submissionId:', submissionId);
@@ -295,9 +303,9 @@ export const SpeedPayValidation: React.FC = () => {
                 <div style={{ padding: '12px 16px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14, color: '#0F172A', fontFamily: 'monospace' }}>{sub.referenceNumber}</div>
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: '#64748B', marginBottom: 6 }}>DATE SUBMITTED</label>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: '#64748B', marginBottom: 6 }}>PAYMENT DATE</label>
                 <div style={{ padding: '12px 16px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14, color: '#0F172A' }}>
-                  {new Date(sub.submittedAt).toLocaleString('en-PH', { month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  {new Date(sub.submittedAt.endsWith('Z') ? sub.submittedAt : sub.submittedAt + 'Z').toLocaleString('en-PH', { month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                 </div>
               </div>
             </div>

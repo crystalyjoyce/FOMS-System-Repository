@@ -159,7 +159,7 @@ export const CollectionPriorities: React.FC = () => {
   const handleSubmitRecReview = async () => {
     if (!selectedRec) return;
     if (!remarks.trim()) {
-      toast.warning('Investigation notes/remarks are required for review.', 'Validation');
+      toast.warning('Action Taken is required before logging a decision.', 'Validation');
       return;
     }
     setModalLoading(true);
@@ -167,14 +167,19 @@ export const CollectionPriorities: React.FC = () => {
       const res = await fetch(`/api/ai/collection/recommendations/${selectedRec.id}/review`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ decision, remarks, recommendedAction }),
+        body: JSON.stringify({
+          decision,
+          remarks,           // Action Taken field
+          recommendedAction, // Optional notes field
+        }),
       });
       if (res.ok) {
         setSelectedRec(null);
-        toast.success(`Logged review action on Recommendation #${selectedRec.id}`, 'Review Submitted');
+        toast.success(`Decision logged for ${selectedRec.priority?.client_name || 'Recommendation #' + selectedRec.id}. It is now visible in For Review.`, 'Decision Logged');
         fetchRecommendations();
       } else {
-        toast.error('Failed to submit review.', 'Error');
+        const errData = await res.json().catch(() => ({}));
+        toast.error(errData?.message || 'Failed to log decision.', 'Error');
       }
     } catch {
       toast.error('Connection issue. Action failed.', 'Error');
@@ -183,8 +188,15 @@ export const CollectionPriorities: React.FC = () => {
     }
   };
 
+  // Accountant, Coordinator, Assistant FM can LOG decisions (feeds into ForReview)
+  const canLogDecision =
+    user?.role &&
+    ['Accountant', 'Coordinator', 'Assistant of Finance Manager'].includes(user.role);
+
+  // Finance Manager, Head Accountant can also log decisions (they can do everything)
   const canSubmitReviews =
-    user?.role && ['Financial Manager', 'Head Accountant', 'Accountant'].includes(user.role);
+    user?.role &&
+    ['Financial Manager', 'Finance Manager', 'Head Accountant', 'Accountant', 'Coordinator', 'Assistant of Finance Manager'].includes(user.role);
 
   const getScore = (row: any) => {
     const p = String(row.priority_level || '').toUpperCase();
@@ -577,12 +589,23 @@ export const CollectionPriorities: React.FC = () => {
                       <div style={{ marginTop: 'auto', paddingTop: 8 }}>
                         <button
                           onClick={() => {
+                            const pLevel = String(row.priority_level || '').toLowerCase();
+                            const bal = (row.outstanding_balance || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 });
+                            const dynamicRec = pLevel.includes('critical')
+                              ? `Immediate action required: Escalate to legal or field collections due to critical priority on ₱${bal}.`
+                              : pLevel.includes('high')
+                              ? `Schedule a priority follow-up call immediately to secure payment commitments for the overdue ₱${bal}.`
+                              : pLevel.includes('medium')
+                              ? `Send a formal reminder notice for the outstanding ₱${bal} and follow up with a call within 3 days.`
+                              : `Send standard payment reminder via email for the ₱${bal} balance.`;
+
                             const recToOpen = correspondingRec.id ? { ...correspondingRec, priority: row } : {
                               id: row.id,
                               priority_id: row.id,
                               priority: row,
                               review_status: 'Pending Review',
-                              recommended_action: 'Contact client to arrange payment schedule immediately.',
+                              recommendation_text: dynamicRec,
+                              recommended_action: '',
                               explanation_basis: []
                             };
                             handleOpenRecReview(recToOpen);
@@ -832,7 +855,7 @@ export const CollectionPriorities: React.FC = () => {
                   <strong style={{ fontSize: 13, color: '#111827' }}>Suggested Action Plan</strong>
                 </div>
                 <p style={{ margin: 0, fontSize: 13, color: '#374151', lineHeight: 1.5 }}>
-                  {selectedRec.recommended_action || 'Escalate to phone outreach and request an immediate settlement commitment.'}
+                  {selectedRec.recommendation_text || 'Escalate to phone outreach and request an immediate settlement commitment.'}
                 </p>
               </div>
 
@@ -851,7 +874,7 @@ export const CollectionPriorities: React.FC = () => {
                       onChange={e => setDecision(e.target.value)}
                     >
                       <option value="Accepted as Recommendation">Accept Recommendation</option>
-                      <option value="Reviewed & Closed">Reviewed & Closed</option>
+                      <option value="Reviewed &amp; Closed">Reviewed &amp; Closed</option>
                       <option value="Reject Priority Assignment">Reject Priority Assignment</option>
                     </select>
                   </div>
@@ -876,6 +899,8 @@ export const CollectionPriorities: React.FC = () => {
                     <textarea
                       style={{ width: '100%', minHeight: 80, padding: '10px 14px', borderRadius: 6, border: '1px solid #D1D5DB', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
                       placeholder="Optional validation steps or extra context..."
+                      value={recommendedAction}
+                      onChange={e => setRecommendedAction(e.target.value)}
                     />
                   </div>
 

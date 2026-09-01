@@ -37,7 +37,7 @@ export const PaymentHistory: React.FC = () => {
               {payments.map(pay => (
                 <tr key={pay.id} style={{ borderBottom: '1px solid #F1F5F9', transition: 'background 0.2s' }} onMouseOver={e => e.currentTarget.style.background = '#F8FAFC'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
                   <td style={{ padding: '16px', fontSize: '14px', color: '#64748B' }}>
-                    {new Date(pay.dateSubmitted).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                    {new Date(pay.dateSubmitted.endsWith('Z') ? pay.dateSubmitted : pay.dateSubmitted + 'Z').toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
                   </td>
                   <td style={{ padding: '16px', fontSize: '14px', fontWeight: 600, color: '#3B82F6' }}>{pay.invoiceId}</td>
                   <td style={{ padding: '16px', fontSize: '14px', color: '#0F172A', fontFamily: 'monospace' }}>{pay.referenceNo}</td>
@@ -45,14 +45,14 @@ export const PaymentHistory: React.FC = () => {
                   <td style={{ padding: '16px', fontSize: '14px', fontWeight: 600, color: '#0F172A' }}>₱{pay.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
                   <td style={{ padding: '16px' }}>{getStatusBadge(pay.status)}</td>
                   <td style={{ padding: '16px', fontSize: '13px' }}>
-                    {pay.status === 'Validated' && pay.officialReceipt && (
+                    {pay.status === 'Validated' && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#10B981', fontWeight: 500 }}>
-                        <FileText size={14} /> {pay.officialReceipt}
+                        <FileText size={14} /> Paid
                       </div>
                     )}
-                    {pay.status === 'Rejected' && pay.rejectionReason && (
+                    {pay.status === 'Rejected' && (
                       <div style={{ color: '#EF4444' }}>
-                        {pay.rejectionReason}
+                        Payment failed due to {pay.rejectionReason || 'an unknown reason'}. Please try again.
                       </div>
                     )}
                     {pay.status === 'Pending Validation' && (

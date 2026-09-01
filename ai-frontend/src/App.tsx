@@ -17,9 +17,12 @@ import { Reports } from './pages/Reports';
 import { Profile } from './pages/Profile';
 import { Unauthorized } from './pages/Unauthorized';
 import { AuditTrail } from './pages/AuditTrail';
+import { NotificationsPage } from './pages/NotificationsPage';
 
 import { Sidebar, GlobalHeader, ToastProvider, ToastBar } from './components';
 import type { NavGroup } from './components/Sidebar';
+import { NotificationProvider } from './contexts/NotificationContext';
+
 
 // Speedex OneUI App Shell Layout
 
@@ -203,9 +206,10 @@ const MainLayout: React.FC = () => {
           }}
           onLogout={handleLogout}
           onProfile={() => navigate('/ai/profile')}
+          onViewAllNotifications={() => navigate('/ai/notifications')}
         />
 
-        <main>
+        <main style={location.pathname.includes('/ai/notifications') ? { maxWidth: '100%', width: '100%', padding: '28px', backgroundColor: '#EEF2FF', boxSizing: 'border-box', margin: 0 } : undefined}>
           <Routes>
             {/* Dashboard Guard */}
             <Route path="dashboard" element={
@@ -261,6 +265,8 @@ const MainLayout: React.FC = () => {
               </PermissionGuard>
             } />
 
+            <Route path="notifications" element={<NotificationsPage />} />
+
             <Route path="profile" element={<Profile />} />
           </Routes>
         </main>
@@ -282,7 +288,9 @@ function App() {
               {/* Protected Area */}
               <Route path="/ai/*" element={
                 <ProtectedRoute>
-                  <MainLayout />
+                  <NotificationProvider>
+                    <MainLayout />
+                  </NotificationProvider>
                 </ProtectedRoute>
               } />
 

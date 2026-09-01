@@ -1,10 +1,9 @@
-import React, { useState, useMemo, useCallback } from "react";
-import { Bell, AlertTriangle, CheckCircle2, Info, Settings } from "lucide-react";
+import React, { useState, useMemo } from "react";
+import { Bell, AlertTriangle, CheckCircle2, Info, Settings, Trash2, CheckCheck } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { StatusBadge } from "../components/StatusBadge";
+import StatusBadge from "../components/StatusBadge";
 import ConfirmModal from "../components/ConfirmModal";
-import { Button } from "../components/Buttons";
-import { useNotifications } from "../context/NotificationContext";
+import { useNotifications } from "../contexts/NotificationContext";
 import "./NotificationsPage.css";
 
 export const NotificationsPage: React.FC = () => {
@@ -15,13 +14,11 @@ export const NotificationsPage: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
-  const selected = useMemo(() => notifications.find((n) => n.id === selectedId) ?? null, [notifications, selectedId]);
   const filtered = useMemo(() => {
     if (activeTab === "all") return notifications;
     if (activeTab === "read") return notifications.filter((n) => n.read);
     return notifications.filter((n) => n.type === activeTab && !n.read);
   }, [notifications, activeTab]);
-
 
   const tabs = useMemo(() => [
     { key: "all", label: "All" },
@@ -40,11 +37,7 @@ export const NotificationsPage: React.FC = () => {
     }, {});
   }, [filtered]);
 
-  const handleClearConfirm = useCallback(() => {
-    clearAll();
-    setSelectedId("");
-    setShowClearConfirm(false);
-  }, [clearAll]);
+
 
   const TypeIcon = ({ type, size = 18 }: any) => {
     switch (type) {
@@ -63,8 +56,20 @@ export const NotificationsPage: React.FC = () => {
 
       <div className="notif-actions-row">
         <div style={{ display: 'flex', gap: '10px' }}>
-          <Button title="Mark all as read" icon="ti-check" variant="secondary" onClick={markAllAsRead} disabled={unreadCount === 0} />
-          <Button title="Clear all" icon="ti-trash" variant="secondary" onClick={() => setShowClearConfirm(true)} disabled={notifications.length === 0} />
+          <button 
+            onClick={markAllAsRead} 
+            disabled={unreadCount === 0}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '6px', border: '1px solid #E2E8F0', background: '#F8FAFC', color: '#475569', fontWeight: 600, fontSize: '13px', cursor: unreadCount === 0 ? 'not-allowed' : 'pointer', opacity: unreadCount === 0 ? 0.6 : 1 }}
+          >
+            <CheckCheck size={16} /> Mark all as read
+          </button>
+          <button 
+            onClick={() => setShowClearConfirm(true)} 
+            disabled={notifications.length === 0}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '6px', border: '1px solid #E2E8F0', background: '#F8FAFC', color: '#DC2626', fontWeight: 600, fontSize: '13px', cursor: notifications.length === 0 ? 'not-allowed' : 'pointer', opacity: notifications.length === 0 ? 0.6 : 1 }}
+          >
+            <Trash2 size={16} /> Clear all
+          </button>
         </div>
         <span className="notif-unread-count">{unreadCount} unread notifications</span>
       </div>
@@ -140,7 +145,7 @@ export const NotificationsPage: React.FC = () => {
         cancelLabel="Cancel"
         icon="ti-trash"
         onCancel={() => setShowClearConfirm(false)}
-        onConfirm={handleClearConfirm}
+        onConfirm={clearAll}
       />
     </div>
   );

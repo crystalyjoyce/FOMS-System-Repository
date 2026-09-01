@@ -57,6 +57,8 @@ export const Login: React.FC = () => {
     
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
+      if (errors.clientId) toast.error(errors.clientId, 'Login Failed');
+      else if (errors.password) toast.error(errors.password, 'Login Failed');
       return;
     }
     setFieldErrors({});
@@ -64,6 +66,7 @@ export const Login: React.FC = () => {
     const result = login(clientId.trim(), password);
     if (!result.success && result.error) {
       setGlobalError(result.error);
+      toast.error(result.error, 'Login Failed');
     } else if (result.success && result.requirePasswordChange) {
       setShowChangePassword(true);
     } else if (result.success) {
@@ -275,13 +278,6 @@ export const Login: React.FC = () => {
               </button>
             </div>
 
-            {globalError && (
-              <div className="login-global-error">
-                <AlertCircle size={15} />
-                {globalError}
-              </div>
-            )}
-            
             {globalSuccess && (
               <div style={{
                 display: 'flex', alignItems: 'center', gap: '10px',

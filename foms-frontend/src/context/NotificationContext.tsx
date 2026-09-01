@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useMemo, useEffect } from 'react';
+import React, { createContext, useContext, useState, useMemo, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import { useAppData } from './AppDataContext';
 import { SEEDED_WAYBILLS, SEEDED_INVOICES, SEEDED_PAYMENTS, SEEDED_SPEEDPAY, SEEDED_AR_RECORDS } from '../data/seed';
@@ -150,10 +150,53 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const { waybills, invoices, payments, speedPay, arRecords } = useAppData();
 
+  // ── Fetch backend Notification records (payment validated/rejected events) ──
+  const [backendNotifs, setBackendNotifs] = useState<NotificationItem[]>([]);
+
+  const fetchBackendNotifs = useCallback(() => {
+    fetch('/api/notifications/finance')
+      .then(res => res.ok ? res.json() : [])
+      .then((data: any[]) => {
+        if (!Array.isArray(data)) return;
+        const mapped: NotificationItem[] = data.map(n => ({
+          id: n.id,
+          title: n.title ?? 'Notification',
+          description: n.description ?? '',
+          timestamp: (() => {
+            const diff = Date.now() - new Date(n.createdAt ?? n.timestamp ?? Date.now()).getTime();
+            const m = Math.floor(diff / 60000);
+            if (m < 1) return 'Just now';
+            if (m < 60) return `${m}m ago`;
+            const h = Math.floor(m / 60);
+            if (h < 24) return `${h}h ago`;
+            return `${Math.floor(h / 24)}d ago`;
+          })(),
+          read: n.read ?? false,
+          type: (n.type === 'success' ? 'success' : n.type === 'alert' ? 'alert' : 'info') as NotificationItem['type'],
+          category: 'finance' as NotificationItem['category'],
+          isToday: new Date(n.createdAt ?? Date.now()).toDateString() === new Date().toDateString(),
+          link: '/speedpay-validation'
+        }));
+        setBackendNotifs(mapped);
+      })
+      .catch(() => { /* silently ignore */ });
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    fetchBackendNotifs();
+    const interval = setInterval(fetchBackendNotifs, 30000);
+    return () => clearInterval(interval);
+  }, [user, fetchBackendNotifs]);
+
   const allNotifications = useMemo(() => {
     if (!user) return [];
-    return generateNotifications(user.role, { waybills, invoices, payments, speedPay, arRecords });
-  }, [user, waybills, invoices, payments, speedPay, arRecords]);
+    const generated = generateNotifications(user.role, { waybills, invoices, payments, speedPay, arRecords });
+    // Merge backend notifications (deduplicate by id)
+    const existingIds = new Set(generated.map(n => n.id));
+    const merged = backendNotifs.filter(n => !existingIds.has(n.id));
+    return [...generated, ...merged];
+  }, [user, waybills, invoices, payments, speedPay, arRecords, backendNotifs]);
 
   const notifications = useMemo(() => {
     return allNotifications

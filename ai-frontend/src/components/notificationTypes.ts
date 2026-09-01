@@ -30,4 +30,6 @@ export interface NotificationItem {
   source: string;
   /** Optional inline call-to-action, e.g. "View Route #8" */
   actionLabel?: string;
+  /** Optional navigation target when the notification is clicked */
+  link?: string;
 }

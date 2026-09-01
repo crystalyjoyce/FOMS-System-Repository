@@ -1,16 +1,35 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { Invoice, PaymentRecord, ClientUser } from '../data/mockData';
+
+export interface ClientNotification {
+  id: string;
+  type: 'success' | 'alert' | 'info' | 'system';
+  title: string;
+  description: string;
+  invoiceNo?: string;
+  read: boolean;
+  date: string;
+  timestamp: string;
+  source: string;
+  relatedPaymentId?: string;
+  relatedInvoiceId?: string;
+  createdAt: string;
+}
 
 interface ClientContextType {
   user: ClientUser | null;
   invoices: Invoice[];
   payments: PaymentRecord[];
+  notifications: ClientNotification[];
+  unreadCount: number;
   login: (clientId: string, password: string) => { success: boolean; error?: string; requirePasswordChange?: boolean };
   logout: () => void;
   createAccount: (account: Omit<ClientUser, 'avatarInitials' | 'password'>) => { success: boolean; error?: string };
   changePassword: (clientId: string, newPassword: string) => void;
   submitPayment: (invoiceId: string, paymentMethod: 'GCash' | 'Maya' | 'Bank Transfer', referenceNo: string, amount: number) => void;
   getDashboardSummary: () => { totalOutstanding: number; nextDueDate: string | null; totalPaidPeriod: number };
+  markAsRead: (id: string) => Promise<void>;
+  markAllAsRead: () => Promise<void>;
 }
 
 const ClientContext = createContext<ClientContextType | undefined>(undefined);
@@ -31,6 +50,8 @@ export const ClientProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
 
+  const [notifications, setNotifications] = useState<ClientNotification[]>([]);
+
   useEffect(() => {
     localStorage.setItem('speedpay_clients', JSON.stringify(clients));
   }, [clients]);
@@ -43,11 +64,24 @@ export const ClientProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     localStorage.setItem('speedpay_payments', JSON.stringify(payments));
   }, [payments]);
 
+  const fetchNotifications = useCallback(async (clientId: string) => {
+    try {
+      const res = await fetch(`/api/speedpay/notifications?clientId=${encodeURIComponent(clientId)}`);
+      if (res.ok) {
+        const data: ClientNotification[] = await res.json();
+        setNotifications(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch notifications:', err);
+    }
+  }, []);
+
   useEffect(() => {
     if (!user) {
       // Clear data when logged out to ensure isolation
       setInvoices([]);
       setPayments([]);
+      setNotifications([]);
       return;
     }
 
@@ -107,7 +141,33 @@ export const ClientProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         console.error('Failed to fetch payment transactions:', err);
         setPayments([]);
       });
-  }, [user]);
+
+    // Fetch notifications immediately and then every 30 seconds
+    fetchNotifications(user.id);
+    const notifInterval = setInterval(() => fetchNotifications(user.id), 30000);
+    return () => clearInterval(notifInterval);
+  }, [user, fetchNotifications]);
+
+  const markAsRead = async (id: string) => {
+    try {
+      await fetch(`/api/speedpay/notifications/${encodeURIComponent(id)}/read`, { method: 'PUT' });
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    } catch (err) {
+      console.error('Failed to mark notification as read:', err);
+    }
+  };
+
+  const markAllAsRead = async () => {
+    if (!user) return;
+    try {
+      await fetch(`/api/speedpay/notifications/mark-all-read?clientId=${encodeURIComponent(user.id)}`, { method: 'PUT' });
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    } catch (err) {
+      console.error('Failed to mark all notifications as read:', err);
+    }
+  };
+
+  const unreadCount = notifications.filter(n => !n.read).length;
 
   // Auth functions
   const login = (clientId: string, password: string) => {
@@ -250,12 +310,16 @@ export const ClientProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       user,
       invoices,
       payments,
+      notifications,
+      unreadCount,
       login,
       logout,
       createAccount,
       changePassword,
       submitPayment,
-      getDashboardSummary
+      getDashboardSummary,
+      markAsRead,
+      markAllAsRead
     }}>
       {children}
     </ClientContext.Provider>

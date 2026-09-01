@@ -23,7 +23,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, className = ''
   let tier: 'success' | 'warning' | 'danger' = 'warning'; // default to orange/warning as seen in the image for most things
 
   // 1. Critical / Negative (Red)
-  if (['failed', 'overdue', 'outflow', 'missing', 'deactivated', 'cancelled', 'returned'].includes(normalized) || normalized.includes('60-90') || normalized.includes('90+')) {
+  if (['failed', 'overdue', 'outflow', 'missing', 'deactivated', 'cancelled', 'returned', 'rejected'].includes(normalized) || normalized.includes('60-90') || normalized.includes('90+')) {
     tier = 'danger';
   }
   // 2. Positive / Success (Green)
