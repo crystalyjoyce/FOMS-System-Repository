@@ -52,7 +52,7 @@ public class SpeedPaySubmissionsController : ControllerBase
             AmountPaid = request.AmountPaid,
             ProofFileName = request.ProofFileName ?? "proof.jpg",
             ProofFileUrl = request.ProofFileUrl,
-            Status = "Pending Validation",
+            Status = "Pending Finance Validation",
             SubmittedAt = DateTime.UtcNow,
         };
 
@@ -72,7 +72,7 @@ public class SpeedPaySubmissionsController : ControllerBase
             ReferenceNumber = submission.ReferenceNumber,
             ProofImageUrl = submission.ProofFileUrl,
             Remarks = "Manual payment submission proof uploaded.",
-            PaymentStatus = "Pending Validation", // Awaiting initial Accountant check
+            PaymentStatus = "Pending Finance Validation", // Awaiting final finance validation
             SubmittedAt = DateTime.UtcNow,
             PaymentDate = DateTime.UtcNow.ToString("yyyy-MM-dd"),
             DateRecorded = DateTime.UtcNow.ToString("yyyy-MM-dd"),
@@ -90,9 +90,9 @@ public class SpeedPaySubmissionsController : ControllerBase
             Id = Guid.NewGuid().ToString(),
             PaymentId = payment.Id,
             InvoiceId = invoice.Id,
-            Status = "Pending Validation",
+            Status = "Pending Finance Validation",
             Action = "Payment Submitted",
-            Remarks = "Manual payment proof uploaded. Pending validation.",
+            Remarks = "Manual payment proof uploaded. Pending finance validation.",
             PerformedBy = submission.ClientName,
             PerformedRole = "Client",
             CreatedAt = DateTime.UtcNow
@@ -100,14 +100,14 @@ public class SpeedPaySubmissionsController : ControllerBase
         _context.PaymentHistories.Add(history);
 
         // Notifications
-        var notif = new Notification
+        var notif1 = new Notification
         {
             Id = Guid.NewGuid().ToString(),
             Type = "PAYMENT_VALIDATION_REQUIRED",
             Title = "Payment Needs Validation",
-            Description = $"A SpeedPay payment for Invoice {invoice.InvoiceNo} is pending validation.",
+            Description = $"A SpeedPay payment for Invoice {invoice.InvoiceNo} is pending finance validation.",
             InvoiceNo = invoice.InvoiceNo,
-            RecipientRole = "Accountant",
+            RecipientRole = "Financial Manager",
             RelatedPaymentId = payment.Id,
             RelatedInvoiceId = invoice.Id,
             Read = false,
@@ -115,7 +115,23 @@ public class SpeedPaySubmissionsController : ControllerBase
             Timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"),
             Source = "SpeedPay Gateway"
         };
-        _context.Notifications.Add(notif);
+        var notif2 = new Notification
+        {
+            Id = Guid.NewGuid().ToString(),
+            Type = "PAYMENT_VALIDATION_REQUIRED",
+            Title = "Payment Needs Validation",
+            Description = $"A SpeedPay payment for Invoice {invoice.InvoiceNo} is pending finance validation.",
+            InvoiceNo = invoice.InvoiceNo,
+            RecipientRole = "Head Accountant",
+            RelatedPaymentId = payment.Id,
+            RelatedInvoiceId = invoice.Id,
+            Read = false,
+            Date = DateTime.UtcNow.ToString("yyyy-MM-dd"),
+            Timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"),
+            Source = "SpeedPay Gateway"
+        };
+        _context.Notifications.Add(notif1);
+        _context.Notifications.Add(notif2);
 
         await _context.SaveChangesAsync(default);
 
@@ -187,7 +203,7 @@ public class SpeedPaySubmissionsController : ControllerBase
         var submission = await _context.SpeedPayManualSubmissions.FirstOrDefaultAsync(s => s.Id == id);
         if (submission == null) return NotFound(new { message = $"Submission '{id}' not found." });
 
-        var allowed = new[] { "Validated", "Rejected", "Pending Validation" };
+        var allowed = new[] { "Validated", "Rejected", "Pending Finance Validation", "Returned / Needs Correction" };
         if (!allowed.Contains(request.Status))
             return BadRequest(new { message = $"Invalid status '{request.Status}'. Allowed: {string.Join(", ", allowed)}" });
 
@@ -209,7 +225,7 @@ public class SpeedPaySubmissionsController : ControllerBase
                 ReferenceNumber = submission.ReferenceNumber,
                 ProofImageUrl = submission.ProofFileUrl,
                 Remarks = request.Remarks ?? "Manual submission status updated.",
-                PaymentStatus = request.Status == "Validated" ? "Validated" : request.Status == "Rejected" ? "Rejected" : "Submitted",
+                PaymentStatus = request.Status,
                 SubmittedAt = submission.SubmittedAt,
                 PaymentDate = DateTime.UtcNow.ToString("yyyy-MM-dd"),
                 DateRecorded = DateTime.UtcNow.ToString("yyyy-MM-dd")
@@ -218,11 +234,11 @@ public class SpeedPaySubmissionsController : ControllerBase
         }
         else
         {
-            payment.PaymentStatus = request.Status == "Validated" ? "Validated" : request.Status == "Rejected" ? "Rejected" : "Submitted";
+            payment.PaymentStatus = request.Status;
             if (request.Status == "Rejected") {
                 payment.RejectionReason = request.Remarks ?? "Manual submission rejected.";
                 payment.RejectedAt = DateTime.UtcNow;
-                payment.RejectedBy = "Finance Manager";
+                payment.RejectedBy = "Finance Manager"; // ToDo: Grab actual user identity
             }
             if (!string.IsNullOrWhiteSpace(request.Remarks)) {
                 payment.Remarks = request.Remarks;
@@ -390,6 +406,51 @@ public class SpeedPaySubmissionsController : ControllerBase
                     CreatedAt = DateTime.UtcNow
                 };
                 _context.Notifications.Add(notifRejected);
+            }
+        }
+        else if (request.Status == "Returned / Needs Correction")
+        {
+            if (invoice != null)
+            {
+                invoice.PaymentValidationStatus = "Returned / Needs Correction";
+                _context.Invoices.Update(invoice);
+
+                var history = new PaymentHistory
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    PaymentId = payment.Id,
+                    InvoiceId = invoice.Id,
+                    Status = "Returned / Needs Correction",
+                    Action = "Return Payment",
+                    Remarks = request.Remarks ?? "Manual submission returned for correction.",
+                    PerformedBy = "Finance Manager",
+                    PerformedRole = "Financial Manager",
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.PaymentHistories.Add(history);
+
+                var returnMessage = !string.IsNullOrWhiteSpace(request.Remarks)
+                    ? $"Your payment for Invoice {invoice.InvoiceNo} needs correction: {request.Remarks}."
+                    : $"Your payment for Invoice {invoice.InvoiceNo} was returned for correction. Please check the details.";
+
+                var notifReturned = new Notification
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Type = "info",
+                    Title = "Payment Needs Correction",
+                    Description = returnMessage,
+                    InvoiceNo = invoice.InvoiceNo,
+                    RecipientUserId = submission.ClientId,
+                    RecipientRole = "Client",
+                    RelatedPaymentId = payment.Id,
+                    RelatedInvoiceId = invoice.Id,
+                    Read = false,
+                    Date = DateTime.UtcNow.ToString("yyyy-MM-dd"),
+                    Timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"),
+                    Source = "Finance Department",
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.Notifications.Add(notifReturned);
             }
         }
 

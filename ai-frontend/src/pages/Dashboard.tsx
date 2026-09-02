@@ -41,15 +41,8 @@ export const Dashboard: React.FC = () => {
         flaggedAmount: Math.round((t.totalOutstanding || 0) * 0.15)
       }));
     }
-    // Zeroed points if database trends empty
-    return [
-      { dateStr: 'Jul 1', totalOutstanding: 0, collectedAmount: 0, flaggedAmount: 0 },
-      { dateStr: 'Jul 5', totalOutstanding: 0, collectedAmount: 0, flaggedAmount: 0 },
-      { dateStr: 'Jul 10', totalOutstanding: 0, collectedAmount: 0, flaggedAmount: 0 },
-      { dateStr: 'Jul 15', totalOutstanding: 0, collectedAmount: 0, flaggedAmount: 0 },
-      { dateStr: 'Jul 20', totalOutstanding: 0, collectedAmount: 0, flaggedAmount: 0 },
-      { dateStr: 'Jul 22', totalOutstanding: 0, collectedAmount: 0, flaggedAmount: 0 }
-    ];
+    // Return empty if database trends empty
+    return [];
   }, [trends]);
 
   // AI Duplicate Detection Categorization Breakdown
@@ -202,18 +195,12 @@ export const Dashboard: React.FC = () => {
             value={String(summary?.totalDuplicateAlerts ?? 0)}
             icon="ti ti-alert-octagon"
             variant="teal"
-            trend={{ value: '12%', type: 'up' }}
-            periodText="vs. last week"
-            sparklineData={[20, 25, 45, 55, 30, 40, 70]}
           />
           <StatusCard
             label="Pending Review"
             value={String(summary?.pendingDuplicateReviews ?? 0)}
             icon="ti ti-clock"
             variant="teal"
-            trend={{ value: '8%', type: 'up' }}
-            periodText="vs. last week"
-            sparklineData={[30, 45, 25, 35, 60, 50, 75]}
           />
           <StatusCard
             label="Exact Match Alerts"
@@ -221,9 +208,6 @@ export const Dashboard: React.FC = () => {
             icon="ti ti-scan"
             variant="danger"
             polarity="lower-is-better"
-            trend={{ value: '4%', type: 'down' }}
-            periodText="vs. last week"
-            sparklineData={[80, 65, 75, 40, 55, 30, 20]}
           />
           <StatusCard
             label="Urgent Collections"
@@ -231,9 +215,6 @@ export const Dashboard: React.FC = () => {
             icon="ti ti-coin"
             variant="warning"
             polarity="lower-is-better"
-            trend={{ value: '15%', type: 'down' }}
-            periodText="vs. last week"
-            sparklineData={[90, 80, 60, 55, 45, 30, 25]}
           />
           <StatusCard
             label="Awaiting Validation"
@@ -241,9 +222,6 @@ export const Dashboard: React.FC = () => {
             icon="ti ti-circle-check"
             variant="warning"
             polarity="lower-is-better"
-            trend={{ value: '8%', type: 'down' }}
-            periodText="vs. last week"
-            sparklineData={[70, 80, 50, 45, 60, 35, 20]}
           />
         </div>
 

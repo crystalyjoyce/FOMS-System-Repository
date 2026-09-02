@@ -45,7 +45,7 @@ export const CollectionRecommendations: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/ai/collection-recommendations?status=${statusFilter}`, {
+      const res = await fetch(`/api/ai/collection/recommendations?status=${statusFilter}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -77,7 +77,7 @@ export const CollectionRecommendations: React.FC = () => {
     }
     setModalLoading(true);
     try {
-      const res = await fetch(`/api/ai/collection-recommendations/${selectedRec.id}/review`, {
+      const res = await fetch(`/api/ai/collection/recommendations/${selectedRec.id}/review`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ decision, remarks, recommendedAction }),

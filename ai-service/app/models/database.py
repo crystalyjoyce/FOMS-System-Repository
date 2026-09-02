@@ -4,7 +4,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from datetime import datetime
 from app.core.config import settings
 
-engine = create_engine(settings.POSTGRES_URI)
+engine = create_engine(settings.POSTGRES_URI, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
