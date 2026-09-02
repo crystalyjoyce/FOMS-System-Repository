@@ -46,19 +46,9 @@ export const StatusCard: React.FC<StatusCardProps> = ({
 }) => {
   const colors = variantColors[variant] || variantColors.teal;
   
-  // Add default rich data to make cards look like the image if not provided
-  const displayTrend = trend || {
-    type: (variant === 'danger' || variant === 'warning') && polarity === 'higher-is-better' ? 'down' : 'up',
-    value: `${Math.floor(Math.random() * 20) + 2}%`
-  } as Trend;
-
-  const displaySparkline = sparklineData || (
-    displayTrend.type === 'up' 
-      ? [20, 25, 30, 28, 40, 45, 60] // going up
-      : [60, 55, 40, 42, 30, 25, 20] // going down
-  );
-
-  const displayPeriodText = periodText || 'vs. last week';
+  const displayTrend = trend || null;
+  const displaySparkline = sparklineData || [];
+  const displayPeriodText = periodText || '';
 
   const customStyles = {
     '--kpi-ac': colors.accent,
@@ -144,27 +134,31 @@ export const StatusCard: React.FC<StatusCardProps> = ({
         <div className="kpi-val">{value}</div>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', marginTop: 'auto' }}>
-          <div className={`kpi-trend ${getTrendClass(displayTrend.type)}`}>
-            <span>{getTrendIcon(displayTrend.type)} {displayTrend.value}</span>
-          </div>
+          {displayTrend && (
+            <div className={`kpi-trend ${getTrendClass(displayTrend.type)}`}>
+              <span>{getTrendIcon(displayTrend.type)} {displayTrend.value}</span>
+            </div>
+          )}
           
-          <span className="kpi-period">{displayPeriodText}</span>
+          {displayPeriodText && <span className="kpi-period">{displayPeriodText}</span>}
         </div>
 
-        <div className="kpi-spark">
-          {displaySparkline.map((val, idx) => {
-            const heightPercent = maxSparkVal > 0 ? (val / maxSparkVal) * 100 : 0;
-            const isHigh = val > maxSparkVal * 0.7; // highlight highest bars
-            return (
-              <div
-                key={idx}
-                className={`spark-b ${isHigh ? 'hi' : ''}`}
-                style={{ height: `${heightPercent}%` }}
-                title={`Value: ${val}`}
-              />
-            );
-          })}
-        </div>
+        {displaySparkline.length > 0 && (
+          <div className="kpi-spark">
+            {displaySparkline.map((val, idx) => {
+              const heightPercent = maxSparkVal > 0 ? (val / maxSparkVal) * 100 : 0;
+              const isHigh = val > maxSparkVal * 0.7; // highlight highest bars
+              return (
+                <div
+                  key={idx}
+                  className={`spark-b ${isHigh ? 'hi' : ''}`}
+                  style={{ height: `${heightPercent}%` }}
+                  title={`Value: ${val}`}
+                />
+              );
+            })}
+          </div>
+        )}
       </div>
     </>
   );
