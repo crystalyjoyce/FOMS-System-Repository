@@ -148,7 +148,7 @@ def get_collection_recommendations(
 
         result = []
         for r, p in query.all():
-            if status != "ALL" and status not in r.status:
+            if status.upper() != "ALL" and (not r.status or status.lower() not in r.status.lower()):
                 continue
             ar_info = ar_map.get(p.invoice_id) or {}
             history = history_map.get(str(r.id))
@@ -193,7 +193,7 @@ def review_collection_recommendation(
 ):
     """
     Review/validate a collection recommendation.
-    Allowed: Financial Manager, Head Accountant only.
+    Allowed: All staff roles (Finance Manager, Head Accountant, Accountant, Coordinator, Assistant FM).
     Supports both real DB records and static mock IDs (101, 102, 103).
     """
     reviewer_username = payload.get("preferred_username") or payload.get("unique_name") or payload.get("name") or "Unknown"
@@ -202,25 +202,53 @@ def review_collection_recommendation(
     status_mapping = {
         "Accepted as Recommendation": "Processing",
         "Accepted with Modification": "Processing",
+        "Reviewed & Closed": "Reviewed & Closed",
+        "Reject Priority Assignment": "Rejected",
         "Rejected": "Rejected",
         "Escalated": "Processing",
     }
 
-    # Try to update the real DB record if it exists
-    rec = db.query(AIRecommendation).filter(AIRecommendation.id == id).first()
-    if rec:
-        rec.status = status_mapping.get(request.decision, "Processing")
+    new_status = status_mapping.get(request.decision, "Processing")
 
-    # Always log to AIReviewHistory (covers both real and mock items)
-    # Remove old history for same target so only latest review is shown
+    # Try to find the recommendation by id
+    rec = db.query(AIRecommendation).filter(AIRecommendation.id == id).first()
+
+    if not rec:
+        # The frontend sends the PRIORITY id when a card has no existing recommendation.
+        # We auto-create an AIRecommendation for it so it shows up in the ForReview JOIN query.
+        priority = db.query(AICollectionPriority).filter(AICollectionPriority.id == id).first()
+        if priority:
+            # Check if this priority already has a recommendation via priority_result_id
+            existing = db.query(AIRecommendation).filter(AIRecommendation.priority_result_id == priority.id).first()
+            if existing:
+                rec = existing
+            else:
+                # Create recommendation record so it appears in ForReview
+                rec = AIRecommendation(
+                    priority_result_id=priority.id,
+                    recommendation_text="Manual collection action logged by staff directly from Priority List.",
+                    decision_support_notice="Human decision logged — AI recommendation auto-generated from priority card.",
+                    status=new_status,
+                )
+                db.add(rec)
+                db.flush()  # Assign rec.id before using it
+
+    if rec:
+        rec.status = new_status
+        actual_id = rec.id
+    else:
+        # Fallback: keep original id (for mock static items like 101, 102, 103)
+        actual_id = id
+
+    # Always log to AIReviewHistory — remove old entry first so only latest review is shown
     db.query(AIReviewHistory).filter(
         AIReviewHistory.target_type == "COLLECTION_RECOMMENDATION",
-        AIReviewHistory.target_id == str(id)
+        AIReviewHistory.target_id == str(actual_id)
     ).delete()
 
     history = AIReviewHistory(
         target_type="COLLECTION_RECOMMENDATION",
-        target_id=str(id),
+        target_id=str(actual_id),
         reviewer_username=reviewer_username,
         reviewer_role=reviewer_role,
         decision=request.decision,
@@ -231,5 +259,5 @@ def review_collection_recommendation(
     db.add(history)
     db.commit()
 
-    return MessageResponse(success=True, message=f"Recommendation {id} reviewed successfully.")
+    return MessageResponse(success=True, message="Decision logged successfully. It is now visible in For Review.")
 
