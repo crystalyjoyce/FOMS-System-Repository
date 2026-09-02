@@ -52,9 +52,13 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
         if not result:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-        # Compare passwords
-        if not bcrypt.checkpw(request.password.encode('utf-8'), result["password_hash"].encode('utf-8')):
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+        # Compare passwords gracefully handling non-bcrypt hashes
+        try:
+            if not bcrypt.checkpw(request.password.encode('utf-8'), result["password_hash"].encode('utf-8')):
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+        except ValueError:
+            # Raised by bcrypt if the hash is not in a valid format (e.g., PBKDF2)
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials. Hash format mismatch.")
 
         if not result.get("is_active", True):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is inactive")
