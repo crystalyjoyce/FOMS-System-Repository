@@ -103,8 +103,8 @@ async def verify_gateway_api_key(request: Request, call_next):
 
     if api_key != settings.AI_SERVICE_API_KEY:
         host = request.client.host if request.client else "unknown"
-        if host in ["127.0.0.1", "localhost", "::1"]:
-            pass  # Allow local dev traffic regardless of key
+        if host in ["127.0.0.1", "localhost", "::1"] or host.startswith("172."):
+            pass  # Allow local dev / Docker bridge traffic regardless of key
         else:
             return JSONResponse(
                 status_code=status.HTTP_403_FORBIDDEN,

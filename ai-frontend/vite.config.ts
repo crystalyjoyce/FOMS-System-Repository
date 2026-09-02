@@ -20,6 +20,9 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
+        headers: {
+          'X-API-Key': 'change-me'
+        },
       }
     }
   }
