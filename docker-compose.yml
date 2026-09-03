@@ -100,7 +100,7 @@ services:
       dockerfile: Dockerfile
     container_name: foms-frontend
     ports:
-      - "5173:80"
+      - "6001:80"
     depends_on:
       - foms-backend
     restart: unless-stopped
@@ -112,7 +112,7 @@ services:
       dockerfile: Dockerfile
     container_name: speedpay-portal
     ports:
-      - "5174:80"
+      - "6002:80"
     depends_on:
       - foms-backend
     restart: unless-stopped
@@ -175,7 +175,7 @@ services:
       dockerfile: Dockerfile
     container_name: foms-ai-frontend
     ports:
-      - "5175:80"
+      - "6003:80"
     depends_on:
       - foms-ai-gateway
     restart: unless-stopped
