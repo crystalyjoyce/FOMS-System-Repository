@@ -53,7 +53,7 @@ export const ClientProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       email: 'test001@speedpay.test',
       contactNumber: '09000000001',
       avatarInitials: 'TC',
-      password: 'passwor123',
+      password: 'password123',
       isFirstLogin: false,
     };
 
