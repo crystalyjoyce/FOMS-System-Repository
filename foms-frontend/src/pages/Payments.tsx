@@ -779,16 +779,7 @@ export const Payments: React.FC = () => {
             ],
             filterFn: (row: any, val: string) => row.status === val
           }]}
-          actions={[
-            {
-              label: 'View Details',
-              icon: 'ti-eye',
-              onClick: (row: any) => {
-                const sourceId = row.id.startsWith('SP-') ? row.id.slice(3) : row.id;
-                navigate(`/payments/${row.clientId}?paymentId=${sourceId}&action=view`);
-              }
-            }
-          ]}
+          actions={[]}
         />
       </TableContainer>
     </div>

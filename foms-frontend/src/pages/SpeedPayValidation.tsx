@@ -254,6 +254,18 @@ export const SpeedPayValidation: React.FC = () => {
       onClick: (row: any) => navigate(`/speedpay-validation?submissionId=${row.id}`),
       hidden: (row: any) => row.status !== 'Pending Validation',
     },
+    {
+      label: 'Reject',
+      icon: 'ti-x',
+      onClick: (row: any) => navigate(`/speedpay-validation?submissionId=${row.id}`),
+      hidden: (row: any) => row.status !== 'Pending Validation',
+    },
+    {
+      label: 'View Details',
+      icon: 'ti-eye',
+      onClick: (row: any) => navigate(`/speedpay-validation?submissionId=${row.id}`),
+      hidden: (row: any) => row.status === 'Pending Validation',
+    },
   ];
 
   // ─── Detail / Validation View ──────────────────────────────────────
