@@ -43,8 +43,27 @@ export const ClientProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Use localStorage to persist registered client accounts across reloads
   const [clients, setClients] = useState<ClientUser[]>(() => {
     const saved = localStorage.getItem('speedpay_clients');
-    return saved ? JSON.parse(saved) : [];
+    const existing: ClientUser[] = saved ? JSON.parse(saved) : [];
+
+    // Seed the default test account if it doesn't already exist
+    const defaultClient: ClientUser = {
+      id: 'TEST-001',
+      name: 'Test Client',
+      companyName: 'Test Company',
+      email: 'test001@speedpay.test',
+      contactNumber: '09000000001',
+      avatarInitials: 'TC',
+      password: 'passwor123',
+      isFirstLogin: false,
+    };
+
+    const alreadyExists = existing.some(
+      (c) => c.id.toLowerCase() === defaultClient.id.toLowerCase()
+    );
+
+    return alreadyExists ? existing : [defaultClient, ...existing];
   });
+
 
   const [invoices, setInvoices] = useState<Invoice[]>([]);
 
