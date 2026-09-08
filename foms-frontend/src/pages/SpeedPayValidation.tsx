@@ -81,7 +81,7 @@ export const SpeedPayValidation: React.FC = () => {
   const navigate = useNavigate();
   const { speedPay, invoices, updateSpeedPay, updateInvoice, addReceipt, receipts, clients, addPayment } = useAppData();
 
-  const [validationStatus, setValidationStatus] = useState<'Approve' | 'Reject'>('Approve');
+  const [validationStatus, setValidationStatus] = useState<'Approve' | 'Reject' | ''>('');
   const [rejectionReason, setRejectionReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -249,22 +249,9 @@ export const SpeedPayValidation: React.FC = () => {
 
   const actions = [
     {
-      label: 'Validate',
-      icon: 'ti-check',
-      onClick: (row: any) => navigate(`/speedpay-validation?submissionId=${row.id}`),
-      hidden: (row: any) => row.status !== 'Pending Validation',
-    },
-    {
-      label: 'Reject',
-      icon: 'ti-x',
-      onClick: (row: any) => navigate(`/speedpay-validation?submissionId=${row.id}`),
-      hidden: (row: any) => row.status !== 'Pending Validation',
-    },
-    {
       label: 'View Details',
       icon: 'ti-eye',
       onClick: (row: any) => navigate(`/speedpay-validation?submissionId=${row.id}`),
-      hidden: (row: any) => row.status === 'Pending Validation',
     },
   ];
 
@@ -341,7 +328,7 @@ export const SpeedPayValidation: React.FC = () => {
 
             <hr style={{ border: 0, borderTop: '1px solid #E2E8F0', margin: 0 }} />
 
-            {sub.status === 'Pending Validation' ? (
+            {(sub.status !== 'Validated' && sub.status !== 'Rejected') ? (
               <>
                 <div>
                   <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: '#0F172A', marginBottom: 10 }}>VALIDATION DECISION</label>
@@ -350,15 +337,16 @@ export const SpeedPayValidation: React.FC = () => {
                     onChange={(e) => setValidationStatus(e.target.value as 'Approve' | 'Reject')}
                     style={{
                       width: '100%', padding: '12px 16px',
-                      border: validationStatus === 'Approve' ? '2px solid #10B981' : '2px solid #EF4444',
+                      border: validationStatus === 'Approve' ? '2px solid #10B981' : validationStatus === 'Reject' ? '2px solid #EF4444' : '1px solid #E2E8F0',
                       borderRadius: 8, fontSize: 14, outline: 'none',
-                      background: validationStatus === 'Approve' ? '#F0FDF4' : '#FEF2F2',
-                      color: validationStatus === 'Approve' ? '#047857' : '#B91C1C',
+                      background: validationStatus === 'Approve' ? '#F0FDF4' : validationStatus === 'Reject' ? '#FEF2F2' : '#F8FAFC',
+                      color: validationStatus === 'Approve' ? '#047857' : validationStatus === 'Reject' ? '#B91C1C' : '#0F172A',
                       cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700
                     }}
                   >
-                    <option value="Approve">✓ Approve — Mark as Validated</option>
-                    <option value="Reject">✗ Reject — Return to Client</option>
+                    <option value="" disabled style={{ color: '#64748B' }}>Select Decision...</option>
+                    <option value="Approve" style={{ color: '#0F172A' }}>Accept Payment</option>
+                    <option value="Reject" style={{ color: '#0F172A' }}>Reject Payment</option>
                   </select>
                 </div>
                 {validationStatus === 'Reject' && (
@@ -377,9 +365,9 @@ export const SpeedPayValidation: React.FC = () => {
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16 }}>
                   <Button title="Cancel" variant="secondary" onClick={() => navigate('/speedpay-validation')} />
                   <Button
-                    title={isSubmitting ? 'Processing...' : (validationStatus === 'Approve' ? 'Approve Payment' : 'Reject Payment')}
+                    title={isSubmitting ? 'Processing...' : 'Submit'}
                     onClick={() => handleValidate(sub)}
-                    disabled={isSubmitting || (validationStatus === 'Reject' && !rejectionReason.trim())}
+                    disabled={isSubmitting || validationStatus === '' || (validationStatus === 'Reject' && !rejectionReason.trim())}
                   />
                 </div>
               </>

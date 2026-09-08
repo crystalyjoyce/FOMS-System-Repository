@@ -117,6 +117,9 @@ public class SpeedPayController : ApiControllerBase
                     BillingDate = DateTime.UtcNow.AddDays(-i).ToString("O"),
                     DueDate = DateTime.UtcNow.AddDays(30 - i).ToString("O"),
                     TotalAmount = i * 1250m,
+                    FreightCharges = (i * 1250m) / 1.12m, // Back-calculated before VAT
+                    VatAmount = (i * 1250m) - ((i * 1250m) / 1.12m),
+                    VatRate = 0.12,
                     Balance = i * 1250m,
                     PaymentStatus = "Unpaid",
                     Description = $"Logistics Services Route {i}",

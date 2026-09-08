@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\Administrator\\OneDrive - Polytechnic University of the Philippines\\Attachments\\Capstone (NewClone)\\FOMS-System-Repository\\ai-gateway\\foms-ai-gateway.csproj": {}
+    "C:\\Users\\Administrator\\OneDrive - Polytechnic University of the Philippines\\Attachments\\Develop4\\FOMS-System-Repository\\ai-gateway\\foms-ai-gateway.csproj": {}
   },
   "projects": {
-    "C:\\Users\\Administrator\\OneDrive - Polytechnic University of the Philippines\\Attachments\\Capstone (NewClone)\\FOMS-System-Repository\\ai-gateway\\foms-ai-gateway.csproj": {
+    "C:\\Users\\Administrator\\OneDrive - Polytechnic University of the Philippines\\Attachments\\Develop4\\FOMS-System-Repository\\ai-gateway\\foms-ai-gateway.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Administrator\\OneDrive - Polytechnic University of the Philippines\\Attachments\\Capstone (NewClone)\\FOMS-System-Repository\\ai-gateway\\foms-ai-gateway.csproj",
+        "projectUniqueName": "C:\\Users\\Administrator\\OneDrive - Polytechnic University of the Philippines\\Attachments\\Develop4\\FOMS-System-Repository\\ai-gateway\\foms-ai-gateway.csproj",
         "projectName": "foms-ai-gateway",
-        "projectPath": "C:\\Users\\Administrator\\OneDrive - Polytechnic University of the Philippines\\Attachments\\Capstone (NewClone)\\FOMS-System-Repository\\ai-gateway\\foms-ai-gateway.csproj",
+        "projectPath": "C:\\Users\\Administrator\\OneDrive - Polytechnic University of the Philippines\\Attachments\\Develop4\\FOMS-System-Repository\\ai-gateway\\foms-ai-gateway.csproj",
         "packagesPath": "C:\\Users\\Administrator\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Administrator\\OneDrive - Polytechnic University of the Philippines\\Attachments\\Capstone (NewClone)\\FOMS-System-Repository\\ai-gateway\\obj\\",
+        "outputPath": "C:\\Users\\Administrator\\OneDrive - Polytechnic University of the Philippines\\Attachments\\Develop4\\FOMS-System-Repository\\ai-gateway\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\Administrator\\AppData\\Roaming\\NuGet\\NuGet.Config"

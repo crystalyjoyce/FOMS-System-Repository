@@ -22,7 +22,7 @@ export const InvoicingDesk: React.FC = () => {
   const actionParam = searchParams.get('action');
   
   const { toast } = useToast();
-  const { invoices, clients, updateInvoice } = useAppData();
+  const { invoices, clients, updateInvoice, receipts } = useAppData();
   const [activeFilter, setActiveFilter] = useState<InvoiceStatusFilter>('All');
   
   const [isPrintMode, setIsPrintMode] = useState(false);
@@ -90,6 +90,13 @@ export const InvoicingDesk: React.FC = () => {
     } else if (action === 'Finalizing') {
       updateInvoice(inv.id, { status: 'Finalized' });
       toast.success(`Invoice ${inv.invoiceNumber} finalized successfully.`, 'Success');
+    } else if (action === 'ViewReceipt') {
+      const receipt = receipts.find(r => r.invoiceId === inv.id);
+      if (receipt) {
+        navigate(`/receipts/${receipt.id}`);
+      } else {
+        toast.info('Receipt not yet generated for this invoice.', 'Info');
+      }
     }
   };
 
@@ -155,6 +162,7 @@ export const InvoicingDesk: React.FC = () => {
   const actions = [
     { label: 'View Details', icon: 'ti-eye', onClick: (row: any) => handleAction(row.invoiceId || row.id, 'Viewing') },
     { label: 'Download PDF', icon: 'ti-file-download', onClick: (row: any) => handleAction(row.invoiceId || row.id, 'Downloading') },
+    { label: 'View Receipt', icon: 'ti-receipt', onClick: (row: any) => handleAction(row.invoiceId || row.id, 'ViewReceipt'), hidden: (row: any) => row.status !== 'Paid' },
     { label: 'Submit for Approval', icon: 'ti-send', onClick: (row: any) => handleAction(row.invoiceId || row.id, 'Submitting'), hidden: (row: any) => row.status !== 'Draft' },
     { label: 'Finalize', icon: 'ti-file-check', onClick: (row: any) => handleAction(row.invoiceId || row.id, 'Finalizing'), hidden: (row: any) => row.status !== 'Verified' }
   ];

@@ -289,6 +289,64 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       .catch(() => { /* keep static seed as fallback */ });
   }, []);
 
+  // ── Fetch Official Receipts from real backend on mount ──
+  useEffect(() => {
+    api.get('/official-receipts')
+      .then((res) => {
+        const mapped: Receipt[] = res.data.map((r: any) => ({
+          id: r.id,
+          receiptNumber: r.receiptNumber ?? r.orNumber ?? r.id,
+          invoiceId: r.invoiceId ?? r.paymentCollection?.invoiceId ?? '',
+          paymentId: r.paymentCollectionId ?? r.paymentId ?? '',
+          clientId: r.clientId ?? r.paymentCollection?.clientId ?? '',
+          amount: r.amount ?? r.paymentCollection?.amountCollected ?? 0,
+          referenceNumber: r.referenceNumber ?? '',
+          issuedBy: r.issuedBy ?? 'System',
+          issuedAt: r.issuedDate ?? r.issuedAt ?? new Date().toISOString(),
+        }));
+        if (mapped.length > 0) {
+          setReceipts(prev => {
+            const existingIds = new Set(prev.map(r => r.id));
+            const newOnes = mapped.filter(r => !existingIds.has(r.id));
+            return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
+          });
+        }
+      })
+      .catch(() => { /* keep in-memory receipts as fallback */ });
+  }, []);
+
+  // ── Auto-derive receipts from validated SpeedPay submissions ──
+  // Whenever the SpeedPay list updates, create a Receipt entry for every
+  // Validated submission that does not already have one. This ensures the
+  // Official Receipt History table is populated even if the accountant
+  // validated in a previous session (before receipts were persisted).
+  useEffect(() => {
+    const validatedSubs = speedPay.filter(s => s.status === 'Validated');
+    if (validatedSubs.length === 0) return;
+
+    setReceipts(prev => {
+      const existingPaymentIds = new Set(prev.map(r => r.paymentId));
+      const derived: Receipt[] = validatedSubs
+        .filter(s => !existingPaymentIds.has(s.id))
+        .map((s, idx) => {
+          const clientId = (s as any).clientId ?? '';
+          const orNum = `OR-${new Date().getFullYear()}-${String(prev.length + idx + 1).padStart(4, '0')}`;
+          return {
+            id: `OR-derived-${s.id}`,
+            receiptNumber: orNum,
+            invoiceId: s.invoiceId,
+            paymentId: s.id,
+            clientId,
+            amount: s.amountPaid ?? 0,
+            referenceNumber: s.referenceNumber ?? '',
+            issuedBy: (s as any).validatedBy ?? 'System',
+            issuedAt: (s as any).validatedAt ?? s.submittedAt ?? new Date().toISOString(),
+          };
+        });
+      return derived.length > 0 ? [...prev, ...derived] : prev;
+    });
+  }, [speedPay]);
+
   // ── Fetch CashFlow from real backend on mount ──
   useEffect(() => {
     api.get('/cash-flow')
