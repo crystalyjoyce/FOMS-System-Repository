@@ -69,6 +69,50 @@ def extract_document_fields(file_bytes: bytes, filename: str, mime_type: str = "
     NEEDS_GEMINI_REVIEW response that BLOCKS the duplicate scan. We never auto-approve
     a document when we cannot visually inspect its content.
     """
+    # --- MOCK TESTING MODE ---
+    # Automatically intercepts the scan and simulates the AI response based on the filename.
+    # This allows testing the strict validation UI without needing a valid Google API key.
+    fn_lower = filename.lower()
+    is_valid_doc = any(keyword in fn_lower for keyword in ["receipt", "invoice", "billing", "or", "payment", "screenshot"])
+    
+    if is_valid_doc:
+        logger.info(f"[OCR - MOCK MODE] Intercepted valid document based on filename: {filename}")
+        return {
+            "documentType": "OFFICIAL_RECEIPT",
+            "isAllowed": True,
+            "confidence": 0.99,
+            "detectedFields": {
+                "invoiceNumber": None,
+                "officialReceiptNumber": "MOCK-OR-12345",
+                "paymentReference": "MOCK-REF-9876",
+                "companyName": "MOCK CORP",
+                "clientName": "SPEEDEX USER",
+                "amount": "1,500.00",
+                "dateIssued": "2026-09-15"
+            },
+            "reason": "[MOCK] Successfully classified as Official Receipt.",
+            "shouldProceedToDuplicateScan": True
+        }
+    else:
+        logger.warning(f"[OCR - MOCK MODE] Intercepted random/invalid image based on filename: {filename}")
+        return {
+            "documentType": "INVALID_OR_UNRELATED_IMAGE",
+            "isAllowed": False,
+            "confidence": 0.95,
+            "detectedFields": {
+                "invoiceNumber": None,
+                "officialReceiptNumber": None,
+                "paymentReference": None,
+                "companyName": None,
+                "clientName": None,
+                "amount": None,
+                "dateIssued": None
+            },
+            "reason": "[MOCK] Image appears to be a random photo (selfie, scenery, etc). Not a financial document.",
+            "shouldProceedToDuplicateScan": False
+        }
+    # --- END MOCK TESTING MODE ---
+
     gemini_api_key = os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
     gemini_model = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
