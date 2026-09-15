@@ -117,6 +117,14 @@ def extract_document_fields(file_bytes: bytes, filename: str, mime_type: str = "
                 if candidate_text:
                     extracted = json.loads(candidate_text)
 
+                    # Enforce strict field presence check
+                    detected_fields = extracted.get("detectedFields", {})
+                    filled_fields = sum(1 for v in detected_fields.values() if v is not None and str(v).strip() != "" and str(v).strip() != "null")
+                    if filled_fields < 2:
+                        extracted["isAllowed"] = False
+                        extracted["documentType"] = "INVALID_OR_UNRELATED_IMAGE"
+                        extracted["reason"] = "The uploaded image does not contain sufficient finance document fields."
+
                     doc_type = extracted.get("documentType", "INVALID_OR_UNRELATED_IMAGE")
                     is_allowed_flag = extracted.get("isAllowed", False)
                     confidence = float(extracted.get("confidence", 0.0))
@@ -124,7 +132,7 @@ def extract_document_fields(file_bytes: bytes, filename: str, mime_type: str = "
                     # Final gate: override isAllowed based on doc type and confidence
                     if doc_type in VALID_FINANCE_DOC_TYPES and is_allowed_flag and confidence >= 0.75:
                         extracted["isAllowed"] = True
-                    elif doc_type in INVALID_DOC_TYPES or not is_allowed_flag or confidence < 0.75:
+                    else:
                         extracted["isAllowed"] = False
                         extracted["shouldProceedToDuplicateScan"] = False
                         

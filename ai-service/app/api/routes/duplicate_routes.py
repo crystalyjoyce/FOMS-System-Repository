@@ -298,10 +298,10 @@ async def scan_document(
             detail={
                 "success": False,
                 "status": "INVALID_DOCUMENT",
-                "message": result.get("message", "Only official receipts, invoices, billing statements, or payment-related finance documents are allowed."),
+                "message": "Only official receipts, invoices, billing statements, or payment-related finance documents are allowed.",
                 "details": {
                     "detectedType": result.get("extracted", {}).get("documentType", "INVALID_OR_UNRELATED_IMAGE"),
-                    "reason": result.get("reason_code", "INVALID_DOCUMENT"),
+                    "reason": result.get("extracted", {}).get("reason", result.get("message", "The uploaded image does not contain finance document fields.")),
                     "confidence": result.get("confidence", 0.0)
                 }
             }
