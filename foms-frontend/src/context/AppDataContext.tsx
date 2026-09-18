@@ -42,16 +42,20 @@ function computeArRecords(invoices: Invoice[], payments: Payment[]): ARRecord[] 
       const diffDays = Math.floor((now.getTime() - due.getTime()) / (1000 * 60 * 60 * 24));
       const daysUntilDue = Math.floor((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
-      const paid = payments
+      let paid = payments
         .filter(p => p.invoiceId === inv.id && (p.status === 'Validated' || p.status === 'Approved'))
         .reduce((s, p) => s + p.amount, 0);
         
-      const outstandingBalance = Math.max(0, inv.totalAmount - paid);
+      let outstandingBalance = Math.max(0, inv.totalAmount - paid);
 
       let bracket: ARRecord['agingBracket'] = 'Current';
       let status: ARRecord['status'] = 'Current';
 
-      if (outstandingBalance <= 0) {
+      if (inv.status === 'Paid') {
+        status = 'Paid';
+        outstandingBalance = 0;
+        paid = inv.totalAmount;
+      } else if (outstandingBalance <= 0) {
         status = 'Paid';
       } else if (diffDays > 0) {
         status = 'Overdue';
