@@ -61,6 +61,13 @@ export const ClientProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       (c) => c.id.toLowerCase() === defaultClient.id.toLowerCase()
     );
 
+    if (alreadyExists) {
+      const testUser = existing.find((c) => c.id.toLowerCase() === defaultClient.id.toLowerCase());
+      if (testUser) {
+        testUser.password = 'password123';
+      }
+    }
+
     return alreadyExists ? existing : [defaultClient, ...existing];
   });
 
