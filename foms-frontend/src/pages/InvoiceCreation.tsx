@@ -204,7 +204,14 @@ export const InvoiceCreation: React.FC = () => {
       <Card noPadding style={{ padding: '20px 32px', display: 'flex', alignItems: 'center', gap: 0 }}>
         {([{ n: 1, label: 'Select Waybills' }, { n: 2, label: 'Review & Compute' }, { n: 3, label: 'Confirm & Submit' }] as const).map(({ n, label }, idx) => (
           <React.Fragment key={n}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flex: 1 }}>
+            <div 
+              onClick={() => {
+                if (n === 1) setStep(1);
+                else if (n === 2 && selectedWaybills.length > 0) setStep(2);
+                else if (n === 3 && selectedWaybills.length > 0 && !isBillingPeriodInvalid && !isDateInvalid) setStep(3);
+              }}
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flex: 1, cursor: (n === 1 || selectedWaybills.length > 0) ? 'pointer' : 'not-allowed' }}
+            >
               <div style={{
                 width: 36, height: 36, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
                 background: step >= n ? '#0F172A' : '#F1F5F9',
