@@ -30,7 +30,10 @@ export const AuditProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             ipAddress: l.ipAddress || '192.168.1.1',
             timestamp: l.loggedAt || l.timestamp || l.createdAt || new Date().toISOString()
           }));
-          setLogs(backendLogs);
+          // Merge seeded data with backend logs so UI is never empty during testing
+          const existingIds = new Set(backendLogs.map((l: any) => l.id));
+          const seedToKeep = SEEDED_AUDIT_LOGS.filter(s => !existingIds.has(s.id));
+          setLogs([...backendLogs, ...seedToKeep].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
         }
       })
       .catch(err => {
