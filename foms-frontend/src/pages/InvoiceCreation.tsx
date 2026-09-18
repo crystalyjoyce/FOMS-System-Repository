@@ -221,7 +221,21 @@ export const InvoiceCreation: React.FC = () => {
       {step === 1 && (
         <>
           <TableContainer style={{ display: 'flex', flexDirection: 'column', gap: 24, paddingBottom: 24 }}>
-            
+            {selectedClientId ? (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span onClick={() => setSelectedClientId(null)} style={{ cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600 }}>
+                  <i className="ti ti-arrow-left" style={{ fontSize: '16px' }} /> Back to All Clients
+                </span>
+                <span style={{ fontSize: '0.85rem', color: '#475569', fontWeight: 600 }}>
+                  Showing individual waybills for <strong>{clients.find(c => c.id === selectedClientId)?.name}</strong>
+                </span>
+              </div>
+            ) : (
+              <div style={{ background: '#F8FAFC', padding: '12px 16px', borderRadius: 8, border: '1px solid #E2E8F0', fontSize: '0.85rem', color: '#475569' }}>
+                <i className="ti ti-info-circle" style={{ color: '#3B82F6', marginRight: 6 }} />
+                Click on any <strong>Client Name</strong> below to view and select individual waybills (including <strong>CTC Submitted</strong> and <strong>Validated</strong> documents).
+              </div>
+            )}
 
             <DataTable
               key={selectedClientId ?? 'all'}
