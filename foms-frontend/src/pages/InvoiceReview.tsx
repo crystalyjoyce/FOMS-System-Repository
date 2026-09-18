@@ -9,8 +9,6 @@ import { useToast } from '../components/ToastContext';
 import { ClientInfoCard } from '../components/ClientInfoCard';
 import '../components/FormModals.css';
 import { 
-  SEEDED_CLIENTS, 
-  SEEDED_USERS, 
   Invoice 
 } from '../data/seed';
 import { useAppData } from '../context/AppDataContext';
@@ -53,11 +51,10 @@ export const InvoiceReview: React.FC = () => {
   if (selectedClientId) {
     enriched = visibleInvoices.filter(i => i.clientId === selectedClientId).map(inv => {
       const client = clients.find(c => c.id === inv.clientId);
-      const user = SEEDED_USERS.find(u => u.employeeId === inv.createdBy);
       return {
         ...inv,
         clientName: client ? client.name : 'Unknown Client',
-        submittedBy: user ? user.fullName : inv.createdBy,
+        submittedBy: inv.createdBy,
         waybillCount: inv.waybillIds.length,
       };
     });
@@ -71,12 +68,10 @@ export const InvoiceReview: React.FC = () => {
       const client = clients.find(c => c.id === clientId);
       const statuses = Array.from(new Set(recs.map(r => r.status)));
       const status = statuses.length === 1 ? statuses[0] : 'Mixed';
-      const maxDate = new Date(Math.max(...recs.map(r => new Date(r.createdAt).getTime())));
-      const submitters = Array.from(new Set(recs.map(r => {
-        const u = SEEDED_USERS.find(user => user.employeeId === r.createdBy);
-        return u ? u.fullName : r.createdBy;
-      })));
-      const submittedBy = submitters.length === 1 ? submitters[0] : submitters.join(', ');
+      const validTimes = recs.map(r => new Date(r.createdAt).getTime()).filter(t => !isNaN(t));
+      const maxDate = new Date(validTimes.length > 0 ? Math.max(...validTimes) : Date.now());
+      const submitters = Array.from(new Set(recs.map(r => r.createdBy)));
+      const submittedBy = submitters.length === 1 ? submitters[0] : '[Multiple]';
       
       return {
         id: clientId, 
