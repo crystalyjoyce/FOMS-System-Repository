@@ -248,7 +248,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [speedPay, setSpeedPay] = useState<SpeedPaySubmission[]>([]);
-  const [clients, setClients] = useState<Client[]>([]);
+  const [clients, setClients] = useState<Client[]>(SEEDED_CLIENTS);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [followUpRecords, setFollowUpRecords] = useState<FollowUpRecord[]>([]);
 

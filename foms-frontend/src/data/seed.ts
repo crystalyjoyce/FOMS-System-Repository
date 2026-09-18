@@ -113,7 +113,14 @@ export interface Client {
   createdAt: string;
 }
 
-export const SEEDED_CLIENTS: Client[] = [];
+export const SEEDED_CLIENTS: Client[] = [
+  { id: 'CL-001', name: 'Lazada Philippines', contactPerson: 'Maria Dela Cruz', email: 'finance@lazada.com.ph', phone: '0917-123-4567', address: 'Rockwell Dr., Makati City', region: 'Metro Manila', billingSchedule: 'Monthly', status: 'Active', vatStatus: 'VATable', vatRate: 0.12, createdAt: '2024-11-26' },
+  { id: 'CL-002', name: 'Shopee Express', contactPerson: 'Jose Santos', email: 'ap@shopee.ph', phone: '0917-555-9876', address: 'Ayala Ave., Makati City', region: 'Metro Manila', billingSchedule: 'Monthly', status: 'Active', vatStatus: 'VATable', vatRate: 0.12, createdAt: '2024-12-26' },
+  { id: 'CL-003', name: 'TikTok Shop', contactPerson: 'Robert Lim', email: 'billing@tiktok.ph', phone: '0917-333-4444', address: 'BGC High St., Taguig City', region: 'Metro Manila', billingSchedule: 'Semi-monthly', status: 'Active', vatStatus: 'VATable', vatRate: 0.12, createdAt: '2025-01-25' },
+  { id: 'CA-001', name: 'Lazada Account', contactPerson: 'Maria Dela Cruz', email: 'finance@lazada.com.ph', phone: '0917-123-4567', address: 'Rockwell Dr., Makati City', region: 'Metro Manila', billingSchedule: 'Monthly', status: 'Active', vatStatus: 'VATable', vatRate: 0.12, createdAt: '2024-11-26' },
+  { id: 'CA-002', name: 'Shopee Express Account', contactPerson: 'Jose Santos', email: 'ap@shopee.ph', phone: '0917-555-9876', address: 'Ayala Ave., Makati City', region: 'Metro Manila', billingSchedule: 'Monthly', status: 'Active', vatStatus: 'VATable', vatRate: 0.12, createdAt: '2024-12-26' },
+  { id: 'CA-003', name: 'Lazada Philippines', contactPerson: 'Lazada Admin', email: 'billing@lazada.ph', phone: '+63 917 123 4567', address: 'BGC High St., Taguig City', region: 'Metro Manila', billingSchedule: 'Monthly', status: 'Active', vatStatus: 'VATable', vatRate: 0.12, createdAt: '2024-11-26' },
+];
 
 
 // ─── Billing Rates ────────────────────────────────────────────────
@@ -128,7 +135,14 @@ export interface BillingRate {
   effectiveDate: string;
 }
 
-export const SEEDED_RATES: BillingRate[] = [];
+export const SEEDED_RATES: BillingRate[] = [
+  { id: 'RATE-001', clientId: 'CL-001', region: 'Metro Manila', baseRate: 800, vatRate: 0.12, surchargeRate: 0.05, effectiveDate: '2025-01-01' },
+  { id: 'RATE-002', clientId: 'CL-002', region: 'Metro Manila', baseRate: 1100, vatRate: 0.12, surchargeRate: 0.05, effectiveDate: '2025-01-01' },
+  { id: 'RATE-003', clientId: 'CL-003', region: 'Metro Manila', baseRate: 950, vatRate: 0.12, surchargeRate: 0.05, effectiveDate: '2025-01-01' },
+  { id: 'RATE-004', clientId: 'CA-001', region: 'Metro Manila', baseRate: 500, vatRate: 0.12, surchargeRate: 0.05, effectiveDate: '2025-01-01' },
+  { id: 'RATE-005', clientId: 'CA-002', region: 'Metro Manila', baseRate: 300, vatRate: 0.12, surchargeRate: 0.05, effectiveDate: '2025-01-01' },
+  { id: 'RATE-006', clientId: 'CA-003', region: 'Metro Manila', baseRate: 600, vatRate: 0.12, surchargeRate: 0.05, effectiveDate: '2025-01-01' },
+];
 
 // ─── Waybills ─────────────────────────────────────────────────────
 
