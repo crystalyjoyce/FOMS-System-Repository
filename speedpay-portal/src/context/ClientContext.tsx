@@ -109,7 +109,7 @@ export const ClientProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     fetch(`/api/speedpay/invoices?clientId=${clientIdParam}`)
       .then(res => res.json())
       .then((data: any[]) => {
-        if (data && Array.isArray(data)) {
+        if (data && Array.isArray(data) && data.length > 0) {
           const mapped = data.map(inv => ({
             id: inv.id,
             invoiceNumber: inv.invoiceNo ?? inv.id,
@@ -124,7 +124,30 @@ export const ClientProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           }));
           setInvoices(mapped);
         } else {
-          setInvoices([]);
+          if (user.id === 'TEST-001') {
+            setInvoices([
+              {
+                id: 'INV-1001',
+                invoiceNumber: 'INV-1001',
+                routeArea: 'National Capital Region',
+                amount: 25000,
+                dueDate: new Date(Date.now() + 86400000 * 5).toISOString(), // 5 days from now
+                status: 'Unpaid',
+                description: 'Logistics Services - Manila to Quezon City'
+              },
+              {
+                id: 'INV-1002',
+                invoiceNumber: 'INV-1002',
+                routeArea: 'CALABARZON',
+                amount: 15000,
+                dueDate: new Date(Date.now() - 86400000 * 2).toISOString(), // 2 days overdue
+                status: 'Overdue',
+                description: 'Warehouse Storage Fee'
+              }
+            ]);
+          } else {
+            setInvoices([]);
+          }
         }
       })
       .catch((err) => {
@@ -135,7 +158,7 @@ export const ClientProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     fetch(`/api/speedpay/transactions?clientId=${clientIdParam}`)
       .then(res => res.json())
       .then((data: any[]) => {
-        if (data && Array.isArray(data)) {
+        if (data && Array.isArray(data) && data.length > 0) {
           const mapped = data.map(p => ({
             id: p.transactionId ?? p.id,
             invoiceId: p.invoiceId,
@@ -153,7 +176,21 @@ export const ClientProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           }));
           setPayments(mapped);
         } else {
-          setPayments([]);
+          if (user.id === 'TEST-001') {
+            setPayments([
+              {
+                id: 'PAY-2001',
+                invoiceId: 'INV-0999',
+                referenceNo: 'REF123456789',
+                paymentMethod: 'GCash',
+                dateSubmitted: new Date(Date.now() - 86400000 * 10).toISOString(),
+                amount: 10000,
+                status: 'Validated'
+              }
+            ]);
+          } else {
+            setPayments([]);
+          }
         }
       })
       .catch((err) => {
