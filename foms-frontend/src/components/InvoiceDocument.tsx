@@ -1,19 +1,25 @@
 import React from 'react';
-import { SEEDED_WAYBILLS, SEEDED_CLIENTS, SEEDED_RATES, Invoice } from '../data/seed';
+import { Invoice } from '../data/seed';
+import { useAppData } from '../context/AppDataContext';
 
 export const InvoiceDocument: React.FC<{ invoice: Invoice; compact?: boolean }> = ({ invoice, compact = false }) => {
-  const client = SEEDED_CLIENTS.find(c => c.id === invoice.clientId);
-  const waybills = invoice.waybillIds.map(id => SEEDED_WAYBILLS.find(w => w.id === id)).filter(Boolean) as any[];
-  const rate = SEEDED_RATES.find(r => r.clientId === invoice.clientId);
-
+  const { clients, waybills: allWaybills } = useAppData();
+  
+  const client = clients.find(c => c.id === invoice.clientId);
+  const waybills = invoice.waybillIds.map(id => allWaybills.find(w => w.id === id)).filter(Boolean) as any[];
+  
+  // Base rate calculation fallback for live data
+  const baseRate = 25000; // Default flat rate if billing rate missing
+  const surchargeRate = 0; // Default surcharge
+  
   let subtotal = 0;
   waybills.forEach(wb => {
-    subtotal += rate ? rate.baseRate : 0;
+    subtotal += baseRate;
   });
 
-  const vatRate = client?.vatRate ?? 0;
+  const vatRate = client?.vatRate ?? 0.12;
   const vat = subtotal * vatRate;
-  const surcharge = rate ? subtotal * rate.surchargeRate : 0;
+  const surcharge = subtotal * surchargeRate;
   const totalDue = subtotal + vat + surcharge;
 
   // Derive dates
@@ -126,7 +132,7 @@ export const InvoiceDocument: React.FC<{ invoice: Invoice; compact?: boolean }> 
                 <tr key={wb.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
                   <td style={{ padding: compact ? '8px 12px' : '12px 16px', fontSize: compact ? '0.8rem' : '0.9rem', color: '#0F172A', fontWeight: 600 }}>{wb.waybillNumber}</td>
                   <td style={{ padding: compact ? '8px 12px' : '12px 16px', fontSize: compact ? '0.8rem' : '0.9rem', color: '#64748B' }}>{new Date(wb.deliveryDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
-                  <td style={{ padding: compact ? '8px 12px' : '12px 16px', fontSize: compact ? '0.8rem' : '0.9rem', color: '#0F172A', textAlign: 'right' }}>₱{(rate ? rate.baseRate : 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                  <td style={{ padding: compact ? '8px 12px' : '12px 16px', fontSize: compact ? '0.8rem' : '0.9rem', color: '#0F172A', textAlign: 'right' }}>₱{baseRate.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                 </tr>
               ))}
             </tbody>

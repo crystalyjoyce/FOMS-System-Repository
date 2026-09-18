@@ -9,7 +9,8 @@ import { useToast } from '../components/ToastContext';
 import { ClientInfoCard } from '../components/ClientInfoCard';
 import '../components/FormModals.css';
 import { 
-  Invoice 
+  Invoice,
+  SEEDED_USERS 
 } from '../data/seed';
 import { useAppData } from '../context/AppDataContext';
 import { TableContainer } from '../components/TableContainer';
