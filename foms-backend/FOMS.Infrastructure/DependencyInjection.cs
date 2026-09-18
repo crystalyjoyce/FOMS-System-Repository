@@ -14,7 +14,7 @@ public static class DependencyInjection
         var connectionString = configuration.GetConnectionString("DefaultConnection");
 
         services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseSqlServer(connectionString,
+            options.UseNpgsql(connectionString,
                 builder =>
                 {
                     builder.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName);
@@ -22,7 +22,7 @@ public static class DependencyInjection
                     builder.EnableRetryOnFailure(
                         maxRetryCount: 5,
                         maxRetryDelay: TimeSpan.FromSeconds(10),
-                        errorNumbersToAdd: null); // auto-retry on transient errors
+                        errorCodesToAdd: null); // auto-retry on transient errors
                 })
                    .ConfigureWarnings(warnings => warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
 
