@@ -247,6 +247,9 @@ public class SpeedPaySubmissionsController : ControllerBase
 
         var invoice = await _context.Invoices.FirstOrDefaultAsync(i => i.Id == submission.InvoiceId);
 
+        using var transaction = await _context.Database.BeginTransactionAsync();
+        try
+        {
         if (request.Status == "Validated")
         {
             if (invoice != null)
@@ -258,6 +261,7 @@ public class SpeedPaySubmissionsController : ControllerBase
                 BillingComputationService.RecalculateInvoice(invoice);
                 invoice.UpdatedBy = "Finance Manager";
                 invoice.PaymentValidationStatus = "Validated";
+                invoice.PaymentStatus = invoice.Balance <= 0 ? "Paid" : "Unpaid";
 
                 // Generate OR
                 var orNum = await GenerateNextOrNumberAsync();
@@ -289,7 +293,7 @@ public class SpeedPaySubmissionsController : ControllerBase
                     receivable.BalanceAmount = invoice.Balance;
                     receivable.PaidAmount += submission.AmountPaid;
                     receivable.LastPaymentDate = DateTime.UtcNow;
-                    receivable.Status = invoice.Balance <= 0 ? "Fully Paid" : "Partially Paid";
+                    receivable.Status = invoice.Balance <= 0 ? "Paid" : "Unpaid";
                     _context.ReceivableBalances.Update(receivable);
                 }
                 else if (invoice.Balance > 0)
@@ -301,7 +305,7 @@ public class SpeedPaySubmissionsController : ControllerBase
                         BalanceAmount = invoice.Balance,
                         PaidAmount = submission.AmountPaid,
                         LastPaymentDate = DateTime.UtcNow,
-                        Status = "Partially Paid",
+                        Status = "Unpaid",
                         DueDate = DateTime.TryParse(invoice.DueDate, out var parsedDue) ? parsedDue : DateTime.UtcNow.AddDays(30)
                     };
                     _context.ReceivableBalances.Add(receivable);
@@ -365,7 +369,7 @@ public class SpeedPaySubmissionsController : ControllerBase
         {
             if (invoice != null)
             {
-                invoice.PaymentStatus = invoice.AmountPaid > 0 ? "Partially Paid" : "Unpaid";
+                invoice.PaymentStatus = invoice.Balance <= 0 ? "Paid" : "Unpaid";
                 invoice.PaymentValidationStatus = "Rejected";
                 _context.Invoices.Update(invoice);
 
@@ -455,6 +459,7 @@ public class SpeedPaySubmissionsController : ControllerBase
         }
 
         await _context.SaveChangesAsync(default);
+        await transaction.CommitAsync();
 
         return Ok(new
         {
@@ -462,6 +467,12 @@ public class SpeedPaySubmissionsController : ControllerBase
             submission.Status,
             message = $"Submission status updated to '{request.Status}'."
         });
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            return StatusCode(500, new { message = "An error occurred while updating the status. Transaction rolled back.", details = ex.Message });
+        }
     }
 
     // ──────────────────────────────────────────────────────────────────────────

@@ -79,7 +79,7 @@ export const SpeedPayValidation: React.FC = () => {
   const [searchParams] = useSearchParams();
   const submissionId = searchParams.get('submissionId');
   const navigate = useNavigate();
-  const { speedPay, invoices, updateSpeedPay, updateInvoice, addReceipt, receipts, clients, addPayment } = useAppData();
+  const { speedPay, invoices, clients, receipts, refreshSpeedPay, refreshPayments, refreshInvoices, refreshReceipts } = useAppData();
 
   const [validationStatus, setValidationStatus] = useState<'Approve' | 'Reject' | ''>('');
   const [rejectionReason, setRejectionReason] = useState('');
@@ -171,47 +171,28 @@ export const SpeedPayValidation: React.FC = () => {
     return Object.entries(counts).map(([label, value]) => ({ label, value, color: colors[label] ?? '#6366F1' }));
   }, [allEnriched]);
 
-  // ─── Handle Validate/Reject ───────────────────────────────────────
+  // ─── Handle Validate/Reject — PERSISTS TO DB ────────────────────
   const handleValidate = async (sub: any) => {
+    if (validationStatus === 'Reject' && !rejectionReason.trim()) {
+      toast.error('Please provide a rejection reason.', 'Required Field Missing');
+      return;
+    }
     setIsSubmitting(true);
     try {
       if (validationStatus === 'Approve') {
-        updateSpeedPay(sub.id, { status: 'Validated', validatedBy: 'EMP-001', validatedAt: new Date().toISOString() } as any);
-        await api.put(`/speedpay/submissions/${sub.id}/status`, { status: 'Validated' }).catch(() => {});
-        const linkedInvoice = invoices.find(i => i.id === sub.invoiceId);
-        if (linkedInvoice) updateInvoice(linkedInvoice.id, { status: 'Paid' });
-        addPayment({
-          id: `PAY-${Date.now()}`,
-          clientId: sub.clientId ?? linkedInvoice?.clientId ?? 'UNKNOWN',
-          invoiceId: sub.invoiceId,
-          amount: sub.amountPaid,
-          paymentMethod: sub.paymentMethod,
-          referenceNumber: sub.referenceNumber,
-          proofOfPaymentUrl: sub.proofFileUrl,
-          recordedBy: 'EMP-001',
-          recordedAt: new Date().toISOString(),
-          status: 'Validated',
-          bankConfirmed: true,
-        });
-        const orNum = `OR-${new Date().getFullYear()}-${String(receipts.length + 1).padStart(4, '0')}`;
-        addReceipt({
-          id: `OR-${Date.now()}`,
-          receiptNumber: orNum,
-          invoiceId: sub.invoiceId,
-          paymentId: sub.id,
-          clientId: sub.clientId ?? 'UNKNOWN',
-          amount: sub.amountPaid,
-          referenceNumber: sub.referenceNumber,
-          issuedBy: 'EMP-001',
-          issuedAt: new Date().toISOString(),
-        });
-        toast.success(`Payment from ${sub.clientName} has been Approved. Official Receipt generated.`, 'Payment Validated');
+        // Backend atomically: validates payment, marks invoice Paid, updates AR to 0, creates OR
+        await api.post(`/finance/payments/${sub.id}/validate`, { Remarks: 'Approved via SpeedPay Validation' });
+        toast.success(`Payment from ${sub.clientName} approved. Invoice = Paid. OR generated.`, 'Payment Validated');
       } else {
-        updateSpeedPay(sub.id, { status: 'Rejected', rejectionReason } as any);
-        await api.put(`/speedpay/submissions/${sub.id}/status`, { status: 'Rejected', remarks: rejectionReason }).catch(() => {});
+        await api.post(`/finance/payments/${sub.id}/reject`, { RejectionReason: rejectionReason });
         toast.error(`Payment from ${sub.clientName} has been Rejected.`, 'Payment Rejected');
       }
+      // Refresh all from DB — single source of truth, persists after refresh/restart
+      await Promise.all([refreshSpeedPay(), refreshPayments(), refreshInvoices(), refreshReceipts()]);
       navigate('/speedpay-validation');
+    } catch (err: any) {
+      const msg = err?.response?.data?.message ?? err?.message ?? 'Action failed.';
+      toast.error(msg, 'Validation Error');
     } finally {
       setIsSubmitting(false);
     }

@@ -185,11 +185,15 @@ public class FinancePaymentsController : ControllerBase
         decimal beforeBalance = invoice.Balance;
         string beforeStatus = invoice.PaymentStatus;
 
-        // Perform computation updates
-        invoice.AmountPaid += payment.Amount;
-        BillingComputationService.RecalculateInvoice(invoice);
-        invoice.UpdatedBy = user;
-        invoice.PaymentValidationStatus = "Validated";
+        using var transaction = await _context.Database.BeginTransactionAsync();
+        try
+        {
+            // Perform computation updates
+            invoice.AmountPaid += payment.Amount;
+            BillingComputationService.RecalculateInvoice(invoice);
+            invoice.UpdatedBy = user;
+            invoice.PaymentValidationStatus = "Validated";
+            invoice.PaymentStatus = invoice.Balance <= 0 ? "Paid" : "Unpaid";
 
         payment.PaymentStatus = "Validated";
         payment.ValidatedAt = DateTime.UtcNow;
@@ -226,7 +230,7 @@ public class FinancePaymentsController : ControllerBase
             receivable.BalanceAmount = invoice.Balance;
             receivable.PaidAmount += payment.Amount;
             receivable.LastPaymentDate = DateTime.UtcNow;
-            receivable.Status = invoice.Balance <= 0 ? "Fully Paid" : "Partially Paid";
+            receivable.Status = invoice.Balance <= 0 ? "Paid" : "Unpaid";
             _context.ReceivableBalances.Update(receivable);
         }
         else if (invoice.Balance > 0)
@@ -238,7 +242,7 @@ public class FinancePaymentsController : ControllerBase
                 BalanceAmount = invoice.Balance,
                 PaidAmount = payment.Amount,
                 LastPaymentDate = DateTime.UtcNow,
-                Status = "Partially Paid",
+                Status = "Unpaid",
                 DueDate = DateTime.TryParse(invoice.DueDate, out var parsedDue) ? parsedDue : DateTime.UtcNow.AddDays(30)
             };
             _context.ReceivableBalances.Add(receivable);
@@ -297,6 +301,7 @@ public class FinancePaymentsController : ControllerBase
         _context.Notifications.Add(notif);
 
         await _context.SaveChangesAsync(default);
+        await transaction.CommitAsync();
 
         return Ok(new
         {
@@ -306,6 +311,12 @@ public class FinancePaymentsController : ControllerBase
             OfficialReceipt = orNum,
             message = "Payment successfully validated and applied."
         });
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync();
+            return StatusCode(500, new { message = "An error occurred while validating the payment. Transaction rolled back.", details = ex.Message });
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -335,7 +346,7 @@ public class FinancePaymentsController : ControllerBase
         var invoice = await _context.Invoices.FirstOrDefaultAsync(i => i.Id == payment.InvoiceId);
         if (invoice != null)
         {
-            invoice.PaymentStatus = invoice.AmountPaid > 0 ? "Partially Paid" : "Unpaid";
+            invoice.PaymentStatus = invoice.Balance <= 0 ? "Paid" : "Unpaid";
             invoice.PaymentValidationStatus = "Rejected";
             invoice.UpdatedBy = user;
             _context.Invoices.Update(invoice);

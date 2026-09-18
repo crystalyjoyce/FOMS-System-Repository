@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { UploadCloud, X, Camera, CheckCircle2 } from 'lucide-react';
 
 export const PayInvoice: React.FC = () => {
-  const { invoices, submitPayment, user } = useClientContext();
+  const { invoices, submitPayment } = useClientContext();
   const { toast } = useToast();
   const location = useLocation();
   const navigate = useNavigate();
@@ -189,22 +189,6 @@ export const PayInvoice: React.FC = () => {
             </div>
             
             <div style={{ background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0', padding: '24px' }}>
-              {paymentMethod === 'Bank Transfer' && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
-                  <div style={{ color: '#64748B', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    <div>Bank</div>
-                    <div>Account name</div>
-                    <div>Account number</div>
-                    <div>Branch</div>
-                  </div>
-                  <div style={{ color: '#0F172A', fontWeight: 600, display: 'flex', flexDirection: 'column', gap: '12px', textAlign: 'right' }}>
-                    <div>BDO Unibank</div>
-                    <div>30 SpeedEx Courier & Forwarder Inc.</div>
-                    <div>0012 3456 7890</div>
-                    <div>Makati Ave Branch</div>
-                  </div>
-                </div>
-              )}
               {paymentMethod !== 'Bank Transfer' && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '14px' }}>
                   <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>

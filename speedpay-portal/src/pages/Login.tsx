@@ -21,7 +21,6 @@ export const Login: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   
   const [fieldErrors, setFieldErrors] = useState<FormErrors>({});
-  const [globalError, setGlobalError] = useState<string | null>(null);
   const [globalSuccess, setGlobalSuccess] = useState<string | null>(null);
 
   // Modals state
@@ -48,7 +47,6 @@ export const Login: React.FC = () => {
 
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setGlobalError(null);
     setGlobalSuccess(null);
 
     const errors: FormErrors = {};
@@ -65,7 +63,6 @@ export const Login: React.FC = () => {
 
     const result = login(clientId.trim(), password);
     if (!result.success && result.error) {
-      setGlobalError(result.error);
       toast.error(result.error, 'Login Failed');
     } else if (result.success && result.requirePasswordChange) {
       setShowChangePassword(true);
@@ -205,7 +202,6 @@ export const Login: React.FC = () => {
                   onChange={(e) => {
                     setClientId(e.target.value);
                     clearFieldError('clientId');
-                    setGlobalError(null);
                   }}
                   autoFocus
                 />
@@ -235,7 +231,6 @@ export const Login: React.FC = () => {
                   onChange={(e) => {
                     setPassword(e.target.value);
                     clearFieldError('password');
-                    setGlobalError(null);
                   }}
                 />
                 <button

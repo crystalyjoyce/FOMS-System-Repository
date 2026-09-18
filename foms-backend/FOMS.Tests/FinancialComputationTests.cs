@@ -89,7 +89,7 @@ public class FinancialComputationTests
         // Act & Assert
         Assert.Equal("Paid", BillingComputationService.ComputePaymentStatus(0m, 10000.00m, futureDue));
         Assert.Equal("Unpaid", BillingComputationService.ComputePaymentStatus(10000.00m, 0m, futureDue));
-        Assert.Equal("Partially Paid", BillingComputationService.ComputePaymentStatus(6000.00m, 4000.00m, futureDue));
+        Assert.Equal("Unpaid", BillingComputationService.ComputePaymentStatus(6000.00m, 4000.00m, futureDue));
         Assert.Equal("Overdue", BillingComputationService.ComputePaymentStatus(10000.00m, 0m, pastDue));
         Assert.Equal("Overdue", BillingComputationService.ComputePaymentStatus(6000.00m, 4000.00m, pastDue));
     }
@@ -135,7 +135,7 @@ public class FinancialComputationTests
         var updatedInvoice = await context.Invoices.FindAsync(invoice.Id);
         Assert.Equal(paymentAmount, updatedInvoice!.AmountPaid);
         Assert.Equal(startingBalance - paymentAmount, updatedInvoice.Balance);
-        Assert.Equal("Partially Paid", updatedInvoice.PaymentStatus);
+        Assert.Equal("Unpaid", updatedInvoice.PaymentStatus);
 
         // Assert overpayment rejection
         var overpayCommand = command with { OrNumber = "OR-OVERPAY", Amount = startingBalance + 1.00m };

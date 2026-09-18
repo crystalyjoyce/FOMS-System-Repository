@@ -65,37 +65,18 @@ public static class PaymentFeatures
             if (string.IsNullOrWhiteSpace(request.ReferenceNumber))
                 throw new InvalidOperationException("Reference Number is required.");
 
-            // Guard — Payment proof image is required
-            if (string.IsNullOrWhiteSpace(request.ProofImageUrl))
-                throw new InvalidOperationException("Payment proof image is required.");
-
             // ── TASK 3: Guard — Zero / Negative Payment ──────────────────────
             if (request.Amount <= 0m)
                 throw new InvalidOperationException("Payment amount must be greater than zero.");
 
-            // ── REVISION 1: Guard — Invalid Payment Method ───────────────────
-            var validMethods = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Card", "GCash", "Maya" };
-            if (!validMethods.Contains(request.PaymentMethod))
-                throw new InvalidOperationException($"Invalid payment method '{request.PaymentMethod}'. Allowed methods: Card, GCash, Maya.");
-
-            // ── TASK 3: Guard — Duplicate OR Number ──────────────────────────
-            var orExists = await _context.Payments
-                .AnyAsync(p => p.OrNumber == request.OrNumber, cancellationToken);
-            if (orExists)
-                throw new InvalidOperationException(
-                    $"Official Receipt number '{request.OrNumber}' already exists. Each payment must have a unique OR number.");
-
             // ── TASK 3: Guard — Duplicate Reference Number per Invoice ────────
-            if (!string.IsNullOrWhiteSpace(request.ReferenceNumber))
-            {
-                var refExists = await _context.Payments
-                    .AnyAsync(p => p.ReferenceNumber == request.ReferenceNumber
-                                   && p.InvoiceId == request.InvoiceId,
-                              cancellationToken);
-                if (refExists)
-                    throw new InvalidOperationException(
-                        $"Reference number '{request.ReferenceNumber}' has already been used for this invoice.");
-            }
+            var refExists = await _context.Payments
+                .AnyAsync(p => p.ReferenceNumber == request.ReferenceNumber
+                               && p.InvoiceId == request.InvoiceId,
+                          cancellationToken);
+            if (refExists)
+                throw new InvalidOperationException(
+                    $"Reference number '{request.ReferenceNumber}' has already been used for this invoice.");
 
             // ── Fetch Invoice ─────────────────────────────────────────────────
             var invoice = await _context.Invoices
@@ -103,18 +84,38 @@ public static class PaymentFeatures
             if (invoice == null)
                 throw new InvalidOperationException($"Invoice '{request.InvoiceId}' not found.");
 
-            // ── TASK 4: Guard — Overpayment ───────────────────────────────────
-            var validationError = BillingComputationService.ValidatePaymentAmount(request.Amount, invoice.Balance);
-            if (validationError != null)
-                throw new InvalidOperationException(validationError);
+            // ── Guard — Ensure invoice is not already Paid ────────────────────
+            if (invoice.PaymentStatus == "Paid" && invoice.Balance <= 0m)
+                throw new InvalidOperationException($"Invoice '{invoice.InvoiceNo}' has already been fully paid.");
+
+            // ── Guard — Amount must not exceed outstanding balance ─────────────
+            if (request.Amount > invoice.Balance)
+                throw new InvalidOperationException(
+                    $"Payment amount ({request.Amount:N2}) exceeds the outstanding balance ({invoice.Balance:N2}). Overpayments are not allowed.");
 
             // ── Record the payment ────────────────────────────────────────────
             var beforeBalance = invoice.Balance;
             var beforeStatus = invoice.PaymentStatus;
 
+            // Generate a temporary OR number placeholder (real OR is generated on validation)
+            var tempOrNum = $"PENDING-{Guid.NewGuid().ToString("N").Substring(0, 8).ToUpper()}";
+
+            // Check if an OR number was explicitly provided; if not, use placeholder
+            var orNum = string.IsNullOrWhiteSpace(request.OrNumber) ? tempOrNum : request.OrNumber;
+
+            // Guard — Duplicate OR Number (only if not using placeholder)
+            if (!orNum.StartsWith("PENDING-"))
+            {
+                var orExists = await _context.Payments
+                    .AnyAsync(p => p.OrNumber == orNum, cancellationToken);
+                if (orExists)
+                    throw new InvalidOperationException(
+                        $"Official Receipt number '{orNum}' already exists. Each payment must have a unique OR number.");
+            }
+
             var payment = new Payment
             {
-                OrNumber = request.OrNumber,
+                OrNumber = orNum,
                 InvoiceId = request.InvoiceId,
                 InvoiceNo = request.InvoiceNo,
                 ClientId = request.ClientId,
@@ -126,32 +127,10 @@ public static class PaymentFeatures
                 ProofImageUrl = request.ProofImageUrl,
                 Remarks = request.Remarks,
                 RecordedBy = request.RecordedBy,
-                DateRecorded = DateTime.UtcNow.ToString("yyyy-MM-dd")
+                DateRecorded = DateTime.UtcNow.ToString("yyyy-MM-dd"),
+                PaymentStatus = "Pending Validation",
+                SubmittedAt = DateTime.UtcNow
             };
-
-            // ── TASK 8 & 10: Update Invoice using BillingComputationService ───
-            invoice.AmountPaid += request.Amount;
-            BillingComputationService.RecalculateInvoice(invoice);
-            invoice.UpdatedBy = request.RecordedBy;
-
-            // ── TASK 11: Create Official Receipt via PaymentCollection ─────────
-            var paymentCollection = new PaymentCollection
-            {
-                InvoiceId = invoice.Id,
-                CollectedDate = DateTime.UtcNow,
-                AmountCollected = request.Amount,
-                PaymentMethod = request.PaymentMethod,
-                Status = "Completed"
-            };
-            _context.PaymentCollections.Add(paymentCollection);
-
-            var officialReceipt = new OfficialReceipt
-            {
-                PaymentCollectionId = paymentCollection.Id,
-                ReceiptNumber = request.OrNumber,
-                IssuedDate = DateTime.UtcNow
-            };
-            _context.OfficialReceipts.Add(officialReceipt);
 
             // ── TASK 17: Audit Log with Before/After values ────────────────────
             var audit = new AuditLog
@@ -160,22 +139,51 @@ public static class PaymentFeatures
                 EntityName = "Payment",
                 EntityId = payment.Id,
                 Action = "Record Payment",
-                Details = $"Recorded payment of {request.Amount:N2} for invoice {request.InvoiceNo} " +
-                          $"(OR: {request.OrNumber}). Method: {request.PaymentMethod}. " +
-                          $"Status: {invoice.PaymentStatus}.",
+                Details = $"Recorded payment of {request.Amount:N2} for invoice {request.InvoiceNo}. " +
+                          $"Method: {request.PaymentMethod}. Ref: {request.ReferenceNumber}. " +
+                          $"Status: Pending Validation.",
                 BeforeValue = $"Balance: {beforeBalance:N2} | Status: {beforeStatus}",
-                AfterValue = $"Balance: {invoice.Balance:N2} | Status: {invoice.PaymentStatus}"
+                AfterValue = $"Balance: {invoice.Balance:N2} | Status: Pending Validation"
             };
             await _context.AuditLogs.AddAsync(audit, cancellationToken);
 
             _context.Payments.Add(payment);
-            await _context.SaveChangesAsync(cancellationToken);
 
-            // Sync Billing Invoice and ReceivableBalance
-            await BillingComputationService.SyncBillingInvoiceAndReceivableAsync(invoice, _context, cancellationToken);
+            // Notify Finance Manager/Head Accountant about new payment
+            var notifFm = new Notification
+            {
+                Id = Guid.NewGuid().ToString(),
+                Type = "PAYMENT_VALIDATION_REQUIRED",
+                Title = "New Payment Recorded",
+                Description = $"A payment of {request.Amount:N2} for Invoice {request.InvoiceNo} has been recorded and is pending validation.",
+                InvoiceNo = request.InvoiceNo,
+                RecipientRole = "Financial Manager",
+                RelatedPaymentId = payment.Id,
+                RelatedInvoiceId = request.InvoiceId,
+                Read = false,
+                Date = DateTime.UtcNow.ToString("yyyy-MM-dd"),
+                Timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"),
+                Source = "Accountant"
+            };
+            _context.Notifications.Add(notifFm);
 
-            // ── TASK 12: Sync client balance authoritatively ───────────────────
-            await BillingComputationService.SyncClientBalanceAsync(request.ClientId, _context, cancellationToken);
+            var notifHa = new Notification
+            {
+                Id = Guid.NewGuid().ToString(),
+                Type = "PAYMENT_VALIDATION_REQUIRED",
+                Title = "New Payment Recorded",
+                Description = $"A payment of {request.Amount:N2} for Invoice {request.InvoiceNo} has been recorded and is pending validation.",
+                InvoiceNo = request.InvoiceNo,
+                RecipientRole = "Head Accountant",
+                RelatedPaymentId = payment.Id,
+                RelatedInvoiceId = request.InvoiceId,
+                Read = false,
+                Date = DateTime.UtcNow.ToString("yyyy-MM-dd"),
+                Timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss"),
+                Source = "Accountant"
+            };
+            _context.Notifications.Add(notifHa);
+
             await _context.SaveChangesAsync(cancellationToken);
 
             return payment;

@@ -1,12 +1,14 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using FOMS.Domain.Entities;
 
 namespace FOMS.Application.Interfaces;
 
 public interface IApplicationDbContext
 {
+    DatabaseFacade Database { get; }
     DbSet<Client> Clients { get; }
     DbSet<Invoice> Invoices { get; }
     DbSet<Payment> Payments { get; }

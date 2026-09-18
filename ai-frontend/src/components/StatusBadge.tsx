@@ -47,7 +47,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md', c
   }
   // 5. Attention / Pending / Fallback day checks
   else if (
-    ['pending', 'preparing', 'ready for pickup', 'processing', 'returning', 'not submitted', 'partially paid'].includes(normalized) ||
+    ['pending', 'preparing', 'ready for pickup', 'processing', 'returning', 'not submitted'].includes(normalized) ||
     normalized.includes('days') || normalized.includes('day')
   ) {
     tier = 'warning';

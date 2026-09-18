@@ -208,6 +208,7 @@ export interface Payment {
   validatedAt?: string;
   status: 'Pending Validation' | 'Validated' | 'Approved' | 'Rejected';
   notes?: string;
+  orNumber?: string;
 }
 
 export const SEEDED_PAYMENTS: Payment[] = [];

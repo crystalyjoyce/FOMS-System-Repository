@@ -73,10 +73,8 @@ public static class BillingComputationService
     /// <summary>
     /// Determine the payment status from balance, amountPaid, and due date.
     ///   Balance = 0                          → Paid
-    ///   Balance > 0, AmountPaid = 0, Overdue → Overdue
-    ///   Balance > 0, AmountPaid > 0, Overdue → Overdue  (overdue takes priority)
-    ///   Balance > 0, AmountPaid > 0          → Partially Paid
-    ///   Balance > 0, AmountPaid = 0          → Unpaid
+    ///   Balance > 0, Overdue                 → Overdue
+    ///   Balance > 0, Not Overdue             → Unpaid
     /// </summary>
     public static string ComputePaymentStatus(decimal balance, decimal amountPaid, string dueDate)
     {
@@ -86,9 +84,6 @@ public static class BillingComputationService
         var isOverdue = IsOverdue(dueDate);
         if (isOverdue)
             return "Overdue";
-
-        if (amountPaid > 0m)
-            return "Partially Paid";
 
         return "Unpaid";
     }

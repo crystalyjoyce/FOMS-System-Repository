@@ -183,9 +183,7 @@ export const AccountsReceivable: React.FC = () => {
     const hasUnpaid = unpaidCount > 0;
     const hasPaid = paidCount > 0;
 
-    if (hasUnpaid && hasPaid) {
-      computedStatus = 'Partially Paid';
-    } else if (hasUnpaid) {
+    if (hasUnpaid) {
       if (recs.some(r => r.status === 'Overdue')) computedStatus = 'Overdue';
       else computedStatus = 'Unpaid';
     }
@@ -243,13 +241,9 @@ export const AccountsReceivable: React.FC = () => {
           key: 'status', label: 'All Statuses', options: [
             { label: 'Overdue', value: 'Overdue' },
             { label: 'Unpaid', value: 'Unpaid' },
-            { label: 'Partially Paid', value: 'Partially Paid' },
             { label: 'Paid', value: 'Paid' },
           ],
-          filterFn: (row: any, val: string) => {
-            if (val === 'Paid') return row.status === 'Paid' || row.status === 'Partially Paid';
-            return row.status === val;
-          },
+          filterFn: (row: any, val: string) => row.status === val,
         }]}
       />
     </TableContainer>

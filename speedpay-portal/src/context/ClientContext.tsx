@@ -26,7 +26,7 @@ interface ClientContextType {
   logout: () => void;
   createAccount: (account: Omit<ClientUser, 'avatarInitials' | 'password'>) => { success: boolean; error?: string };
   changePassword: (clientId: string, newPassword: string) => void;
-  submitPayment: (invoiceId: string, paymentMethod: 'GCash' | 'Maya' | 'Bank Transfer', referenceNo: string, amount: number) => void;
+  submitPayment: (invoiceId: string, paymentMethod: 'GCash' | 'Maya' | 'Bank Transfer', referenceNo: string, amount: number, proofFileName?: string, proofFileUrl?: string) => void;
   getDashboardSummary: () => { totalOutstanding: number; nextDueDate: string | null; totalPaidPeriod: number };
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
@@ -118,7 +118,6 @@ export const ClientProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             dueDate: inv.dueDate ?? new Date().toISOString(),
             routeArea: inv.routeArea ?? 'National Capital Region',
             status: (inv.paymentStatus === 'Unpaid' ? 'Unpaid'
-                  : inv.paymentStatus === 'Partially Paid' ? 'Due Soon'
                   : inv.paymentStatus === 'Pending Payment Validation' ? 'Pending Validation'
                   : 'Paid') as Invoice['status']
           }));

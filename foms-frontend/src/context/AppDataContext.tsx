@@ -1,11 +1,11 @@
 /**
  * ─── FOMS AppDataContext ───────────────────────────────────────────
  * Single source of truth for all shared mutable data in the system.
- * Components MUST read from and write to this context instead of
- * directly using the static SEEDED_* arrays from seed.ts.
+ * Data is fetched EXCLUSIVELY from the real .NET backend API.
  *
- * Data is now fetched from the real .NET backend API (localhost:5007)
- * via the Vite proxy. Static seed data is used as fallback only.
+ * CRITICAL: Every fetch REPLACES state (setX(mapped)), never merges.
+ * This ensures the DB is always the single source of truth.
+ * Refresh functions are exposed so pages can re-sync after mutations.
  * ─────────────────────────────────────────────────────────────────
  */
 
@@ -31,32 +31,135 @@ import {
   FollowUpRecord,
 } from '../data/seed';
 
+// ─── Backend → Frontend map helpers ──────────────────────────────
+
+function mapClient(c: any): Client {
+  return {
+    id: c.id ?? c.clientCode,
+    name: c.name ?? c.businessName ?? '',
+    contactPerson: c.contactPerson ?? '',
+    email: c.email ?? '',
+    phone: c.contactNumber ?? '',
+    address: c.address ?? '',
+    region: c.region ?? 'Metro Manila',
+    billingSchedule: c.billingSchedule ?? 'Monthly',
+    status: c.status === 'Active' ? 'Active' : 'Inactive',
+    vatStatus: c.vatStatus ?? 'VATable',
+    vatRate: c.vatRate ?? 12,
+    createdAt: c.dateRegistered ?? new Date().toISOString(),
+  };
+}
+
+function mapInvoice(inv: any): Invoice {
+  // Derive frontend status from backend paymentStatus (DB truth)
+  let status: Invoice['status'] = 'Finalized';
+  const ps = (inv.paymentStatus ?? '').toLowerCase();
+  const pvs = (inv.paymentValidationStatus ?? '').toLowerCase();
+  if (ps === 'paid') {
+    status = 'Paid';
+  } else if (ps === 'overdue') {
+    status = 'Overdue';
+  } else if (pvs.includes('pending')) {
+    status = 'Pending Approval';
+  } else if (pvs === 'returned for correction') {
+    status = 'Draft';
+  }
+  return {
+    id: inv.id,
+    invoiceNumber: inv.invoiceNo ?? inv.id,
+    clientId: inv.clientId,
+    waybillIds: inv.waybillIds ?? [],
+    amount: inv.subtotal ?? inv.freightCharges ?? 0,
+    vatAmount: inv.vatAmount ?? 0,
+    surchargeAmount: inv.surcharge ?? inv.otherCharges ?? 0,
+    totalAmount: inv.totalAmount ?? 0,
+    billingSchedule: inv.billingSchedule ?? 'Monthly',
+    billingPeriod: inv.billingDate ?? '',
+    status,
+    createdBy: inv.createdBy ?? inv.encodedBy ?? 'System',
+    createdAt: inv.billingDate ?? inv.dateEncoded ?? new Date().toISOString(),
+    dueDate: inv.dueDate ?? new Date().toISOString(),
+    notes: inv.description ?? '',
+  };
+}
+
+function mapPayment(p: any): Payment {
+  const rawStatus = p.paymentStatus ?? p.status ?? 'Pending Validation';
+  const sl = rawStatus.toLowerCase();
+  let status: Payment['status'] = 'Pending Validation';
+  if (sl === 'validated' || sl === 'approved') status = 'Validated';
+  else if (sl === 'rejected') status = 'Rejected';
+  return {
+    id: p.id,
+    invoiceId: p.invoiceId ?? '',
+    invoiceNumber: p.invoiceNo ?? p.invoiceId ?? '',
+    clientId: p.clientId ?? '',
+    clientName: p.clientName ?? '',
+    amount: p.amount ?? 0,
+    paymentMethod: p.paymentMethod ?? 'Bank Transfer',
+    referenceNumber: p.referenceNumber ?? '',
+    bankConfirmed: status === 'Validated',
+    proofOfPaymentUrl: p.proofImageUrl ?? p.proofFileUrl ?? '',
+    recordedBy: p.recordedBy ?? '',
+    recordedAt: p.dateRecorded ?? p.paymentDate ?? p.submittedAt ?? new Date().toISOString(),
+    validatedBy: p.validatedBy,
+    validatedAt: p.validatedAt,
+    status,
+    notes: p.remarks ?? '',
+    orNumber: p.orNumber,
+  };
+}
+
+function mapSpeedPay(s: any): SpeedPaySubmission {
+  const sl = (s.status ?? '').toLowerCase();
+  let status: SpeedPaySubmission['status'] = 'Pending Validation';
+  if (sl === 'validated' || sl === 'approved') status = 'Validated';
+  else if (sl === 'rejected') status = 'Rejected';
+  return {
+    id: s.id ?? s.transactionId,
+    invoiceId: s.invoiceId ?? '',
+    invoiceNumber: s.invoiceNumber,
+    clientId: s.clientId ?? '',
+    clientName: s.clientName ?? 'Unknown',
+    clientEmail: s.clientEmail ?? '',
+    paymentMethod: s.paymentMethod ?? 'GCash',
+    referenceNumber: s.referenceNumber ?? s.id,
+    amountPaid: s.amountPaid ?? s.amount ?? 0,
+    proofFileName: s.proofFileName ?? 'proof.jpg',
+    proofFileUrl: s.proofFileUrl,
+    submittedAt: s.submittedAt ?? s.createdAt ?? new Date().toISOString(),
+    status,
+    validatedBy: s.validatedBy,
+    validatedAt: s.validatedAt,
+    rejectionReason: s.rejectionReason,
+  };
+}
+
 // ─── Helper: compute AR records live from invoices + payments ─────
 
 function computeArRecords(invoices: Invoice[], payments: Payment[]): ARRecord[] {
   return invoices
-    .filter(inv => ['Finalized', 'Overdue', 'Verified', 'Sent', 'Pending Approval', 'Paid', 'Draft'].includes(inv.status))
+    .filter(inv => ['Finalized', 'Overdue', 'Verified', 'Sent', 'Pending Approval', 'Paid', 'Draft', 'Unpaid'].includes(inv.status))
     .map((inv, i) => {
       const now = new Date();
       const due = new Date(inv.dueDate);
       const diffDays = Math.floor((now.getTime() - due.getTime()) / (1000 * 60 * 60 * 24));
       const daysUntilDue = Math.floor((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
-      let paid = payments
+      const paid = payments
         .filter(p => p.invoiceId === inv.id && (p.status === 'Validated' || p.status === 'Approved'))
         .reduce((s, p) => s + p.amount, 0);
-        
+
       let outstandingBalance = Math.max(0, inv.totalAmount - paid);
 
       let bracket: ARRecord['agingBracket'] = 'Current';
       let status: ARRecord['status'] = 'Current';
 
       if (inv.status === 'Paid') {
-        status = 'Paid';
+        status = 'Paid' as any;
         outstandingBalance = 0;
-        paid = inv.totalAmount;
       } else if (outstandingBalance <= 0) {
-        status = 'Paid';
+        status = 'Paid' as any;
       } else if (diffDays > 0) {
         status = 'Overdue';
         if (diffDays <= 30) bracket = '0-30 days';
@@ -97,6 +200,13 @@ export interface AppDataContextValue {
   arRecords: ARRecord[]; // derived, always in sync
   auditLogs: AuditLog[];
   followUpRecords: FollowUpRecord[];
+
+  // DB Refresh actions — call after any mutation to re-sync from DB
+  refreshPayments: () => Promise<void>;
+  refreshInvoices: () => Promise<void>;
+  refreshSpeedPay: () => Promise<void>;
+  refreshClients: () => Promise<void>;
+  refreshReceipts: () => Promise<void>;
 
   // Waybill actions
   updateWaybill: (id: string, changes: Partial<Waybill>) => void;
@@ -142,73 +252,62 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [followUpRecords, setFollowUpRecords] = useState<FollowUpRecord[]>([]);
 
-  // ── Fetch Clients from real backend on mount ──
-  useEffect(() => {
-    api.get('/clients')
-      .then((res) => {
-        const mapped: Client[] = res.data.map((c: any) => ({
-          id: c.id ?? c.clientCode,
-          name: c.name ?? c.businessName ?? '',
-          contactPerson: c.contactPerson ?? '',
-          email: c.email ?? '',
-          phone: c.contactNumber ?? '',
-          address: c.address ?? '',
-          region: c.region ?? 'Metro Manila',
-          billingSchedule: c.billingSchedule ?? 'Monthly',
-          status: c.status === 'Active' ? 'Active' : 'Inactive',
-          vatStatus: c.vatStatus ?? 'VATable',
-          vatRate: c.vatRate ?? 12,
-          createdAt: c.dateRegistered ?? new Date().toISOString(),
-        }));
-        if (mapped.length > 0) {
-          // Merge: keep seed clients, add backend clients that don't conflict
-          setClients(prev => {
-            const existingIds = new Set(prev.map(c => c.id));
-            const newOnes = mapped.filter(c => !existingIds.has(c.id));
-            return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
-          });
-        }
-      })
-      .catch(() => { /* keep static seed as fallback */ });
+  // ── Refresh functions — REPLACE state from DB (never merge) ──────
+  const refreshClients = useCallback(async () => {
+    try {
+      const res = await api.get('/clients');
+      const mapped: Client[] = res.data.map(mapClient);
+      setClients(mapped);
+    } catch { /* keep current state */ }
   }, []);
 
-  // ── Fetch Invoices from real backend on mount ──
-  useEffect(() => {
-    api.get('/invoices')
-      .then((res) => {
-        const mapped: Invoice[] = res.data.map((inv: any) => ({
-          id: inv.id,
-          invoiceNumber: inv.invoiceNo ?? inv.id,
-          clientId: inv.clientId,
-          waybillIds: inv.waybillIds ?? [],
-          amount: inv.subtotal ?? inv.freightCharges ?? 0,
-          vatAmount: inv.vatAmount ?? 0,
-          surchargeAmount: inv.otherCharges ?? 0,
-          totalAmount: inv.totalAmount ?? 0,
-          billingSchedule: inv.billingSchedule ?? 'Monthly',
-          billingPeriod: inv.billingDate ?? '',
-          status: inv.paymentValidationStatus === 'Pending Validation' ? 'Pending Approval'
-                : inv.paymentValidationStatus === 'Returned for Correction' ? 'Draft'
-                : inv.paymentStatus === 'Unpaid' ? 'Pending Approval'
-                : inv.paymentStatus === 'Partially Paid' ? 'Verified'
-                : inv.paymentStatus === 'Paid' ? 'Paid'
-                : 'Finalized',
-          createdBy: inv.createdBy ?? 'EMP-003',
-          createdAt: inv.billingDate ?? new Date().toISOString(),
-          dueDate: inv.dueDate ?? new Date().toISOString(),
-          notes: inv.description ?? '',
-        }));
-        if (mapped.length > 0) {
-          // Merge: keep seed invoices, add backend invoices that don't conflict
-          setInvoices(prev => {
-            const existingIds = new Set(prev.map(i => i.id));
-            const newOnes = mapped.filter(i => !existingIds.has(i.id));
-            return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
-          });
-        }
-      })
-      .catch(() => { /* keep static seed as fallback */ });
+  const refreshInvoices = useCallback(async () => {
+    try {
+      const res = await api.get('/invoices');
+      const mapped: Invoice[] = res.data.map(mapInvoice);
+      setInvoices(mapped);
+    } catch { /* keep current state */ }
   }, []);
+
+  const refreshPayments = useCallback(async () => {
+    try {
+      const res = await api.get('/payments');
+      const mapped: Payment[] = res.data.map(mapPayment);
+      setPayments(mapped);
+    } catch { /* keep current state */ }
+  }, []);
+
+  const refreshSpeedPay = useCallback(async () => {
+    try {
+      const res = await api.get('/speedpay/submissions');
+      const mapped: SpeedPaySubmission[] = res.data.map(mapSpeedPay);
+      setSpeedPay(mapped);
+    } catch { /* keep current state */ }
+  }, []);
+
+  const refreshReceipts = useCallback(async () => {
+    try {
+      const res = await api.get('/official-receipts');
+      const mapped: Receipt[] = res.data.map((r: any) => ({
+        id: r.id,
+        receiptNumber: r.receiptNumber ?? r.orNumber ?? r.id,
+        invoiceId: r.invoiceId ?? r.paymentCollection?.invoiceId ?? '',
+        paymentId: r.paymentCollectionId ?? r.paymentId ?? '',
+        clientId: r.clientId ?? r.paymentCollection?.clientId ?? '',
+        amount: r.amount ?? r.paymentCollection?.amountCollected ?? 0,
+        referenceNumber: r.referenceNumber ?? '',
+        issuedBy: r.issuedBy ?? 'System',
+        issuedAt: r.issuedDate ?? r.issuedAt ?? new Date().toISOString(),
+      }));
+      setReceipts(mapped);
+    } catch { /* keep current state */ }
+  }, []);
+
+  // ── Initial fetches on mount ──
+  useEffect(() => { refreshClients(); }, [refreshClients]);
+  useEffect(() => { refreshInvoices(); }, [refreshInvoices]);
+  useEffect(() => { refreshPayments(); }, [refreshPayments]);
+  useEffect(() => { refreshReceipts(); }, [refreshReceipts]);
 
   // ── Fetch Waybills from real backend on mount ──
   useEffect(() => {
@@ -239,123 +338,16 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       .catch(() => { /* keep static seed as fallback */ });
   }, []);
 
-  // ── Fetch SpeedPay from real backend — polls every 15s so new submissions show up automatically ──
-  const fetchSpeedPay = useCallback(() => {
-    api.get('/speedpay/submissions')
-      .then((res) => {
-        const mapped: SpeedPaySubmission[] = res.data.map((s: any) => ({
-          id: s.id ?? s.transactionId,
-          invoiceId: s.invoiceId ?? 'INV-001',
-          invoiceNumber: s.invoiceNumber,
-          clientId: s.clientId ?? '',
-          clientName: s.clientName ?? 'Unknown',
-          clientEmail: s.clientEmail ?? '',
-          paymentMethod: s.paymentMethod ?? 'GCash',
-          referenceNumber: s.referenceNumber ?? s.id,
-          amountPaid: s.amountPaid ?? s.amount ?? 0,
-          proofFileName: s.proofFileName ?? 'proof.jpg',
-          proofFileUrl: s.proofFileUrl,
-          submittedAt: s.submittedAt ?? s.createdAt ?? new Date().toISOString(),
-          status: s.status ?? 'Pending Validation',
-        }));
-        setSpeedPay(mapped);
-      })
-      .catch(() => { /* keep current state on error */ });
-  }, []);
-
+  // ── SpeedPay — polls every 15s so new submissions appear automatically ──
   useEffect(() => {
-    fetchSpeedPay(); // initial fetch
-    const interval = setInterval(fetchSpeedPay, 15000); // poll every 15 seconds
+    refreshSpeedPay(); // initial fetch
+    const interval = setInterval(refreshSpeedPay, 15000);
     return () => clearInterval(interval);
-  }, [fetchSpeedPay]);
-
-  // ── Fetch Payments from real backend on mount ──
-  useEffect(() => {
-    api.get('/payments')
-      .then((res) => {
-        const mapped: Payment[] = res.data.map((p: any) => ({
-          id: p.id ?? p.orNumber,
-          invoiceId: p.invoiceId ?? '',
-          invoiceNumber: p.invoiceNo ?? p.invoiceId ?? '',
-          clientId: p.clientId ?? '',
-          clientName: p.clientName ?? '',
-          amount: p.amount ?? 0,
-          paymentMethod: p.paymentMethod ?? 'Bank Transfer',
-          referenceNumber: p.referenceNumber ?? '',
-          bankConfirmed: true,
-          proofOfPaymentUrl: p.proofImageUrl ?? '',
-          recordedBy: p.recordedBy ?? '',
-          recordedAt: p.dateRecorded ?? p.paymentDate ?? new Date().toISOString(),
-          status: 'Validated' as const,
-          notes: p.remarks ?? '',
-        }));
-        if (mapped.length > 0) setPayments(mapped);
-      })
-      .catch(() => { /* keep static seed as fallback */ });
-  }, []);
-
-  // ── Fetch Official Receipts from real backend on mount ──
-  useEffect(() => {
-    api.get('/official-receipts')
-      .then((res) => {
-        const mapped: Receipt[] = res.data.map((r: any) => ({
-          id: r.id,
-          receiptNumber: r.receiptNumber ?? r.orNumber ?? r.id,
-          invoiceId: r.invoiceId ?? r.paymentCollection?.invoiceId ?? '',
-          paymentId: r.paymentCollectionId ?? r.paymentId ?? '',
-          clientId: r.clientId ?? r.paymentCollection?.clientId ?? '',
-          amount: r.amount ?? r.paymentCollection?.amountCollected ?? 0,
-          referenceNumber: r.referenceNumber ?? '',
-          issuedBy: r.issuedBy ?? 'System',
-          issuedAt: r.issuedDate ?? r.issuedAt ?? new Date().toISOString(),
-        }));
-        if (mapped.length > 0) {
-          setReceipts(prev => {
-            const existingIds = new Set(prev.map(r => r.id));
-            const newOnes = mapped.filter(r => !existingIds.has(r.id));
-            return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
-          });
-        }
-      })
-      .catch(() => { /* keep in-memory receipts as fallback */ });
-  }, []);
-
-  // ── Auto-derive receipts from validated SpeedPay submissions ──
-  // Whenever the SpeedPay list updates, create a Receipt entry for every
-  // Validated submission that does not already have one. This ensures the
-  // Official Receipt History table is populated even if the accountant
-  // validated in a previous session (before receipts were persisted).
-  useEffect(() => {
-    const validatedSubs = speedPay.filter(s => s.status === 'Validated');
-    if (validatedSubs.length === 0) return;
-
-    setReceipts(prev => {
-      const existingPaymentIds = new Set(prev.map(r => r.paymentId));
-      const derived: Receipt[] = validatedSubs
-        .filter(s => !existingPaymentIds.has(s.id))
-        .map((s, idx) => {
-          const clientId = (s as any).clientId ?? '';
-          const orNum = `OR-${new Date().getFullYear()}-${String(prev.length + idx + 1).padStart(4, '0')}`;
-          return {
-            id: `OR-derived-${s.id}`,
-            receiptNumber: orNum,
-            invoiceId: s.invoiceId,
-            paymentId: s.id,
-            clientId,
-            amount: s.amountPaid ?? 0,
-            referenceNumber: s.referenceNumber ?? '',
-            issuedBy: (s as any).validatedBy ?? 'System',
-            issuedAt: (s as any).validatedAt ?? s.submittedAt ?? new Date().toISOString(),
-          };
-        });
-      return derived.length > 0 ? [...prev, ...derived] : prev;
-    });
-  }, [speedPay]);
+  }, [refreshSpeedPay]);
 
   // ── Fetch CashFlow from real backend on mount ──
   useEffect(() => {
-    api.get('/cash-flow')
-      .catch(() => { /* not critical */ });
+    api.get('/cash-flow').catch(() => { /* not critical */ });
   }, []);
 
   // ── Fetch AuditLogs from real backend on mount ──
@@ -420,7 +412,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
   // ── Receipt Actions ──
   const addReceipt = useCallback((receipt: Receipt) => {
-    setReceipts(prev => [receipt, ...prev]);
+    setReceipts(prev => {
+      const exists = prev.some(r => r.id === receipt.id || r.paymentId === receipt.paymentId);
+      return exists ? prev : [receipt, ...prev];
+    });
   }, []);
 
   // ── SpeedPay Actions ──
@@ -461,6 +456,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     arRecords,
     auditLogs,
     followUpRecords,
+    refreshPayments,
+    refreshInvoices,
+    refreshSpeedPay,
+    refreshClients,
+    refreshReceipts,
     updateWaybill,
     addWaybill,
     addInvoice,

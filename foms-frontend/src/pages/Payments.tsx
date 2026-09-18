@@ -14,6 +14,7 @@ import { CalendarPicker } from '../components/FormModals';
 import { useAppData } from '../context/AppDataContext';
 import { TableContainer } from '../components/TableContainer';
 import { ClientInfoCard } from '../components/ClientInfoCard';
+import api from '../services/api';
 
 const safeFormatDate = (dateVal: string | Date | undefined | null, options?: Intl.DateTimeFormatOptions) => {
   if (!dateVal) return '—';
@@ -45,11 +46,11 @@ export const Payments: React.FC = () => {
   });
   const [submitted, setSubmitted] = useState(false);
 
-  const { payments, invoices, speedPay, clients, updatePayment, addPayment, updateInvoice, addReceipt, receipts } = useAppData();
+  const { payments, invoices, speedPay, clients, updatePayment, addPayment, updateInvoice, addReceipt, receipts, refreshPayments, refreshInvoices, refreshReceipts } = useAppData();
 
-  let allowedPayments = payments;
-  if (isAssistant || isHeadAccountant) allowedPayments = payments.filter(p => p.status === 'Pending Validation');
-  else if (isFinanceManager) allowedPayments = payments.filter(p => p.status === 'Validated');
+  // All roles see all payments — filtering by status was hiding history
+  // Accountants see all; FM/HA/Assistant see all (they validate/approve from this list)
+  const allowedPayments = payments;
 
   const filteredPayments = clientIdParam ? allowedPayments.filter(p => p.clientId === clientIdParam) : allowedPayments;
 
@@ -63,7 +64,8 @@ export const Payments: React.FC = () => {
   const checkCount = useMemo(() => filteredPayments.filter(p => p.paymentMethod === 'Check').length, [filteredPayments]);
   const obtCount = useMemo(() => filteredPayments.filter(p => p.paymentMethod === 'Online Bank Transfer').length, [filteredPayments]);
 
-  const unpaidInvoices = invoices.filter(i => ['Sent', 'Overdue', 'Approved', 'Finalized', 'Verified', 'Paid'].includes(i.status));
+  // Only show invoices that still have outstanding balance (exclude Paid)
+  const unpaidInvoices = invoices.filter(i => ['Sent', 'Overdue', 'Approved', 'Finalized', 'Verified', 'Pending Approval'].includes(i.status));
 
   let enriched: any[] = [];
   if (clientIdParam) {
@@ -186,77 +188,101 @@ export const Payments: React.FC = () => {
   else if (isAccountant) actions = accountantActions;
 
   // Form submission handlers
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.invoiceId || !form.referenceNumber) return;
+    if (!form.invoiceId || !form.referenceNumber || !form.amount) {
+      toast.error('Invoice, Amount, and Reference Number are required.');
+      return;
+    }
     setSubmitted(true);
-    setShowForm(false);
     const invoice = invoices.find(i => i.id === form.invoiceId);
-    if (invoice) {
-      addPayment({
-        id: `PAY-${Date.now()}`,
-        invoiceId: invoice.id,
-        clientId: invoice.clientId,
-        amount: parseFloat(form.amount) || invoice.totalAmount,
-        paymentMethod: form.paymentMethod as any,
-        referenceNumber: form.referenceNumber,
-        bankConfirmed: false,
-        recordedBy: user?.employeeId || 'EMP-000',
-        status: 'Pending Validation',
-        recordedAt: new Date().toISOString(),
-        notes: form.notes
-      });
+    if (!invoice) {
+      toast.error('Selected invoice not found.');
+      setSubmitted(false);
+      return;
     }
-    logAction('PAYMENT_RECORDED', 'Payments', 'Payment', `PAY-${Date.now()}`, `Recorded payment for Invoice ${form.invoiceId}`, user?.fullName || 'User', user?.role || 'Role', user?.employeeId || 'EMP-000');
-    setForm({ invoiceId: '', amount: '', paymentMethod: 'Online Bank Transfer', referenceNumber: '', bankConfirmed: false, notes: '', datePaid: '' });
+    try {
+      const session = JSON.parse(sessionStorage.getItem('foms_session') || '{}');
+      const payload = {
+        InvoiceId: invoice.id,
+        InvoiceNo: invoice.invoiceNumber,
+        ClientId: invoice.clientId,
+        ClientName: clients.find(c => c.id === invoice.clientId)?.name ?? '',
+        PaymentDate: form.datePaid || new Date().toISOString().split('T')[0],
+        Amount: parseFloat(form.amount) || invoice.totalAmount,
+        PaymentMethod: form.paymentMethod,
+        ReferenceNumber: form.referenceNumber,
+        Remarks: form.notes || 'Recorded via Finance Record Payment',
+        RecordedBy: session?.employeeId ?? user?.employeeId ?? 'System',
+      };
+      await api.post('/payments', payload);
+      // Refresh from DB — ensures persistence survives refresh/restart
+      await refreshPayments();
+      setShowForm(false);
+      setForm({ invoiceId: '', amount: '', paymentMethod: 'Bank Transfer', referenceNumber: '', bankConfirmed: false, notes: '', datePaid: '' });
+      logAction('PAYMENT_RECORDED', 'Payments', 'Payment', invoice.id, `Recorded payment for Invoice ${invoice.invoiceNumber}`, user?.fullName || 'User', user?.role || 'Role', user?.employeeId || 'EMP-000');
+      toast.success('Payment recorded and saved to database. Pending validation.');
+    } catch (err: any) {
+      const msg = err?.response?.data?.message ?? err?.message ?? 'Failed to record payment.';
+      toast.error(msg, 'Record Payment Failed');
+    } finally {
+      setSubmitted(false);
+    }
   };
 
-  const handleAFMSubmit = (viewPayment: any) => {
+  // Head Accountant / Finance Manager validate or reject a payment — PERSISTS TO DB
+  const handleAFMSubmit = async (viewPayment: any) => {
     if (verificationStatus === 'Reject' && !rejectionReason.trim()) {
-      toast.error("Please provide a rejection reason.", "Required Field Missing");
+      toast.error('Please provide a rejection reason.', 'Required Field Missing');
       return;
     }
-    if (verificationStatus === 'Reject') {
-      updatePayment(viewPayment.id, { status: 'Rejected', notes: rejectionReason });
-      logAction('PAYMENT_REJECTED', 'Payments', 'Payment', viewPayment.id, `Rejected payment ${viewPayment.id}`, user?.fullName || 'User', user?.role || 'Role', user?.employeeId || 'EMP-000');
-      toast.error(`Payment ${viewPayment.id} rejected.`, 'Payment Rejected');
-    } else {
-      updatePayment(viewPayment.id, { status: 'Validated', validatedBy: user?.fullName || 'AFM', validatedAt: new Date().toISOString() });
-      logAction('PAYMENT_VALIDATED', 'Payments', 'Payment', viewPayment.id, `Validated payment ${viewPayment.id}`, user?.fullName || 'User', user?.role || 'Role', user?.employeeId || 'EMP-000');
-      toast.success(`Payment ${viewPayment.id} validated.`, 'Payment Validated');
+    setSubmitted(true);
+    try {
+      if (verificationStatus === 'Reject') {
+        await api.post(`/finance/payments/${viewPayment.id}/reject`, { RejectionReason: rejectionReason });
+        toast.error(`Payment rejected and saved to database.`, 'Payment Rejected');
+      } else {
+        await api.post(`/finance/payments/${viewPayment.id}/validate`, { Remarks: rejectionReason || 'Validated' });
+        toast.success(`Payment validated. Invoice and AR updated. OR generated.`, 'Payment Validated');
+      }
+      // Refresh from DB — single source of truth
+      await Promise.all([refreshPayments(), refreshInvoices()]);
+      logAction('PAYMENT_VALIDATED', 'Payments', 'Payment', viewPayment.id, `${verificationStatus} payment ${viewPayment.id}`, user?.fullName || 'User', user?.role || 'Role', user?.employeeId || 'EMP-000');
+      navigate('/payments');
+    } catch (err: any) {
+      const msg = err?.response?.data?.message ?? err?.message ?? 'Action failed.';
+      toast.error(msg, 'Validation Error');
+    } finally {
+      setSubmitted(false);
     }
-    navigate('/payments');
   };
 
-  const handleFMSubmit = (viewPayment: any) => {
+  // Finance Manager final approve — calls same validate endpoint (FM also validates)
+  const handleFMSubmit = async (viewPayment: any) => {
     if (approvalStatus === 'Return for Review' && !rejectionReason.trim()) {
-      toast.error("Please provide remarks for returning.", "Required Field Missing");
+      toast.error('Please provide remarks for returning.', 'Required Field Missing');
       return;
     }
-    if (approvalStatus === 'Return for Review') {
-      updatePayment(viewPayment.id, { status: 'Pending Validation', notes: rejectionReason });
-      logAction('PAYMENT_RETURNED', 'Payments', 'Payment', viewPayment.id, `Returned payment ${viewPayment.id} for review`, user?.fullName || 'User', user?.role || 'Role', user?.employeeId || 'EMP-000');
-      toast.info(`Payment ${viewPayment.id} returned for review.`, 'Payment Returned');
-    } else {
-      // Approve: mark payment, mark invoice as Paid, generate receipt
-      updatePayment(viewPayment.id, { status: 'Approved' });
-      updateInvoice(viewPayment.invoiceId, { status: 'Paid' });
-      const orNum = `OR-${new Date().getFullYear()}-${String(receipts.length + 1).padStart(4, '0')}`;
-      addReceipt({
-        id: `OR-${Date.now()}`,
-        receiptNumber: orNum,
-        invoiceId: viewPayment.invoiceId,
-        paymentId: viewPayment.id,
-        clientId: viewPayment.clientId,
-        amount: viewPayment.amount,
-        referenceNumber: viewPayment.referenceNumber,
-        issuedBy: user?.employeeId || 'EMP-001',
-        issuedAt: new Date().toISOString(),
-      });
-      logAction('PAYMENT_APPROVED', 'Payments', 'Payment', viewPayment.id, `Final approval for payment ${viewPayment.id}`, user?.fullName || 'User', user?.role || 'Role', user?.employeeId || 'EMP-000');
-      toast.success(`Payment ${viewPayment.id} approved. Invoice marked as Paid and receipt generated.`, 'Payment Approved');
+    setSubmitted(true);
+    try {
+      if (approvalStatus === 'Return for Review') {
+        await api.post(`/finance/payments/${viewPayment.id}/return`, { Remarks: rejectionReason });
+        toast.info(`Payment returned for correction and saved to database.`, 'Payment Returned');
+      } else {
+        // Finance Manager final approval = validate endpoint
+        await api.post(`/finance/payments/${viewPayment.id}/validate`, { Remarks: 'Finance Manager Final Approval' });
+        toast.success(`Payment approved. Invoice = Paid. AR updated. OR generated.`, 'Payment Approved');
+      }
+      // Refresh everything from DB
+      await Promise.all([refreshPayments(), refreshInvoices(), refreshReceipts()]);
+      logAction('PAYMENT_APPROVED', 'Payments', 'Payment', viewPayment.id, `FM ${approvalStatus} payment ${viewPayment.id}`, user?.fullName || 'User', user?.role || 'Role', user?.employeeId || 'EMP-000');
+      navigate('/payments');
+    } catch (err: any) {
+      const msg = err?.response?.data?.message ?? err?.message ?? 'Action failed.';
+      toast.error(msg, 'Approval Error');
+    } finally {
+      setSubmitted(false);
     }
-    navigate('/payments');
   };
 
   // --- Detail Views ---
@@ -428,7 +454,7 @@ export const Payments: React.FC = () => {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>OR NUMBER</label>
-                  <input type="text" value={`OR-2026-${viewPayment.invoiceNumber?.slice(-4) || '0000'}`} disabled style={{ padding: '12px 16px', border: '1px solid #FCD34D', borderRadius: '8px', fontSize: '14px', color: '#92400E', background: '#FFFBEB', outline: 'none', fontWeight: 700 }} />
+                  <input type="text" value={viewPayment.orNumber || `OR-2026-${viewPayment.invoiceNumber?.slice(-4) || '0000'}`} disabled style={{ padding: '12px 16px', border: '1px solid #FCD34D', borderRadius: '8px', fontSize: '14px', color: '#92400E', background: '#FFFBEB', outline: 'none', fontWeight: 700 }} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <label style={{ fontSize: '11px', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>DATE ISSUED</label>

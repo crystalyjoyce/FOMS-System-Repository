@@ -330,7 +330,7 @@ const ReportsContent: React.FC = () => {
       <div style={{ background: '#fff', borderRadius: 12, padding: 24, border: '1px solid #E2E8F0', display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'flex-end' }}>
         <div style={{ flex: 1, minWidth: 200 }}>
           <label style={{ fontSize: '0.82rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: 6 }}>Report Type</label>
-          <select value={reportType} onChange={e => { setReportType(e.target.value); setIsGenerated(false); }} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC', fontSize: '0.9rem', color: '#0F172A', fontWeight: 500 }}>
+          <select value={reportType} disabled={isGenerated} onChange={e => { setReportType(e.target.value); setIsGenerated(false); }} style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid #E2E8F0', background: isGenerated ? '#E2E8F0' : '#F8FAFC', fontSize: '0.9rem', color: '#0F172A', fontWeight: 500, cursor: isGenerated ? 'not-allowed' : 'pointer' }}>
             <option value="aging">Aging of Accounts</option>
             <option value="invoices">Invoice Summary</option>
             <option value="collections">Collection Summary</option>
@@ -348,9 +348,15 @@ const ReportsContent: React.FC = () => {
         </div>
         <div>
           {!selectedClientId && (
-            <button onClick={handleGenerateReport} style={{ background: '#0F172A', color: '#fff', padding: '10px 24px', borderRadius: 8, border: 'none', fontWeight: 600, fontSize: '0.9rem', cursor: 'pointer' }}>
-              Generate Report
-            </button>
+            !isGenerated ? (
+              <button onClick={handleGenerateReport} style={{ background: '#0F172A', color: '#fff', padding: '10px 24px', borderRadius: 8, border: 'none', fontWeight: 600, fontSize: '0.9rem', cursor: 'pointer' }}>
+                Generate Report
+              </button>
+            ) : (
+              <button onClick={() => setIsGenerated(false)} style={{ background: '#F8FAFC', color: '#0F172A', border: '1px solid #CBD5E1', padding: '10px 24px', borderRadius: 8, fontWeight: 600, fontSize: '0.9rem', cursor: 'pointer' }}>
+                New Report
+              </button>
+            )
           )}
         </div>
       </div>

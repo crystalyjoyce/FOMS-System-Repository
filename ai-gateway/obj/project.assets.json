@@ -14,11 +14,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\Crystalyn Joyce\\Downloads\\kain\\FOMS-System-Repository\\ai-gateway\\foms-ai-gateway.csproj",
+      "projectUniqueName": "C:\\Users\\Crystalyn Joyce\\Downloads\\download\\FOMS-System-Repository\\ai-gateway\\foms-ai-gateway.csproj",
       "projectName": "foms-ai-gateway",
-      "projectPath": "C:\\Users\\Crystalyn Joyce\\Downloads\\kain\\FOMS-System-Repository\\ai-gateway\\foms-ai-gateway.csproj",
+      "projectPath": "C:\\Users\\Crystalyn Joyce\\Downloads\\download\\FOMS-System-Repository\\ai-gateway\\foms-ai-gateway.csproj",
       "packagesPath": "C:\\Users\\Crystalyn Joyce\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\Crystalyn Joyce\\Downloads\\kain\\FOMS-System-Repository\\ai-gateway\\obj\\",
+      "outputPath": "C:\\Users\\Crystalyn Joyce\\Downloads\\download\\FOMS-System-Repository\\ai-gateway\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

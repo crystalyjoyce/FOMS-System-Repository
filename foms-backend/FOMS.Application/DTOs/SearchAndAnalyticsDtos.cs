@@ -11,7 +11,7 @@ public class AdvancedFilterRequest
     public DateTime? EndDate { get; set; }
     
     // Statuses
-    public List<string>? PaymentStatuses { get; set; } // Paid, Unpaid, Partially Paid, Overdue
+    public List<string>? PaymentStatuses { get; set; } // Paid, Unpaid, Overdue
     public List<string>? TransactionTypes { get; set; } // Inflow, Outflow, Cashier, SpeedPay, Adjusted, Archived
     
     // Client and Employee

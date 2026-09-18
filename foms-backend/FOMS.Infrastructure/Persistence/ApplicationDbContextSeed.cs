@@ -194,7 +194,7 @@ public static class ApplicationDbContextSeed
         var staticInvoices = new List<Invoice>
         {
             new Invoice { Id = "INV-001", InvoiceNo = "LZD-2026-0001", ClientId = "CA-001", ClientName = "Lazada Philippines", BillingDate = DateTime.UtcNow.ToString("yyyy-MM-dd"), DueDate = DateTime.UtcNow.AddDays(30).ToString("yyyy-MM-dd"), FreightCharges = 47500.00m, Subtotal = 47500.00m, VatRate = 0.12, VatAmount = 5700.00m,  TotalAmount = 53200.00m, AmountPaid = 0m,       Balance = 53200.00m, PaymentStatus = "Unpaid",         Description = "Monthly Freight Shipping Services" },
-            new Invoice { Id = "INV-002", InvoiceNo = "SHP-2026-0001", ClientId = "CL-002", ClientName = "Shopee Express",     BillingDate = DateTime.UtcNow.ToString("yyyy-MM-dd"), DueDate = DateTime.UtcNow.AddDays(30).ToString("yyyy-MM-dd"), FreightCharges = 35000.00m, Subtotal = 35000.00m, VatRate = 0.12, VatAmount = 4200.00m,  TotalAmount = 39200.00m, AmountPaid = 20400.00m, Balance = 18800.00m, PaymentStatus = "Partially Paid", Description = "Cargo Forwarding" },
+            new Invoice { Id = "INV-002", InvoiceNo = "SHP-2026-0001", ClientId = "CL-002", ClientName = "Shopee Express",     BillingDate = DateTime.UtcNow.ToString("yyyy-MM-dd"), DueDate = DateTime.UtcNow.AddDays(30).ToString("yyyy-MM-dd"), FreightCharges = 35000.00m, Subtotal = 35000.00m, VatRate = 0.12, VatAmount = 4200.00m,  TotalAmount = 39200.00m, AmountPaid = 0m, Balance = 39200.00m, PaymentStatus = "Unpaid", Description = "Cargo Forwarding" },
             new Invoice { Id = "INV-003", InvoiceNo = "TTS-2026-0001", ClientId = "CL-003", ClientName = "TikTok Shop",        BillingDate = DateTime.UtcNow.ToString("yyyy-MM-dd"), DueDate = DateTime.UtcNow.AddDays(15).ToString("yyyy-MM-dd"), FreightCharges = 18000.00m, Subtotal = 18000.00m, VatRate = 0.12, VatAmount = 2160.00m,  TotalAmount = 20160.00m, AmountPaid = 0m,       Balance = 20160.00m, PaymentStatus = "Unpaid",         Description = "Cross-dock Services" },
         };
 
@@ -236,10 +236,8 @@ public static class ApplicationDbContextSeed
         // ══════════════════════════════════════════════════════════════════
         if (!await context.Payments.AnyAsync())
         {
-            var payments = new List<Payment>
-            {
-                new Payment { Id = "PAY-001", OrNumber = "OR-2026-001", InvoiceId = "INV-002", InvoiceNo = "SHP-2026-0001", ClientId = "CL-002", ClientName = "Shopee Express", Amount = 20400.00m, PaymentDate = DateTime.UtcNow.ToString("yyyy-MM-dd"), PaymentMethod = "Bank Transfer", ReferenceNumber = "REF-10029", RecordedBy = "Misty", Remarks = "Initial partial payment" }
-            };
+            var payments = new List<Payment>();
+            // Removing partially paid seed data
             context.Payments.AddRange(payments);
             await context.SaveChangesAsync();
         }
