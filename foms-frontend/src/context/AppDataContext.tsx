@@ -243,7 +243,7 @@ const AppDataContext = createContext<AppDataContextValue | null>(null);
 // ─── Provider ─────────────────────────────────────────────────────
 
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
-  const [waybills, setWaybills] = useState<Waybill[]>([]);
+  const [waybills, setWaybills] = useState<Waybill[]>(SEEDED_WAYBILLS);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
@@ -318,7 +318,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
           waybillNumber: w.waybillNumber ?? w.id,
           clientCode: w.clientId ?? w.clientCode ?? 'CLI-001',
           deliveryDate: w.deliveryDate ?? new Date().toISOString().split('T')[0],
-          status: w.status ?? 'For Checking',
+          status: (w.status === 'Validated' || w.status === 'Validated (CTC)' || w.status === 'CTC Submitted') ? w.status : 'Validated',
           hasOriginalPOD: w.hasOriginalPOD ?? false,
           hasApprovedCTC: w.hasApprovedCTC ?? false,
           encodedBy: w.encodedBy ?? 'EMP-004',
@@ -327,11 +327,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
           invoiceId: w.invoiceId
         }));
         if (mapped.length > 0) {
-          // Merge: keep seed waybills (they have our test statuses), add backend ones
           setWaybills(prev => {
-            const existingIds = new Set(prev.map(w => w.id));
-            const newOnes = mapped.filter(w => !existingIds.has(w.id));
-            return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
+            const map = new Map(prev.map(w => [w.id, w]));
+            mapped.forEach(m => map.set(m.id, { ...map.get(m.id), ...m }));
+            return Array.from(map.values());
           });
         }
       })
