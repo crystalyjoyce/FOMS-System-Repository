@@ -1,4 +1,4 @@
-﻿services:
+services:
   # -------------------------------------------------------
   # 1. FOMS .NET Backend (ASP.NET Core 9)
   # -------------------------------------------------------
@@ -46,7 +46,7 @@
     plan: free
     envVars:
       - key: POSTGRES_CONNECTION_STRING
-        sync: false   # Set to your Render PostgreSQL URL (for ai-service DB)
+        sync: false   # Set to your Supabase PostgreSQL URL (for ai-service DB)
       - key: MONGODB_URI
         sync: false   # Set to your MongoDB Atlas connection string
       - key: FOMS_READ_API_URL
@@ -94,24 +94,3 @@
           property: host
       - key: AI_SERVICE_API_KEY
         value: change-me
-
-  # -------------------------------------------------------
-  # Databases
-  # -------------------------------------------------------
-  - type: pserv
-    name: foms-ai-postgres
-    runtime: docker
-    plan: free
-    image:
-      url: pgvector/pgvector:pg16
-    envVars:
-      - key: POSTGRES_USER
-        value: postgres
-      - key: POSTGRES_PASSWORD
-        generateValue: true
-      - key: POSTGRES_DB
-        value: foms_ai_db
-    disk:
-      name: pgdata
-      mountPath: /var/lib/postgresql/data
-      sizeGB: 1
