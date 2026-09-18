@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { DataTable } from '../components/DataTable';
 import { StatusBadge } from '../components/StatusBadge';
-import { SEEDED_CLIENTS, Payment } from '../data/seed';
+import { Payment } from '../data/seed';
 import { useAuth } from '../context/AuthContext';
 import { useAudit } from '../context/AuditContext';
 import { useToast } from '../components/ToastContext';
@@ -547,7 +547,7 @@ export const Payments: React.FC = () => {
                     style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC', fontSize: '0.9rem', boxSizing: 'border-box' }}>
                     <option value="">Select an unpaid invoice...</option>
                     {unpaidInvoices.map(inv => {
-                      const clientInfo = SEEDED_CLIENTS.find(c => c.id === inv.clientId);
+                      const clientInfo = clients.find(c => c.id === inv.clientId);
                       return <option key={inv.id} value={inv.id}>{inv.invoiceNumber} — {clientInfo?.name} — ₱{inv.totalAmount.toFixed(2)}</option>;
                     })}
                   </select>
@@ -617,19 +617,23 @@ export const Payments: React.FC = () => {
   }
 
   // --- List View — Cash Flow Table ---
-  // Build a flat per-transaction cash flow list from real payments
-  const cashFlowRows = payments.map(p => {
-    const cli = clients.find(c => c.id === p.clientId) ?? SEEDED_CLIENTS.find(c => c.id === p.clientId);
+  // Only VALIDATED payments count as confirmed cash inflows (test case: pending/rejected are excluded)
+  const validatedPayments = payments.filter(p => p.status === 'Validated' || p.status === 'Approved');
+  const pendingPayments = payments.filter(p => p.status === 'Pending Validation');
+
+  const cashFlowRows = validatedPayments.map(p => {
+    const cli = clients.find(c => c.id === p.clientId);
     const invoice = invoices.find(i => i.id === p.invoiceId);
     return {
       ...p,
-      clientName: (p as any).clientName ?? cli?.name ?? p.clientId ?? '—',
-      invoiceNumber: (p as any).invoiceNumber ?? invoice?.invoiceNumber ?? p.invoiceId ?? '—',
-      inflowType: 'Client Collection',
+      clientName: (p as any).clientName || cli?.name || p.clientId || '—',
+      invoiceNumber: (p as any).invoiceNumber || invoice?.invoiceNumber || p.invoiceId || '—',
+      type: 'Inflow' as const,
+      classification: 'Client Collection',
     };
   });
 
-  // Also include validated SpeedPay as inflow rows
+  // Validated SpeedPay submissions as inflow rows
   const speedPayRows = speedPay
     .filter(s => s.status === 'Validated')
     .map(s => {
@@ -646,7 +650,8 @@ export const Payments: React.FC = () => {
         referenceNumber: s.referenceNumber,
         recordedAt: s.submittedAt,
         status: 'Validated' as const,
-        inflowType: 'SpeedPay Collection',
+        type: 'Inflow' as const,
+        classification: 'SpeedPay Collection',
         proofOfPaymentUrl: s.proofFileUrl,
       };
     });
@@ -655,11 +660,35 @@ export const Payments: React.FC = () => {
     .sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime());
 
   const totalInflow = allCashFlowRows
-    .filter(r => r.status === 'Validated' || r.status === 'Approved')
+    .filter(r => r.type === 'Inflow')
     .reduce((sum, r) => sum + r.amount, 0);
-  const pendingInflow = allCashFlowRows
-    .filter(r => r.status === 'Pending Validation')
-    .reduce((sum, r) => sum + r.amount, 0);
+
+  // Cash outflows (placeholder — zero until an outflow module is integrated)
+  const totalOutflow = 0;
+  const netCashFlow = totalInflow - totalOutflow;
+
+  const pendingInflowAmt = pendingPayments.reduce((s, p) => s + p.amount, 0);
+
+  // --- Filters state ---
+  const [filterType, setFilterType] = useState<string>('All');
+  const [filterStatus, setFilterStatus] = useState<string>('All');
+  const [filterDateFrom, setFilterDateFrom] = useState<string>('');
+  const [filterDateTo, setFilterDateTo] = useState<string>('');
+
+  const filteredCashFlow = allCashFlowRows.filter(r => {
+    if (filterType !== 'All' && r.type !== filterType) return false;
+    if (filterStatus !== 'All' && r.status !== filterStatus) return false;
+    if (filterDateFrom) {
+      const from = new Date(filterDateFrom);
+      if (new Date(r.recordedAt) < from) return false;
+    }
+    if (filterDateTo) {
+      const to = new Date(filterDateTo);
+      to.setHours(23, 59, 59);
+      if (new Date(r.recordedAt) > to) return false;
+    }
+    return true;
+  });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -667,37 +696,29 @@ export const Payments: React.FC = () => {
       {/* KPI Summary Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
         {[
-          { label: 'Total Cash Inflow', value: `₱${totalInflow.toLocaleString('en-PH', { maximumFractionDigits: 0 })}`, color: '#10B981', icon: 'ti-trending-up', sub: 'Validated & Approved' },
-          { label: 'Pending Validation', value: `₱${pendingInflow.toLocaleString('en-PH', { maximumFractionDigits: 0 })}`, color: '#F59E0B', icon: 'ti-clock', sub: 'Awaiting verification' },
-          { label: 'Total Transactions', value: allCashFlowRows.length, color: '#6366F1', icon: 'ti-list', sub: `${cashFlowRows.length} manual + ${speedPayRows.length} SpeedPay` },
-          { label: 'SpeedPay Collections', value: speedPayRows.length, color: '#0EA5E9', icon: 'ti-device-mobile-message', sub: 'Via SpeedPay portal' },
+          { label: 'Total Cash Inflow', value: `₱${totalInflow.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, color: '#10B981', icon: 'ti-trending-up', sub: 'Validated payments only' },
+          { label: 'Total Cash Outflow', value: `₱${totalOutflow.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, color: '#EF4444', icon: 'ti-trending-down', sub: 'Approved outgoing transactions' },
+          { label: 'Net Cash Flow', value: `₱${netCashFlow.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, color: netCashFlow >= 0 ? '#6366F1' : '#EF4444', icon: 'ti-currency-peso', sub: 'Total Inflow minus Outflow' },
+          { label: 'Pending Validation', value: `₱${pendingInflowAmt.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, color: '#F59E0B', icon: 'ti-clock', sub: `${pendingPayments.length} payment(s) awaiting` },
         ].map(kpi => (
-          <div 
-            key={kpi.label} 
-            style={{ 
-              background: '#fff', 
-              border: '1px solid #E2E8F0', 
-              borderTop: '4px solid transparent',
-              borderRadius: 12, 
-              padding: '16px 24px', 
-              transition: 'all 0.3s ease'
+          <div
+            key={kpi.label}
+            style={{
+              background: '#fff',
+              border: '1px solid #E2E8F0',
+              borderTop: `4px solid ${kpi.color}`,
+              borderRadius: 12,
+              padding: '16px 24px',
+              transition: 'all 0.2s ease',
             }}
-            onMouseEnter={e => {
-              e.currentTarget.style.transform = 'translateY(-5px)';
-              e.currentTarget.style.boxShadow = '0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)';
-              e.currentTarget.style.borderTop = `4px solid ${kpi.color}`;
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = 'none';
-              e.currentTarget.style.borderTop = '4px solid transparent';
-            }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
               <div style={{ width: 40, height: 40, borderRadius: 10, background: kpi.color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <i className={`ti ${kpi.icon}`} style={{ fontSize: 20, color: kpi.color }} />
               </div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: '#0F172A' }}>{kpi.value}</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: '#0F172A' }}>{kpi.value}</div>
             </div>
             <div style={{ fontSize: 12, fontWeight: 700, color: '#64748B' }}>{kpi.label}</div>
             <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>{kpi.sub}</div>
@@ -705,11 +726,64 @@ export const Payments: React.FC = () => {
         ))}
       </div>
 
+      {/* Filters Bar */}
+      <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '16px 20px', display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#475569' }}>Filters:</span>
+
+        <select value={filterType} onChange={e => setFilterType(e.target.value)}
+          style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC', fontSize: '0.85rem', color: '#475569', fontWeight: 600 }}>
+          <option value="All">All Types</option>
+          <option value="Inflow">Inflow</option>
+          <option value="Outflow">Outflow</option>
+        </select>
+
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+          style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC', fontSize: '0.85rem', color: '#475569', fontWeight: 600 }}>
+          <option value="All">All Statuses</option>
+          <option value="Validated">Validated</option>
+          <option value="Approved">Approved</option>
+          <option value="Pending Validation">Pending Validation</option>
+          <option value="Rejected">Rejected</option>
+        </select>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#64748B' }}>From:</label>
+          <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)}
+            style={{ padding: '7px 10px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC', fontSize: '0.85rem', color: '#475569' }} />
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <label style={{ fontSize: '0.82rem', fontWeight: 600, color: '#64748B' }}>To:</label>
+          <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)}
+            style={{ padding: '7px 10px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC', fontSize: '0.85rem', color: '#475569' }} />
+        </div>
+
+        {(filterType !== 'All' || filterStatus !== 'All' || filterDateFrom || filterDateTo) && (
+          <button onClick={() => { setFilterType('All'); setFilterStatus('All'); setFilterDateFrom(''); setFilterDateTo(''); }}
+            style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid #FCA5A5', background: '#FEF2F2', color: '#DC2626', fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer' }}>
+            <i className="ti ti-x" style={{ marginRight: 4 }} />Clear Filters
+          </button>
+        )}
+      </div>
+
       {/* Cash Flow Table */}
       <TableContainer>
         <DataTable
-          data={allCashFlowRows}
+          data={filteredCashFlow}
           columns={[
+            {
+              key: 'type', label: 'TYPE',
+              render: (row: any) => (
+                <span style={{
+                  padding: '3px 12px', borderRadius: 9999, fontWeight: 700, fontSize: '0.75rem',
+                  background: row.type === 'Inflow' ? '#DCFCE7' : '#FEE2E2',
+                  color: row.type === 'Inflow' ? '#15803D' : '#DC2626',
+                }}>
+                  <i className={`ti ${row.type === 'Inflow' ? 'ti-arrow-down-left' : 'ti-arrow-up-right'}`} style={{ marginRight: 4 }} />
+                  {row.type}
+                </span>
+              )
+            },
             {
               key: 'clientName', label: 'CLIENT', sortable: true,
               render: (row: any) => (
@@ -720,35 +794,35 @@ export const Payments: React.FC = () => {
               )
             },
             {
-              key: 'invoiceNumber', label: 'TRANSACTION / INVOICE',
+              key: 'invoiceNumber', label: 'REFERENCE / INVOICE',
               render: (row: any) => (
                 <div>
-                  <div style={{ fontWeight: 600, color: '#0F172A', fontFamily: 'monospace', fontSize: 12 }}>{row.invoiceNumber}</div>
-                  <div style={{
+                  <div style={{ fontWeight: 600, fontFamily: 'monospace', fontSize: 12, color: '#0F172A' }}>{row.invoiceNumber}</div>
+                  <span style={{
                     display: 'inline-block', marginTop: 2, padding: '1px 8px', borderRadius: 20,
                     fontSize: 10, fontWeight: 700,
-                    background: row.inflowType === 'SpeedPay Collection' ? '#EEF2FF' : '#F0FDF4',
-                    color: row.inflowType === 'SpeedPay Collection' ? '#4338CA' : '#047857'
+                    background: row.classification === 'SpeedPay Collection' ? '#EEF2FF' : '#F0FDF4',
+                    color: row.classification === 'SpeedPay Collection' ? '#4338CA' : '#047857',
                   }}>
-                    {row.inflowType}
-                  </div>
+                    {row.classification}
+                  </span>
                 </div>
               )
             },
             {
               key: 'amount', label: 'AMOUNT', sortable: true,
               render: (row: any) => (
-                <span style={{ fontWeight: 800, color: '#10B981', fontSize: 14 }}>
-                  +₱{Number(row.amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                <span style={{ fontWeight: 800, color: row.type === 'Inflow' ? '#10B981' : '#EF4444', fontSize: 14 }}>
+                  {row.type === 'Inflow' ? '+' : '-'}₱{Number(row.amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                 </span>
               )
             },
             {
               key: 'paymentMethod', label: 'METHOD',
               render: (row: any) => {
-                const colors: Record<string, string> = { GCash: '#007AFF', Maya: '#00AA6C', 'Bank Transfer': '#1E3A5F', Cash: '#047857', Check: '#7C3AED' };
+                const colors: Record<string, string> = { GCash: '#007AFF', Maya: '#00AA6C', 'Bank Transfer': '#1E3A5F', Cash: '#047857', Check: '#7C3AED', 'Online Bank Transfer': '#0EA5E9' };
                 const c = colors[row.paymentMethod] ?? '#64748B';
-                return <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: c + '18', color: c }}>{row.paymentMethod}</span>;
+                return <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: c + '18', color: c }}>{row.paymentMethod || '—'}</span>;
               }
             },
             {
@@ -768,17 +842,8 @@ export const Payments: React.FC = () => {
           title="Cash Flow — Payment Transactions"
           searchPlaceholder="Search by client, invoice, or reference..."
           searchFields={['clientName', 'invoiceNumber', 'referenceNumber'] as any}
-          emptyMessage="No payment transactions found. Payments will appear here once clients submit via SpeedPay or records are manually entered."
+          emptyMessage="No cash flow records found. Adjust your filters or wait for validated payments."
           columnToggle={true} densityToggle={true} exportable={false}
-          filters={[{
-            key: 'status', label: 'All Statuses', options: [
-              { label: 'Pending Validation', value: 'Pending Validation' },
-              { label: 'Validated', value: 'Validated' },
-              { label: 'Approved', value: 'Approved' },
-              { label: 'Rejected', value: 'Rejected' }
-            ],
-            filterFn: (row: any, val: string) => row.status === val
-          }]}
           actions={[]}
         />
       </TableContainer>
