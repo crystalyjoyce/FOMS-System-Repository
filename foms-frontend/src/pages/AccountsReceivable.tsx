@@ -177,9 +177,18 @@ export const AccountsReceivable: React.FC = () => {
       .map(r => r.agingBracket)
       .sort((a, b) => bracketOrder.indexOf(b) - bracketOrder.indexOf(a))[0] ?? 'Current';
 
+    const paidCount = recs.filter(r => r.outstandingBalance <= 0 || r.status === 'Paid').length;
+
     let computedStatus = 'Paid';
-    if (recs.some(r => r.status === 'Overdue')) computedStatus = 'Overdue';
-    else if (recs.some(r => ['Unpaid', 'Sent', 'Draft', 'Due Soon', 'Current', 'Pending Approval'].includes(r.status))) computedStatus = 'Unpaid';
+    const hasUnpaid = unpaidCount > 0;
+    const hasPaid = paidCount > 0;
+
+    if (hasUnpaid && hasPaid) {
+      computedStatus = 'Partially Paid';
+    } else if (hasUnpaid) {
+      if (recs.some(r => r.status === 'Overdue')) computedStatus = 'Overdue';
+      else computedStatus = 'Unpaid';
+    }
 
     return {
       id: clientId,
@@ -187,6 +196,7 @@ export const AccountsReceivable: React.FC = () => {
       totalOriginal,
       totalOutstanding,
       unpaidCount,
+      paidCount,
       worstBracket,
       status: computedStatus,
     };
@@ -233,9 +243,13 @@ export const AccountsReceivable: React.FC = () => {
           key: 'status', label: 'All Statuses', options: [
             { label: 'Overdue', value: 'Overdue' },
             { label: 'Unpaid', value: 'Unpaid' },
+            { label: 'Partially Paid', value: 'Partially Paid' },
             { label: 'Paid', value: 'Paid' },
           ],
-          filterFn: (row: any, val: string) => row.status === val,
+          filterFn: (row: any, val: string) => {
+            if (val === 'Paid') return row.status === 'Paid' || row.status === 'Partially Paid';
+            return row.status === val;
+          },
         }]}
       />
     </TableContainer>
