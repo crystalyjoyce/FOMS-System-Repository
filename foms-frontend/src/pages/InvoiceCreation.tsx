@@ -227,7 +227,7 @@ export const InvoiceCreation: React.FC = () => {
               key={selectedClientId ?? 'all'}
               title="Select Validated Waybills"
               data={filteredAvailableWaybills}
-              columns={selectedClientId ? waybillColumns : waybillColumns.filter(c => !['waybillNumber', 'status'].includes(c.key as string))}
+              columns={selectedClientId ? waybillColumns : waybillColumns.filter(c => c.key !== 'waybillNumber')}
               rowKey="id"
               selectable={selectedClientId !== null}
               onSelectionChange={(keys) => setSelectedWaybills(keys as string[])}
