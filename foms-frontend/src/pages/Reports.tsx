@@ -1,6 +1,6 @@
 import React, { Component, ErrorInfo, useState } from 'react';
 import { useSearchParams, useNavigate, useParams } from 'react-router-dom';
-import { SEEDED_INVOICES, SEEDED_CLIENTS, SEEDED_AR_RECORDS, SEEDED_PAYMENTS } from '../data/seed';
+import { useAppData } from '../context/AppDataContext';
 import { TableContainer } from '../components/TableContainer';
 import { StatusCard } from '../components/StatusCard';
 import { DataTable } from '../components/DataTable';
@@ -49,6 +49,8 @@ const ReportsContent: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   
+  const { invoices, clients, arRecords, payments } = useAppData();
+
   const { id } = useParams();
   const selectedClientId = id;
   const [reportType, setReportType] = useState(searchParams.get('tab') || 'aging');
@@ -76,24 +78,24 @@ const ReportsContent: React.FC = () => {
   };
 
   const getFilteredAR = () => {
-    if (!isGenerated || !dateFrom || !dateTo) return SEEDED_AR_RECORDS;
-    return SEEDED_AR_RECORDS.filter(ar => {
+    if (!isGenerated || !dateFrom || !dateTo) return arRecords;
+    return arRecords.filter(ar => {
       const d = ar.invoiceDate.split('T')[0];
       return d >= dateFrom && d <= dateTo;
     });
   };
 
   const getFilteredInvoices = () => {
-    if (!isGenerated || !dateFrom || !dateTo) return SEEDED_INVOICES;
-    return SEEDED_INVOICES.filter(inv => {
+    if (!isGenerated || !dateFrom || !dateTo) return invoices;
+    return invoices.filter(inv => {
       const d = inv.createdAt.split('T')[0];
       return d >= dateFrom && d <= dateTo;
     });
   };
 
   const getFilteredPayments = () => {
-    if (!isGenerated || !dateFrom || !dateTo) return SEEDED_PAYMENTS;
-    return SEEDED_PAYMENTS.filter(p => {
+    if (!isGenerated || !dateFrom || !dateTo) return payments;
+    return payments.filter(p => {
       const d = p.recordedAt.split('T')[0];
       return d >= dateFrom && d <= dateTo;
     });
@@ -102,7 +104,7 @@ const ReportsContent: React.FC = () => {
   let agingRecords: any[] = [];
   if (selectedClientId) {
     agingRecords = getFilteredAR().filter(ar => ar.clientId === selectedClientId).map(ar => {
-      const client = SEEDED_CLIENTS.find(c => c.id === ar.clientId);
+      const client = clients.find(c => c.id === ar.clientId);
       const invoice = getFilteredInvoices().find(i => i.id === ar.invoiceId);
       return {
         ...ar,
@@ -119,10 +121,11 @@ const ReportsContent: React.FC = () => {
       grouped.get(ar.clientId)!.push(ar);
     });
     agingRecords = Array.from(grouped.entries()).map(([clientId, recs]) => {
-      const client = SEEDED_CLIENTS.find(c => c.id === clientId);
+      const client = clients.find(c => c.id === clientId);
       const statuses = Array.from(new Set(recs.map(r => r.status)));
       const status = statuses.length === 1 ? statuses[0] : 'Mixed';
-      const maxDate = new Date(Math.max(...recs.map(r => new Date(r.invoiceDate).getTime())));
+      const validTimes = recs.map(r => new Date(r.invoiceDate).getTime()).filter(t => !isNaN(t));
+      const maxDate = new Date(validTimes.length > 0 ? Math.max(...validTimes) : Date.now());
       
       return {
         id: clientId, 
@@ -178,7 +181,7 @@ const ReportsContent: React.FC = () => {
   let allInvoices: any[] = [];
   if (selectedClientId) {
     allInvoices = getFilteredInvoices().filter(i => i.clientId === selectedClientId).map(i => {
-      const client = SEEDED_CLIENTS.find(c => c.id === i.clientId);
+      const client = clients.find(c => c.id === i.clientId);
       return {
         ...i,
         clientName: client?.name ?? 'Unknown'
@@ -191,10 +194,11 @@ const ReportsContent: React.FC = () => {
       grouped.get(inv.clientId)!.push(inv);
     });
     allInvoices = Array.from(grouped.entries()).map(([clientId, recs]) => {
-      const client = SEEDED_CLIENTS.find(c => c.id === clientId);
+      const client = clients.find(c => c.id === clientId);
       const statuses = Array.from(new Set(recs.map(r => r.status)));
       const status = statuses.length === 1 ? statuses[0] : 'Mixed';
-      const maxDate = new Date(Math.max(...recs.map(r => new Date(r.createdAt).getTime())));
+      const validTimes = recs.map(r => new Date(r.createdAt).getTime()).filter(t => !isNaN(t));
+      const maxDate = new Date(validTimes.length > 0 ? Math.max(...validTimes) : Date.now());
       
       return {
         id: clientId, 
@@ -247,7 +251,7 @@ const ReportsContent: React.FC = () => {
   const baseCollections = getFilteredPayments().filter(p => p.status === 'Validated' || p.status === 'Approved');
   if (selectedClientId) {
     collections = baseCollections.filter(p => p.clientId === selectedClientId).map(p => {
-      const client = SEEDED_CLIENTS.find(c => c.id === p.clientId);
+      const client = clients.find(c => c.id === p.clientId);
       const invoice = getFilteredInvoices().find(i => i.id === p.invoiceId);
       return {
         ...p,
@@ -262,8 +266,9 @@ const ReportsContent: React.FC = () => {
       grouped.get(col.clientId)!.push(col);
     });
     collections = Array.from(grouped.entries()).map(([clientId, recs]) => {
-      const client = SEEDED_CLIENTS.find(c => c.id === clientId);
-      const maxDate = new Date(Math.max(...recs.map(r => new Date(r.recordedAt).getTime())));
+      const client = clients.find(c => c.id === clientId);
+      const validTimes = recs.map(r => new Date(r.recordedAt).getTime()).filter(t => !isNaN(t));
+      const maxDate = new Date(validTimes.length > 0 ? Math.max(...validTimes) : Date.now());
       
       return {
         id: clientId, 
@@ -350,12 +355,12 @@ const ReportsContent: React.FC = () => {
         </div>
       </div>
 
-      {selectedClientId && SEEDED_CLIENTS.find(c => c.id === selectedClientId) && (
+      {selectedClientId && clients.find(c => c.id === selectedClientId) && (
         <>
           <div onClick={() => navigate('/reports?tab=' + activeTab)} style={{ cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600, width: 'fit-content' }}>
             <i className="ti ti-arrow-left" style={{ fontSize: '16px' }}></i> Back to Reports
           </div>
-          <ClientInfoCard client={SEEDED_CLIENTS.find(c => c.id === selectedClientId)!} />
+          <ClientInfoCard client={clients.find(c => c.id === selectedClientId)!} />
         </>
       )}
 

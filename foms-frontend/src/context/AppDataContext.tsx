@@ -35,7 +35,7 @@ import {
 
 function computeArRecords(invoices: Invoice[], payments: Payment[]): ARRecord[] {
   return invoices
-    .filter(inv => ['Finalized', 'Overdue', 'Verified', 'Sent'].includes(inv.status))
+    .filter(inv => ['Finalized', 'Overdue', 'Verified', 'Sent', 'Pending Approval', 'Paid', 'Draft'].includes(inv.status))
     .map((inv, i) => {
       const now = new Date();
       const due = new Date(inv.dueDate);
@@ -124,20 +124,14 @@ const AppDataContext = createContext<AppDataContextValue | null>(null);
 // ─── Provider ─────────────────────────────────────────────────────
 
 export function AppDataProvider({ children }: { children: React.ReactNode }) {
-  const [waybills, setWaybills] = useState<Waybill[]>(() => {
-    const saved = localStorage.getItem('foms_waybills');
-    return saved ? JSON.parse(saved) : [...SEEDED_WAYBILLS];
-  });
-  useEffect(() => {
-    localStorage.setItem('foms_waybills', JSON.stringify(waybills));
-  }, [waybills]);
-  const [invoices, setInvoices] = useState<Invoice[]>(() => [...SEEDED_INVOICES]);
-  const [payments, setPayments] = useState<Payment[]>(() => [...SEEDED_PAYMENTS]);
-  const [receipts, setReceipts] = useState<Receipt[]>(() => [...SEEDED_RECEIPTS]);
-  const [speedPay, setSpeedPay] = useState<SpeedPaySubmission[]>(() => [...SEEDED_SPEEDPAY]);
-  const [clients, setClients] = useState<Client[]>(() => [...SEEDED_CLIENTS]);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => [...SEEDED_AUDIT_LOGS]);
-  const [followUpRecords, setFollowUpRecords] = useState<FollowUpRecord[]>(() => [...SEEDED_FOLLOW_UP_RECORDS]);
+  const [waybills, setWaybills] = useState<Waybill[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [speedPay, setSpeedPay] = useState<SpeedPaySubmission[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [followUpRecords, setFollowUpRecords] = useState<FollowUpRecord[]>([]);
 
   // ── Fetch Clients from real backend on mount ──
   useEffect(() => {
@@ -184,7 +178,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
           totalAmount: inv.totalAmount ?? 0,
           billingSchedule: inv.billingSchedule ?? 'Monthly',
           billingPeriod: inv.billingDate ?? '',
-          status: inv.paymentStatus === 'Unpaid' ? 'Finalized'
+          status: inv.paymentValidationStatus === 'Pending Validation' ? 'Pending Approval'
+                : inv.paymentValidationStatus === 'Returned for Correction' ? 'Draft'
+                : inv.paymentStatus === 'Unpaid' ? 'Pending Approval'
                 : inv.paymentStatus === 'Partially Paid' ? 'Verified'
                 : inv.paymentStatus === 'Paid' ? 'Paid'
                 : 'Finalized',

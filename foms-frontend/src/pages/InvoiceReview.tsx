@@ -366,7 +366,6 @@ export const InvoiceReview: React.FC = () => {
               rowKey="id"
               searchPlaceholder="Search invoices..."
               searchFields={['invoiceNumber', 'status', 'submittedBy'] as any}
-              defaultFilters={{ status: 'Pending Approval' }}
               filters={[
                 {
                   key: 'status',
@@ -405,7 +404,6 @@ export const InvoiceReview: React.FC = () => {
           rowKey="id"
           searchPlaceholder="Search by client..."
           searchFields={['clientName']}
-          defaultFilters={{ status: 'Pending Approval' }}
           filters={[
             {
               key: 'status',
