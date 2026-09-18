@@ -11,13 +11,14 @@ import { useAuth } from '../context/AuthContext';
 import { useAppData } from '../context/AppDataContext';
 import { TableContainer } from '../components/TableContainer';
 import { Users, FileText, Phone, Mail, MapPin, Calendar as CalIcon, Hash, Settings, CreditCard } from 'lucide-react';
+import api from '../services/api';
 
 export const ClientManagement: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
-  const { clients, invoices, updateClient } = useAppData();
+  const { clients, invoices, updateClient, addClient } = useAppData();
   
   // List view state
   const [isAddingNew, setIsAddingNew] = useState(false);
@@ -71,11 +72,42 @@ export const ClientManagement: React.FC = () => {
     }
   };
 
-  const handleAddNewSubmit = (e: React.FormEvent) => {
+  const handleAddNewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Logic for adding a new client
-    toast.success(`Client successfully created.`);
-    setIsAddingNew(false);
+    try {
+      const payload = {
+        name: formData.name,
+        contactPerson: formData.contactPerson,
+        address: formData.address,
+        billingSchedule: formData.billingSchedule,
+        status: formData.status,
+      };
+      
+      const res = await api.post('/clients', payload);
+      const newClient = res.data;
+      
+      const clientRecord: Client = {
+        id: newClient.id ?? newClient.clientCode ?? `CLI-${Date.now()}`,
+        name: newClient.name ?? newClient.businessName ?? formData.name,
+        contactPerson: newClient.contactPerson ?? formData.contactPerson,
+        email: newClient.email ?? '',
+        phone: newClient.contactNumber ?? '',
+        address: newClient.address ?? formData.address,
+        region: newClient.region ?? 'Metro Manila',
+        billingSchedule: newClient.billingSchedule ?? formData.billingSchedule,
+        status: newClient.status === 'Active' ? 'Active' : 'Inactive',
+        vatStatus: newClient.vatStatus ?? 'VATable',
+        vatRate: newClient.vatRate ?? 12,
+        createdAt: newClient.dateRegistered ?? new Date().toISOString(),
+      };
+      
+      addClient(clientRecord);
+      toast.success(`Client successfully created.`);
+      setIsAddingNew(false);
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to create client.');
+    }
   };
 
   if (id) {

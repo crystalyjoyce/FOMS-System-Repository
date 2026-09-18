@@ -111,6 +111,7 @@ export interface AppDataContextValue {
 
   // Client actions
   updateClient: (id: string, changes: Partial<Client>) => void;
+  addClient: (client: Client) => void;
 
   // Follow-up log actions
   addFollowUpRecord: (record: FollowUpRecord) => void;
@@ -428,6 +429,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     setClients(prev => prev.map(c => c.id === id ? { ...c, ...changes } : c));
   }, []);
 
+  const addClient = useCallback((client: Client) => {
+    setClients(prev => [client, ...prev]);
+  }, []);
+
   // ── Follow-up Actions ──
   const addFollowUpRecord = useCallback((record: FollowUpRecord) => {
     setFollowUpRecords(prev => [record, ...prev]);
@@ -458,6 +463,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     addSpeedPay,
     updateSpeedPay,
     updateClient,
+    addClient,
     addFollowUpRecord,
     addAuditLog,
   };

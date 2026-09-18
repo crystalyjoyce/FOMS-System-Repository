@@ -63,7 +63,7 @@ export const Payments: React.FC = () => {
   const checkCount = useMemo(() => filteredPayments.filter(p => p.paymentMethod === 'Check').length, [filteredPayments]);
   const obtCount = useMemo(() => filteredPayments.filter(p => p.paymentMethod === 'Online Bank Transfer').length, [filteredPayments]);
 
-  const unpaidInvoices = invoices.filter(i => ['Sent', 'Overdue', 'Approved', 'Finalized', 'Verified'].includes(i.status));
+  const unpaidInvoices = invoices.filter(i => ['Sent', 'Overdue', 'Approved', 'Finalized', 'Verified', 'Paid'].includes(i.status));
 
   let enriched: any[] = [];
   if (clientIdParam) {
@@ -545,7 +545,7 @@ export const Payments: React.FC = () => {
                       setForm(f => ({ ...f, invoiceId: e.target.value, amount: inv ? inv.totalAmount.toString() : '' }));
                     }}
                     style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1px solid #E2E8F0', background: '#F8FAFC', fontSize: '0.9rem', boxSizing: 'border-box' }}>
-                    <option value="">Select an unpaid invoice...</option>
+                    <option value="">Select an invoice...</option>
                     {unpaidInvoices.map(inv => {
                       const clientInfo = clients.find(c => c.id === inv.clientId);
                       return <option key={inv.id} value={inv.id}>{inv.invoiceNumber} — {clientInfo?.name} — ₱{inv.totalAmount.toFixed(2)}</option>;

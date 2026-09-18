@@ -369,7 +369,6 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
         items: [
           { label: 'Client Accounts', path: '/clients', icon: 'ti ti-users' },
           { label: 'Billing Rates', path: '/rate-configuration', icon: 'ti ti-calculator' },
-          { label: 'Waybill / POD Validation', path: '/waybills', icon: 'ti ti-file-check' },
         ],
       },
       {
