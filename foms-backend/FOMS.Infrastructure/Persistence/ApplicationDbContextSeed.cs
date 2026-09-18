@@ -155,19 +155,19 @@ public static class ApplicationDbContextSeed
                 context.ShipmentRecords.Add(wb);
         }
 
-        // ── E2E Waybills: 10 records, ALWAYS reset to "For Checking" ─────
+        // ── E2E Waybills: 10 records, ALWAYS reset to "Validated" ─────
         var e2eWaybills = new List<ShipmentRecord>
         {
-            new ShipmentRecord { Id = "WB-E2E-001", ClientId = "CA-001", Origin = "Makati",       Destination = "Quezon City",   WeightKg = 5.0m,  Cost = 500.00m,  Status = "For Checking", ShipmentDate = DateTime.UtcNow.AddDays(-1) },
-            new ShipmentRecord { Id = "WB-E2E-002", ClientId = "CA-001", Origin = "Pasay",         Destination = "Paranaque",     WeightKg = 7.5m,  Cost = 750.00m,  Status = "For Checking", ShipmentDate = DateTime.UtcNow.AddDays(-1) },
-            new ShipmentRecord { Id = "WB-E2E-003", ClientId = "CA-002", Origin = "Taguig",        Destination = "Alabang",       WeightKg = 3.0m,  Cost = 300.00m,  Status = "For Checking", ShipmentDate = DateTime.UtcNow.AddDays(-2) },
-            new ShipmentRecord { Id = "WB-E2E-004", ClientId = "CA-002", Origin = "Mandaluyong",   Destination = "Marikina",      WeightKg = 11.0m, Cost = 1100.00m, Status = "For Checking", ShipmentDate = DateTime.UtcNow.AddDays(-2) },
-            new ShipmentRecord { Id = "WB-E2E-005", ClientId = "CA-003", Origin = "Caloocan",      Destination = "Navotas",       WeightKg = 6.0m,  Cost = 600.00m,  Status = "For Checking", ShipmentDate = DateTime.UtcNow.AddDays(-2) },
-            new ShipmentRecord { Id = "WB-E2E-006", ClientId = "CA-003", Origin = "Valenzuela",    Destination = "Malabon",       WeightKg = 9.5m,  Cost = 950.00m,  Status = "For Checking", ShipmentDate = DateTime.UtcNow.AddDays(-3) },
-            new ShipmentRecord { Id = "WB-E2E-007", ClientId = "CL-001", Origin = "Las Pinas",     Destination = "Muntinlupa",    WeightKg = 4.5m,  Cost = 450.00m,  Status = "For Checking", ShipmentDate = DateTime.UtcNow.AddDays(-3) },
-            new ShipmentRecord { Id = "WB-E2E-008", ClientId = "CL-002", Origin = "Antipolo",      Destination = "Cainta",        WeightKg = 8.0m,  Cost = 800.00m,  Status = "For Checking", ShipmentDate = DateTime.UtcNow.AddDays(-3) },
-            new ShipmentRecord { Id = "WB-E2E-009", ClientId = "CL-003", Origin = "San Juan",      Destination = "Mandaluyong",   WeightKg = 5.5m,  Cost = 550.00m,  Status = "For Checking", ShipmentDate = DateTime.UtcNow.AddDays(-4) },
-            new ShipmentRecord { Id = "WB-E2E-010", ClientId = "CA-001", Origin = "Pateros",       Destination = "Taguig",        WeightKg = 12.0m, Cost = 1200.00m, Status = "For Checking", ShipmentDate = DateTime.UtcNow.AddDays(-4) },
+            new ShipmentRecord { Id = "WB-E2E-001", ClientId = "CA-001", Origin = "Makati",       Destination = "Quezon City",   WeightKg = 5.0m,  Cost = 500.00m,  Status = "Validated", ShipmentDate = DateTime.UtcNow.AddDays(-1) },
+            new ShipmentRecord { Id = "WB-E2E-002", ClientId = "CA-001", Origin = "Pasay",         Destination = "Paranaque",     WeightKg = 7.5m,  Cost = 750.00m,  Status = "Validated", ShipmentDate = DateTime.UtcNow.AddDays(-1) },
+            new ShipmentRecord { Id = "WB-E2E-003", ClientId = "CA-002", Origin = "Taguig",        Destination = "Alabang",       WeightKg = 3.0m,  Cost = 300.00m,  Status = "Validated", ShipmentDate = DateTime.UtcNow.AddDays(-2) },
+            new ShipmentRecord { Id = "WB-E2E-004", ClientId = "CA-002", Origin = "Mandaluyong",   Destination = "Marikina",      WeightKg = 11.0m, Cost = 1100.00m, Status = "Validated", ShipmentDate = DateTime.UtcNow.AddDays(-2) },
+            new ShipmentRecord { Id = "WB-E2E-005", ClientId = "CA-003", Origin = "Caloocan",      Destination = "Navotas",       WeightKg = 6.0m,  Cost = 600.00m,  Status = "Validated", ShipmentDate = DateTime.UtcNow.AddDays(-2) },
+            new ShipmentRecord { Id = "WB-E2E-006", ClientId = "CA-003", Origin = "Valenzuela",    Destination = "Malabon",       WeightKg = 9.5m,  Cost = 950.00m,  Status = "Validated", ShipmentDate = DateTime.UtcNow.AddDays(-3) },
+            new ShipmentRecord { Id = "WB-E2E-007", ClientId = "CL-001", Origin = "Las Pinas",     Destination = "Muntinlupa",    WeightKg = 4.5m,  Cost = 450.00m,  Status = "Validated", ShipmentDate = DateTime.UtcNow.AddDays(-3) },
+            new ShipmentRecord { Id = "WB-E2E-008", ClientId = "CL-002", Origin = "Antipolo",      Destination = "Cainta",        WeightKg = 8.0m,  Cost = 800.00m,  Status = "Validated", ShipmentDate = DateTime.UtcNow.AddDays(-3) },
+            new ShipmentRecord { Id = "WB-E2E-009", ClientId = "CL-003", Origin = "San Juan",      Destination = "Mandaluyong",   WeightKg = 5.5m,  Cost = 550.00m,  Status = "Validated", ShipmentDate = DateTime.UtcNow.AddDays(-4) },
+            new ShipmentRecord { Id = "WB-E2E-010", ClientId = "CA-001", Origin = "Pateros",       Destination = "Taguig",        WeightKg = 12.0m, Cost = 1200.00m, Status = "Validated", ShipmentDate = DateTime.UtcNow.AddDays(-4) },
         };
 
         foreach (var wb in e2eWaybills)
@@ -179,8 +179,8 @@ public static class ApplicationDbContextSeed
             }
             else
             {
-                // ALWAYS reset E2E waybills to "For Checking" on every startup
-                existing.Status = "For Checking";
+                // ALWAYS reset E2E waybills to "Validated" on every startup
+                existing.Status = "Validated";
                 existing.ShipmentDate = wb.ShipmentDate;
             }
         }
