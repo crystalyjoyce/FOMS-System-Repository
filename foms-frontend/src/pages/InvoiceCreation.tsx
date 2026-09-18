@@ -139,43 +139,16 @@ export const InvoiceCreation: React.FC = () => {
   ];
 
   // Enrich available waybills for DataTable searching/filtering
-  let filteredAvailableWaybills: any[] = [];
-  if (selectedClientId) {
-    filteredAvailableWaybills = availableWaybills.filter(wb => wb.clientCode === selectedClientId).map(wb => {
-      const rate = SEEDED_RATES.find(r => r.clientId === wb.clientCode);
-      return {
-        ...wb,
-        clientName: clients.find(c => c.id === wb.clientCode)?.name ?? wb.clientCode,
-        baseRate: rate ? rate.baseRate : 0
-      };
-    });
-  } else {
-    const grouped = new Map<string, any[]>();
-    availableWaybills.forEach(wb => {
-      if (!grouped.has(wb.clientCode)) grouped.set(wb.clientCode, []);
-      grouped.get(wb.clientCode)!.push(wb);
-    });
-    filteredAvailableWaybills = Array.from(grouped.entries()).map(([clientId, recs]) => {
-      const client = clients.find(c => c.id === clientId);
-      const statuses = Array.from(new Set(recs.map(r => r.status)));
-      const status = statuses.length === 1 ? statuses[0] : 'Mixed';
-      const maxDate = new Date(Math.max(...recs.map(r => new Date(r.deliveryDate).getTime())));
-      const rate = SEEDED_RATES.find(r => r.clientId === clientId);
-      
-      return {
-        id: clientId, 
-        clientCode: clientId,
-        waybillNumber: recs.length === 1 ? recs[0].waybillNumber : '[Multiple]',
-        clientName: client?.name ?? 'Unknown',
-        deliveryDate: maxDate.toISOString(),
-        status: status,
-        baseRate: (rate ? rate.baseRate : 0) * recs.length,
-        isGrouped: true
-      };
-    });
-  }
+  const filteredAvailableWaybills = availableWaybills.map(wb => {
+    const rate = SEEDED_RATES.find(r => r.clientId === wb.clientCode);
+    const client = clients.find(c => c.id === wb.clientCode);
+    return {
+      ...wb,
+      clientName: client?.name ?? wb.clientCode,
+      baseRate: rate ? rate.baseRate : 600
+    };
+  });
 
-  // Unique clients for filter dropdown
   const availableClients = Array.from(new Set(filteredAvailableWaybills.map(w => w.clientName)));
 
   if (submitted) {
@@ -228,29 +201,12 @@ export const InvoiceCreation: React.FC = () => {
       {step === 1 && (
         <>
           <TableContainer style={{ display: 'flex', flexDirection: 'column', gap: 24, paddingBottom: 24 }}>
-            {selectedClientId ? (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span onClick={() => setSelectedClientId(null)} style={{ cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600 }}>
-                  <i className="ti ti-arrow-left" style={{ fontSize: '16px' }} /> Back to All Clients
-                </span>
-                <span style={{ fontSize: '0.85rem', color: '#475569', fontWeight: 600 }}>
-                  Showing individual waybills for <strong>{clients.find(c => c.id === selectedClientId)?.name}</strong>
-                </span>
-              </div>
-            ) : (
-              <div style={{ background: '#F8FAFC', padding: '12px 16px', borderRadius: 8, border: '1px solid #E2E8F0', fontSize: '0.85rem', color: '#475569' }}>
-                <i className="ti ti-info-circle" style={{ color: '#3B82F6', marginRight: 6 }} />
-                Click on any <strong>Client Name</strong> below to view and select individual waybills (including <strong>CTC Submitted</strong> and <strong>Validated</strong> documents).
-              </div>
-            )}
-
             <DataTable
-              key={selectedClientId ?? 'all'}
               title="Select Validated Waybills"
               data={filteredAvailableWaybills}
-              columns={selectedClientId ? waybillColumns : waybillColumns.filter(c => c.key !== 'waybillNumber')}
+              columns={waybillColumns}
               rowKey="id"
-              selectable={selectedClientId !== null}
+              selectable={true}
               onSelectionChange={(keys) => setSelectedWaybills(keys as string[])}
               searchPlaceholder="Search waybill no. or client..."
               searchFields={['waybillNumber', 'clientName']}
@@ -295,11 +251,6 @@ export const InvoiceCreation: React.FC = () => {
               />
             </div>
           </TableContainer>
-          {selectedClientId && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
-          <Button variant="secondary" title="← Back to Summary" onClick={() => setSelectedClientId(null)} />
-            </div>
-          )}
         </>
       )}
 
