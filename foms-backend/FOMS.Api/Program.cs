@@ -226,8 +226,14 @@ app.UseAuthorization();
 app.MapControllers();
 
 // ─────────────────────────────────────────────────────────────────────────────
+// START WEB SERVER FIRST (so Render health checks pass while migrations run)
+// ─────────────────────────────────────────────────────────────────────────────
+await app.StartAsync();
+
+// ─────────────────────────────────────────────────────────────────────────────
 // DATABASE INITIALIZATION
 // Uses MigrateAsync() instead of EnsureCreated() to support schema migrations.
+// Runs AFTER the server is listening so Render doesn't time out.
 // ─────────────────────────────────────────────────────────────────────────────
 using (var scope = app.Services.CreateScope())
 {
@@ -244,9 +250,8 @@ using (var scope = app.Services.CreateScope())
     {
         var logger = services.GetRequiredService<ILogger<Program>>();
         logger.LogError(ex, "An error occurred during database migration or seeding.");
-        // Re-throw so the application fails fast with a visible error rather than running broken
-        throw;
+        // Log but don't crash — the app can still serve requests while DB issues are resolved
     }
 }
 
-app.Run();
+await app.WaitForShutdownAsync();
