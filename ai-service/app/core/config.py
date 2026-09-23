@@ -17,7 +17,7 @@ class Settings:
     # Databases (defaults to Docker network hostnames, overridden locally by .env)
     POSTGRES_URI: str = os.getenv(
         "POSTGRES_CONNECTION_STRING", 
-        "postgresql://postgres:postgres@foms-ai-postgres:5432/foms_ai_db"
+        "postgresql://postgres:Postgres2026!@foms-ai-postgres:5432/foms_ai_db"
     )
     MONGODB_URI: str = os.getenv(
         "MONGODB_URI", 

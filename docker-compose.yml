@@ -10,7 +10,7 @@ services:
     container_name: foms-ai-postgres
     environment:
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-Postgres2026!}
       - POSTGRES_DB=foms_ai_db
     ports:
       - "5432:5432"
@@ -128,7 +128,7 @@ services:
     env_file:
       - .env
     environment:
-      - POSTGRES_CONNECTION_STRING=postgresql://postgres:postgres@foms-ai-postgres:5432/foms_ai_db
+      - POSTGRES_CONNECTION_STRING=postgresql://postgres:${POSTGRES_PASSWORD:-Postgres2026!}@foms-ai-postgres:5432/foms_ai_db
       - MONGODB_URI=mongodb://foms-ai-mongodb:27017/
       - FOMS_READ_API_URL=http://foms-backend:8080
       - FOMS_AI_SERVICE_API_KEY=${FOMS_AI_SERVICE_API_KEY}
