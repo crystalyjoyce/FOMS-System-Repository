@@ -475,6 +475,7 @@ const DASHBOARD_MAP: Record<UserRole, React.FC> = {
   'Assistant of Financial Manager': AsstFinanceDashboard,
   'Finance Manager': FinanceManagerDashboard,
   'Financial Manager': FinanceManagerDashboard,
+  'Client': CoordinatorDashboard,
 };
 
 export const Dashboard: React.FC = () => {

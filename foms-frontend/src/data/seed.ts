@@ -101,6 +101,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   'Assistant of Finance Manager': 'Asst. Finance Manager',
   'Assistant of Financial Manager': 'Asst. Financial Manager',
   'Coordinator': 'Coordinator',
+  'Client': 'Client',
 };
 
 // ─── Clients ──────────────────────────────────────────────────────
@@ -533,6 +534,16 @@ export const NAV_CONFIG: Record<UserRole, { groups: { label?: string; items: Nav
         items: [
           { label: 'Reports', path: '/reports', icon: 'ti ti-chart-bar' },
           { label: 'Audit Trail', path: '/audit-trail', icon: 'ti ti-shield-check' },
+        ],
+      },
+    ],
+  },
+  'Client': {
+    groups: [
+      {
+        label: 'Overview',
+        items: [
+          { label: 'Dashboard', path: '/dashboard', icon: 'ti ti-layout-dashboard' },
         ],
       },
     ],

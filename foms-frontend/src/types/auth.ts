@@ -10,7 +10,8 @@ export type UserRole =
   | 'Accountant'
   | 'Assistant of Finance Manager'
   | 'Assistant of Financial Manager'
-  | 'Coordinator';
+  | 'Coordinator'
+  | 'Client';
 
 export interface User {
   employeeId: string;
