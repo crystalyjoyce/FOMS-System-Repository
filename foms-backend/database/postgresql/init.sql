@@ -250,12 +250,16 @@ WHERE r.role_name = 'AssistantFinancialManager' AND p.permission_name IN (
 -- Hash representation: AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==
 INSERT INTO users (login_id, full_name, email, password_hash, role_name) VALUES
 ('EMP-001', 'Crystalyn Joyce C. Fajardo', 'finance.manager@speedex.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'FinancialManager'),
-('EMP-002', 'Misty', 'head.accountant@speedex.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'HeadAccountant'),
-('EMP-003', 'Maria Mariel Jane Anonuevo', 'staff.accountant@speedex.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'Accountant'),
-('EMP-004', 'Hannah Estrera', 'coordinator@speedex.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'Coordinator'),
-('EMP-005', 'Joana Marie Ogaya', 'assistant.fm@speedex.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'AssistantFinancialManager'),
-('EMP-006', 'Client User', 'client@external.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'Client')
-ON CONFLICT (email) DO NOTHING;
+('EMP-002', 'Mariel Maricel Anonuevo', 'head.accountant@speedex.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'HeadAccountant'),
+('EMP-003', 'Misty', 'staff.accountant@speedex.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'Accountant'),
+('EMP-004', 'Joana Marie Chan Ogaya', 'coordinator@speedex.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'Coordinator'),
+('EMP-005', 'Hannah Marie Estrera', 'assistant.fm@speedex.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'AssistantFinancialManager'),
+('EMP-006', 'Client', 'client@external.test', 'AQAAAAIAAYagAAAAEH/ZkZ1v7L70m6P0x8hYmS8rD8fW1wQzZ0V2yN3m9w0v4y==', 'Client')
+ON CONFLICT (email) DO UPDATE SET
+    login_id = EXCLUDED.login_id,
+    full_name = EXCLUDED.full_name,
+    password_hash = EXCLUDED.password_hash,
+    role_name = EXCLUDED.role_name;
 
 -- Seed Client Users with BCrypt hash for 'Password@123'
 INSERT INTO users (login_id, full_name, email, password_hash, role_name, must_change_password, is_temporary_password, password_version) VALUES

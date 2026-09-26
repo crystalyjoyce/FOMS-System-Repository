@@ -9,11 +9,11 @@ CONN_STR = "postgresql://postgres:hanamarie@localhost:5432/foms_ai_db"
 
 staff = [
     ("EMP-001", "Crystalyn Joyce C. Fajardo",  "Financial Manager"),
-    ("EMP-002", "Misty",                       "Head Accountant"),
-    ("EMP-003", "Maria Mariel Jane Anonuevo",  "Accountant"),
-    ("EMP-004", "Hannah Estrera",              "Coordinator"),
-    ("EMP-005", "Joana Marie Ogaya",           "Assistant of Financial Manager"),
-    ("EMP-006", "Client User",                 "Client"),
+    ("EMP-002", "Mariel Maricel Anonuevo",     "Head Accountant"),
+    ("EMP-003", "Misty",                       "Accountant"),
+    ("EMP-004", "Joana Marie Chan Ogaya",      "Coordinator"),
+    ("EMP-005", "Hannah Marie Estrera",        "Assistant of Financial Manager"),
+    ("EMP-006", "Client",                      "Client"),
 ]
 
 PASSWORD = "Password@123"

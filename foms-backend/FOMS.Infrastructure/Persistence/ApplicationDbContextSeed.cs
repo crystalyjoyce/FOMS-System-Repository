@@ -31,9 +31,9 @@ public static class ApplicationDbContextSeed
             new Employee
             {
                 Id = "EMP-002",
-                Name = "Misty",
+                Name = "Mariel Maricel Anonuevo",
                 Role = "Head Accountant",
-                Email = "misty@foms.local",
+                Email = "mariel@foms.local",
                 SystemAccess = "Finance Operation Service",
                 Status = "Active",
                 IsActive = true,
@@ -43,9 +43,9 @@ public static class ApplicationDbContextSeed
             new Employee
             {
                 Id = "EMP-003",
-                Name = "Maria Mariel Jane Anonuevo",
+                Name = "Misty",
                 Role = "Accountant",
-                Email = "mariel@foms.local",
+                Email = "misty@foms.local",
                 SystemAccess = "Finance Operation Service",
                 Status = "Active",
                 IsActive = true,
@@ -55,9 +55,9 @@ public static class ApplicationDbContextSeed
             new Employee
             {
                 Id = "EMP-004",
-                Name = "Hannah Estrera",
+                Name = "Joana Marie Chan Ogaya",
                 Role = "Coordinator",
-                Email = "hannah@foms.local",
+                Email = "joana@foms.local",
                 SystemAccess = "Finance Operation Service",
                 Status = "Active",
                 IsActive = true,
@@ -67,13 +67,25 @@ public static class ApplicationDbContextSeed
             new Employee
             {
                 Id = "EMP-005",
-                Name = "Joana Marie Ogaya",
-                Role = "Financial Manager",
-                Email = "joana@foms.local",
+                Name = "Hannah Marie Estrera",
+                Role = "Assistant of Finance Manager",
+                Email = "hannah@foms.local",
                 SystemAccess = "Finance Operation Service",
                 Status = "Active",
                 IsActive = true,
                 Username = "EMP-005",
+                PasswordHash = FOMS.Application.Services.AuthService.HashPassword("Password@123")
+            },
+            new Employee
+            {
+                Id = "EMP-006",
+                Name = "Client",
+                Role = "Client",
+                Email = "client@foms.local",
+                SystemAccess = "Finance Operation Service",
+                Status = "Active",
+                IsActive = true,
+                Username = "EMP-006",
                 PasswordHash = FOMS.Application.Services.AuthService.HashPassword("Password@123")
             }
         };

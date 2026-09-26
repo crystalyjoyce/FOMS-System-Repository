@@ -24,13 +24,12 @@ def hash_password(plain: str) -> str:
 # password_version=2 means password already changed (no forced change on login)
 USERS = [
     # login_id,  full_name,                           role_name,                        password,        pw_version, must_change
-    ("EMP-001",  "Maria Mariel Jane Anonuevo",        "Finance Manager",                "Password@123",  2,          False),
-    ("EMP-002",  "Ronalyn Mamaril",                   "Head Accountant",                "Password@123",  2,          False),
-    ("EMP-003",  "Hannah Grace Ibanez",               "Accountant",                     "Password@123",  2,          False),
-    ("EMP-004",  "Kathleen Grace Caguioa",            "Coordinator",                    "Password@123",  2,          False),
-    ("EMP-005",  "Pedro Santos",                      "Assistant of Finance Manager",   "Password@123",  2,          False),
-    ("EMP-006",  "Rosa Reyes",                        "Accountant",                     "Password@123",  2,          False),
-    ("EMP-007",  "Carlos Garcia",                     "Coordinator",                    "Password@123",  2,          False),
+    ("EMP-001",  "Crystalyn Joyce C. Fajardo",        "Finance Manager",                "Password@123",  2,          False),
+    ("EMP-002",  "Mariel Maricel Anonuevo",           "Head Accountant",                "Password@123",  2,          False),
+    ("EMP-003",  "Misty",                             "Accountant",                     "Password@123",  2,          False),
+    ("EMP-004",  "Joana Marie Chan Ogaya",            "Coordinator",                    "Password@123",  2,          False),
+    ("EMP-005",  "Hannah Marie Estrera",              "Assistant of Finance Manager",   "Password@123",  2,          False),
+    ("EMP-006",  "Client",                            "Client",                         "Password@123",  2,          False),
     # Client accounts
     ("CA-001",   "Lazada Philippines",                "Client",                         "Password@123",  2,          False),
     ("CA-002",   "Shopee Philippines",                "Client",                         "Password@123",  2,          False),
