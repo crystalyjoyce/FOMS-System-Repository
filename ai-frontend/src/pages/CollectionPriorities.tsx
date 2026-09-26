@@ -189,14 +189,13 @@ export const CollectionPriorities: React.FC = () => {
   };
 
   // Accountant, Coordinator, Assistant FM can LOG decisions (feeds into ForReview)
+  const roleNorm = (user?.role || '').replace(/[\s_-]+/g, '').toLowerCase();
   const canLogDecision =
-    user?.role &&
-    ['Accountant', 'Coordinator', 'Assistant of Finance Manager'].includes(user.role);
+    ['accountant', 'coordinator', 'assistantfinancialmanager', 'assistantoffinancemanager', 'assistantoffinancialmanager'].includes(roleNorm);
 
   // Finance Manager, Head Accountant can also log decisions (they can do everything)
   const canSubmitReviews =
-    user?.role &&
-    ['Financial Manager', 'Finance Manager', 'Head Accountant', 'Accountant', 'Coordinator', 'Assistant of Finance Manager'].includes(user.role);
+    ['financialmanager', 'financemanager', 'headaccountant', 'accountant', 'coordinator', 'assistantfinancialmanager', 'assistantoffinancemanager', 'assistantoffinancialmanager'].includes(roleNorm);
 
   const getScore = (row: any) => {
     const p = String(row.priority_level || '').toUpperCase();

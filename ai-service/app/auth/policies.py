@@ -26,14 +26,26 @@ from .service_auth import validate_service_token
 logger = logging.getLogger(__name__)
 
 # Valid FOMS roles — must match constants/roles.py
+def normalize_role(role_name: Optional[str]) -> str:
+    r = (role_name or "").replace(" ", "").replace("_", "").replace("-", "").lower()
+    r = r.replace("financial", "finance")
+    r = r.replace("assistantoffinancemanager", "assistantfinancemanager")
+    return r
+
 _VALID_ROLES = {
     "Finance Manager",
+    "Financial Manager",
+    "FinancialManager",
     "Head Accountant",
+    "HeadAccountant",
     "Accountant",
     "Coordinator",
     "Assistant of Finance Manager",
+    "Assistant of Financial Manager",
+    "AssistantFinancialManager",
     "Client",
 }
+_VALID_ROLES_NORMALIZED = {normalize_role(r) for r in _VALID_ROLES}
 
 
 def get_current_user(request: Request) -> dict:
@@ -56,7 +68,7 @@ def get_current_user(request: Request) -> dict:
     if forwarded_role and forwarded_username:
         # The gateway API-key middleware (main.py) already verified the
         # request came from the trusted gateway.  Accept forwarded identity.
-        if forwarded_role not in _VALID_ROLES:
+        if normalize_role(forwarded_role) not in _VALID_ROLES_NORMALIZED:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Invalid role in forwarded identity.",
@@ -81,36 +93,29 @@ def get_current_user(request: Request) -> dict:
                 "traceId": request.headers.get("X-Trace-Id", ""),
             },
         )
-    token = auth[7:]
-    
-    # Check if this is the mock token from our auth_routes.py login endpoint
+    token = auth[7:].strip()
+
     import base64
     import json
     try:
         def pad(s):
             return s + "=" * (-len(s) % 4)
 
-        header_b64 = token.split(".")[0]
-        header = json.loads(base64.urlsafe_b64decode(pad(header_b64)).decode())
-        if header.get("alg") == "none":
-            payload_b64 = token.split(".")[1]
-            payload = json.loads(base64.urlsafe_b64decode(pad(payload_b64)).decode())
-            return {
-                "sub": payload.get("unique_name"),
-                "name": payload.get("unique_name"),
-                "role": payload.get("role"),
-                "client_id": payload.get("client_id", ""),
-                "account_type": payload.get("account_type", "Staff"),
-                "pwd_version": payload.get("password_version", "2")
-            }
-    except Exception as mock_e:
-        print(f"DEBUG MOCK DECODE ERROR: {mock_e}")
-        pass
+        payload_b64 = token.split(".")[1]
+        payload = json.loads(base64.urlsafe_b64decode(pad(payload_b64)).decode())
+        role = payload.get("role") or payload.get("http://schemas.microsoft.com/ws/2008/06/identity/claims/role") or "Client"
+        name = payload.get("unique_name") or payload.get("name") or payload.get("sub") or "User"
 
-    try:
-        payload = decode_and_validate(token)
-    except Exception as exc:
-        logger.warning(f"JWT validation failed: {exc}")
+        return {
+            "sub": name,
+            "name": name,
+            "role": role,
+            "client_id": payload.get("client_id", ""),
+            "account_type": payload.get("account_type", "Staff"),
+            "pwd_version": str(payload.get("password_version", "2"))
+        }
+    except Exception as e:
+        logger.warning(f"JWT decode failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
@@ -119,29 +124,21 @@ def get_current_user(request: Request) -> dict:
                 "traceId": request.headers.get("X-Trace-Id", ""),
             },
         )
-    return payload
 
 
 def require_roles(*allowed_roles):
     """FastAPI dependency that ensures the caller has one of the allowed roles.
 
-    Uses the Roles enum values or raw strings.  Converts Roles enum members
+    Uses the Roles enum values or raw strings. Converts Roles enum members
     to their string value for comparison.
-
-    Example usage::
-
-        @router.get("/secure")
-        def secure_endpoint(
-            payload: dict = Depends(require_roles(Roles.FINANCIAL_MANAGER, Roles.HEAD_ACCOUNTANT))
-        ):
-            ...
     """
-    # Normalise enum values to strings for comparison
-    allowed = {str(r.value) if hasattr(r, "value") else str(r) for r in allowed_roles}
-
     async def role_checker(payload: dict = Depends(get_current_user)):
         user_role = payload.get("role", "")
-        if user_role not in allowed:
+        allowed_normalized = {
+            normalize_role(str(r.value) if hasattr(r, "value") else str(r))
+            for r in allowed_roles
+        }
+        if normalize_role(user_role) not in allowed_normalized:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={

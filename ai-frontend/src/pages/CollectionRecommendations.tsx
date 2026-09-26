@@ -96,8 +96,9 @@ export const CollectionRecommendations: React.FC = () => {
     }
   };
 
+  const roleNorm = (user?.role || '').replace(/[\s_-]+/g, '').toLowerCase();
   const canSubmitReviews =
-    user?.role && ['Financial Manager', 'Head Accountant', 'Accountant'].includes(user.role);
+    ['financialmanager', 'financemanager', 'headaccountant', 'accountant'].includes(roleNorm);
 
   const priorityToStatus = (lvl: string) => {
     switch (lvl?.toLowerCase()) {

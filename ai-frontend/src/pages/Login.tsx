@@ -60,7 +60,11 @@ export const Login: React.FC = () => {
     try {
       await login(username, password);
       toast.success("Successfully logged in!");
-      if (selectedRole === 'Client') {
+      const storedUser = localStorage.getItem('foms_ai_user');
+      const parsedUser = storedUser ? JSON.parse(storedUser) : null;
+      const userRole = (parsedUser?.role || selectedRole || '').replace(/[\s_-]+/g, '').toLowerCase();
+
+      if (userRole === 'client' || username.trim().toUpperCase() === 'EMP-006') {
         navigate('/unauthorized');
       } else {
         navigate('/ai/dashboard');

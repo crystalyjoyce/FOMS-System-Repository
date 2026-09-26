@@ -53,7 +53,18 @@ var RolePermissionsMatrix = new Dictionary<string, string[]>
         "ai.recommendation.view", "ai.recommendation.decide", "ai.recommendation.export",
         "ai.reports.view", "ai.reports.export", "ai.audit.view", "ai.system.health.view"
     }},
+    { "FinancialManager", new[] {
+        "ai.dashboard.view", "ai.duplicate.view", "ai.duplicate.review", "ai.duplicate.scan",
+        "ai.collection.view", "ai.collection.generate", "ai.collection.validate", 
+        "ai.recommendation.view", "ai.recommendation.decide", "ai.recommendation.export",
+        "ai.reports.view", "ai.reports.export", "ai.audit.view", "ai.system.health.view"
+    }},
     { "Head Accountant", new[] {
+        "ai.dashboard.view", "ai.duplicate.view", "ai.duplicate.review", "ai.duplicate.scan",
+        "ai.collection.view", "ai.collection.generate", "ai.recommendation.view", 
+        "ai.recommendation.decide", "ai.reports.view", "ai.audit.view_limited"
+    }},
+    { "HeadAccountant", new[] {
         "ai.dashboard.view", "ai.duplicate.view", "ai.duplicate.review", "ai.duplicate.scan",
         "ai.collection.view", "ai.collection.generate", "ai.recommendation.view", 
         "ai.recommendation.decide", "ai.reports.view", "ai.audit.view_limited"
@@ -70,6 +81,9 @@ var RolePermissionsMatrix = new Dictionary<string, string[]>
         "ai.dashboard.view_limited", "ai.reports.view_limited", "ai.audit.view_limited", "ai.duplicate.view", "ai.duplicate.scan"
     }},
     { "Assistant of Financial Manager", new[] {
+        "ai.dashboard.view_limited", "ai.reports.view_limited", "ai.audit.view_limited", "ai.duplicate.view", "ai.duplicate.scan"
+    }},
+    { "AssistantFinancialManager", new[] {
         "ai.dashboard.view_limited", "ai.reports.view_limited", "ai.audit.view_limited", "ai.duplicate.view", "ai.duplicate.scan"
     }},
     { "Client", Array.Empty<string>() }

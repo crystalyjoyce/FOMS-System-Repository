@@ -43,15 +43,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Initialize role mapping to local permissions (fallback before backend response)
   const mapRoleToPermissions = (role: string): Permissions => {
+    const r = (role || '').replace(/[\s_-]+/g, '').toLowerCase();
+    const isFM = r === 'financialmanager' || r === 'financemanager';
+    const isHA = r === 'headaccountant';
+    const isAcct = r === 'accountant';
+    const isCoord = r === 'coordinator';
+    const isAsst = r === 'assistantfinancialmanager' || r === 'assistantoffinancemanager' || r === 'assistantoffinancialmanager';
+    const isClient = r === 'client';
+
     return {
-      view_dashboard: role !== "Client",
-      run_sync: ["Financial Manager", "Head Accountant", "Accountant"].includes(role),
-      view_duplicates: ["Financial Manager", "Head Accountant", "Accountant", "Coordinator"].includes(role),
-      view_invoice_duplicates: ["Financial Manager", "Head Accountant", "Accountant"].includes(role),
-      view_priorities: ["Financial Manager", "Head Accountant", "Accountant"].includes(role),
-      view_recommendations: ["Financial Manager", "Head Accountant", "Accountant"].includes(role),
-      approve_review: ["Financial Manager", "Head Accountant", "Accountant"].includes(role),
-      view_audit_history: ["Financial Manager", "Head Accountant", "Accountant", "Assistant of Financial Manager"].includes(role)
+      view_dashboard: !isClient,
+      run_sync: isFM || isHA || isAcct,
+      view_duplicates: isFM || isHA || isAcct || isCoord,
+      view_invoice_duplicates: isFM || isHA || isAcct,
+      view_priorities: isFM || isHA || isAcct || isCoord || isAsst,
+      view_recommendations: isFM || isHA || isAcct,
+      approve_review: isFM || isHA || isAcct,
+      view_audit_history: isFM || isHA || isAcct || isAsst
     };
   };
 

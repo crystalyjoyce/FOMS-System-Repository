@@ -231,10 +231,11 @@ export const DuplicateAlerts: React.FC = () => {
   // ==========================================
   // ROLE-BASED ACCESS CONTROL (RBAC) GUARDS
   // ==========================================
-  const isFinancialManager = useMemo(() => user?.role === 'Financial Manager' || user?.role === 'Finance Manager', [user]);
-  const isHeadAccountant = useMemo(() => user?.role === 'Head Accountant', [user]);
-  const isAccountant = useMemo(() => user?.role === 'Accountant', [user]);
-  const isCoordinator = useMemo(() => user?.role === 'Coordinator', [user]);
+  const roleNorm = useMemo(() => (user?.role || '').replace(/[\s_-]+/g, '').toLowerCase(), [user]);
+  const isFinancialManager = useMemo(() => roleNorm === 'financialmanager' || roleNorm === 'financemanager', [roleNorm]);
+  const isHeadAccountant = useMemo(() => roleNorm === 'headaccountant', [roleNorm]);
+  const isAccountant = useMemo(() => roleNorm === 'accountant', [roleNorm]);
+  const isCoordinator = useMemo(() => roleNorm === 'coordinator', [roleNorm]);
 
   const canValidate = useMemo(() => {
     return isFinancialManager || isHeadAccountant || isAccountant;
