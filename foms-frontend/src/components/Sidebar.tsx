@@ -81,6 +81,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </button>
       </div>
 
+      {/* Role Badge */}
+      {!collapsed && user && (
+        <div style={{ padding: '0 24px', marginBottom: '24px' }}>
+          <div style={{
+            background: 'rgba(16, 185, 129, 0.15)',
+            color: '#10B981',
+            padding: '8px 12px',
+            borderRadius: '9999px',
+            fontSize: '0.75rem',
+            fontWeight: 800,
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            border: '1px solid rgba(16, 185, 129, 0.2)'
+          }}>
+            {ROLE_LABELS[user.role] || user.role}
+          </div>
+        </div>
+      )}
+
       {/* Navigation Links */}
       <nav className="sidebar-nav">
         {navGroups.map((group, groupIndex) => (
@@ -108,7 +131,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         <i className={item.icon} style={{ fontSize: "18px" }}></i>
                       </span>
                     )}
-                    <span className="nav-label">{item.label}</span>
+                    <span className="nav-label" style={{ flex: 1 }}>{item.label}</span>
+                    {item.badge && !collapsed && (
+                      <span style={{
+                        background: item.badge.bg,
+                        color: item.badge.color,
+                        padding: '2px 8px',
+                        borderRadius: '999px',
+                        fontSize: '0.7rem',
+                        fontWeight: 700,
+                        marginLeft: 'auto',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {item.badge.text}
+                      </span>
+                    )}
                     {item.children && !collapsed && (
                       <i className={`ti ti-chevron-${expandedItems[item.label] ? 'down' : 'right'}`} style={{ marginLeft: 'auto', fontSize: '14px', opacity: 0.7 }} />
                     )}
@@ -203,7 +240,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               )}
             </div>
             {!collapsed && (
-              <i className="ti ti-chevron-up" style={{ color: '#94A3B8', fontSize: '14px', flexShrink: 0 }}></i>
+              <i className="ti ti-selector" style={{ color: '#94A3B8', fontSize: '16px', flexShrink: 0 }}></i>
             )}
           </div>
         </div>

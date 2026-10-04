@@ -79,18 +79,19 @@ export const SpeedPayValidation: React.FC = () => {
   const [searchParams] = useSearchParams();
   const submissionId = searchParams.get('submissionId');
   const navigate = useNavigate();
-  const { speedPay, invoices, clients, receipts, refreshSpeedPay, refreshPayments, refreshInvoices, refreshReceipts } = useAppData();
+  const { speedPay, invoices, clients, receipts, refreshSpeedPay, refreshPayments, refreshInvoices, refreshReceipts, waybills, billingRecords } = useAppData();
 
   const [validationStatus, setValidationStatus] = useState<'Approve' | 'Reject' | ''>('');
   const [rejectionReason, setRejectionReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   // ─── Enrich SpeedPay submissions ─────────────────────────────────
   const allEnriched = speedPay.map(sub => {
     const invoice = invoices.find(i => i.id === sub.invoiceId);
     const clientId = (sub as any).clientId || (invoice ? invoice.clientId : 'UNKNOWN');
     const client = clients.find(c => c.id === clientId);
-    
+
     // Ensure the submittedAt string is treated as UTC if it doesn't have timezone info
     let submittedTimeStr = sub.submittedAt || new Date().toISOString();
     if (!submittedTimeStr.endsWith('Z') && !submittedTimeStr.includes('+')) {
@@ -242,123 +243,264 @@ export const SpeedPayValidation: React.FC = () => {
     if (!sub) return <div style={{ padding: 32 }}>Submission not found.</div>;
     console.log('[SpeedPayValidation] sub.status is:', sub.status);
 
+    const statusColor = sub.status === 'Validated' ? '#10B981' : sub.status === 'Rejected' ? '#EF4444' : '#F59E0B';
+    const statusBg = sub.status === 'Validated' ? '#DCFCE7' : sub.status === 'Rejected' ? '#FEE2E2' : '#FEF3C7';
+
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-        <div onClick={() => navigate('/speedpay-validation')}
-          style={{ cursor: 'pointer', color: '#64748B', display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 600, width: 'fit-content' }}
-        >
-          <i className="ti ti-arrow-left" style={{ fontSize: 16 }} /> Back to Queue
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+        {/* Notice Banner */}
+        <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', padding: '12px 18px', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <i className="ti ti-alert-triangle" style={{ color: '#F97316', fontSize: 18, flexShrink: 0 }} />
+          <span style={{ fontSize: '0.85rem', color: '#9A3412' }}>
+            <strong>Notice:</strong> Please ensure all payment details are correct before approving. Verify the amount, reference number, and proof of payment carefully.
+          </span>
         </div>
 
-        <Card>
-          <div style={{ padding: 32, display: 'flex', flexDirection: 'column', gap: 24 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#0F172A', fontWeight: 700 }}>Validate SpeedPay Submission</h3>
-              <StatusBadge status={sub.status} />
+        {/* New Single-Card Layout matching design request */}
+        <Card style={{ padding: 0, overflow: 'hidden' }}>
+          {/* Header */}
+          <div style={{ background: '#0F172A', padding: '20px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>SpeedPay Submission · {sub.id}</div>
+              <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#fff', fontWeight: 800 }}>Payment Information</h3>
             </div>
+            <span style={{ border: `1px solid ${statusColor}`, color: statusColor, padding: '6px 16px', borderRadius: 6, fontSize: '0.8rem', fontWeight: 700 }}>
+              {sub.status === 'Pending Validation' ? 'Pending Validation' : sub.status}
+            </span>
+          </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: '#64748B', marginBottom: 6 }}>CLIENT NAME</label>
-                <div style={{ padding: '12px 16px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14, color: '#0F172A', fontWeight: 600 }}>{sub.clientName}</div>
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: '#64748B', marginBottom: 6 }}>CLIENT ID</label>
-                <div style={{ padding: '12px 16px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14, color: '#0F172A' }}>{(sub as any).clientId || '—'}</div>
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: '#64748B', marginBottom: 6 }}>LINKED INVOICE NO.</label>
-                <div style={{ padding: '12px 16px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14, color: '#0F172A' }}>{sub.invoiceNumber}</div>
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: '#64748B', marginBottom: 6 }}>AMOUNT PAID</label>
-                <div style={{ padding: '12px 16px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14, color: '#0F172A', fontWeight: 700 }}>₱{Number(sub.amountPaid).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</div>
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: '#64748B', marginBottom: 6 }}>PAYMENT METHOD</label>
-                <div style={{ padding: '12px 16px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14, color: '#0F172A' }}>{sub.paymentMethod}</div>
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: '#64748B', marginBottom: 6 }}>REFERENCE NUMBER</label>
-                <div style={{ padding: '12px 16px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14, color: '#0F172A', fontFamily: 'monospace' }}>{sub.referenceNumber}</div>
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: '#64748B', marginBottom: 6 }}>PAYMENT DATE</label>
-                <div style={{ padding: '12px 16px', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14, color: '#0F172A' }}>
-                  {new Date(sub.submittedAt.endsWith('Z') ? sub.submittedAt : sub.submittedAt + 'Z').toLocaleString('en-PH', { month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                </div>
-              </div>
-            </div>
-
-            {sub.proofFileName && (
-              <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: '#64748B', marginBottom: 8 }}>PROOF OF PAYMENT</label>
-                <div style={{ border: '1px solid #E2E8F0', borderRadius: 8, background: '#F8FAFC', padding: 16, textAlign: 'center' }}>
-                  {sub.proofFileUrl ? (
-                    <img src={sub.proofFileUrl} alt="Proof" style={{ maxWidth: '100%', maxHeight: 400, borderRadius: 4, objectFit: 'contain' }} />
-                  ) : (
-                    <div style={{ padding: '32px 0', color: '#94A3B8', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                      <i className="ti ti-photo" style={{ fontSize: 48 }} />
-                      <span style={{ fontSize: 14 }}>{sub.proofFileName}</span>
-                      <span style={{ fontSize: 12 }}>(File uploaded — preview not available in this view)</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            <hr style={{ border: 0, borderTop: '1px solid #E2E8F0', margin: 0 }} />
-
-            {(sub.status !== 'Validated' && sub.status !== 'Rejected') ? (
-              <>
+          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 0 }}>
+            {/* LEFT — Client & Payment Details */}
+            <div style={{ padding: '28px 32px', borderRight: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: 28 }}>
+              <h4 style={{ margin: 0, fontSize: '0.85rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>CLIENT & PAYMENT DETAILS</h4>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: '#0F172A', marginBottom: 10 }}>VALIDATION DECISION</label>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#64748B', marginBottom: 6 }}>Client Name</label>
+                  <div style={{ fontSize: 16, color: '#0F172A', fontWeight: 700 }}>{sub.clientName}</div>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#64748B', marginBottom: 6 }}>Client ID</label>
+                  <div style={{ fontSize: 15, color: '#0F172A' }}>{(sub as any).clientId || '—'}</div>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#64748B', marginBottom: 6 }}>Linked Invoice No.</label>
+                  <div style={{ fontSize: 15, color: '#0F172A' }}>{sub.invoiceNumber}</div>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#64748B', marginBottom: 6 }}>Payment Date</label>
+                  <div style={{ fontSize: 15, color: '#0F172A' }}>
+                    {new Date(sub.submittedAt.endsWith('Z') ? sub.submittedAt : sub.submittedAt + 'Z').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, paddingBottom: 28, borderBottom: '1px solid #E2E8F0' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#64748B', marginBottom: 6 }}>Payment Method</label>
+                  <div style={{ fontSize: 15, color: '#0F172A' }}>{sub.paymentMethod}</div>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#64748B', marginBottom: 6 }}>Reference Number</label>
+                  <div style={{ fontSize: 15, color: '#0F172A' }}>{sub.referenceNumber}</div>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 800, color: '#64748B', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>AMOUNT PAID</label>
+                <div style={{ padding: '20px 24px', background: '#F0FDF4', border: '1px solid #16A34A', borderLeft: '4px solid #16A34A', borderRadius: 8, fontSize: 32, color: '#15803D', fontWeight: 800 }}>
+                  ₱{Number(sub.amountPaid).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                </div>
+              </div>
+            </div>
+
+            {/* RIGHT — Order Summary, Waybills, Proof */}
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              
+              {/* Order Summary */}
+              <div style={{ padding: '28px 32px', borderBottom: '1px solid #E2E8F0' }}>
+                <h4 style={{ margin: '0 0 20px 0', fontSize: '0.85rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ORDER SUMMARY</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14, fontSize: 14 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#64748B' }}>Submission ID</span>
+                    <span style={{ color: '#0F172A', fontWeight: 600 }}>{sub.id}</span>
+                  </div>
+                  <div style={{ height: 1, background: '#F1F5F9' }} />
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#64748B' }}>Invoice No.</span>
+                    <span style={{ color: '#0F172A', fontWeight: 600 }}>{sub.invoiceNumber}</span>
+                  </div>
+                  <div style={{ height: 1, background: '#F1F5F9' }} />
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#64748B' }}>Submitted By</span>
+                    <span style={{ color: '#0F172A', fontWeight: 600 }}>{sub.clientName}</span>
+                  </div>
+                  <div style={{ height: 1, background: '#F1F5F9' }} />
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#64748B' }}>Last Updated</span>
+                    <span style={{ color: '#0F172A', fontWeight: 600 }}>{new Date(sub.submittedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                  <div style={{ height: 1, background: '#F1F5F9' }} />
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#64748B' }}>Invoice Amount</span>
+                    <span style={{ color: '#0F172A', fontWeight: 800 }}>₱{Number(sub.invoiceAmount || sub.amountPaid).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Waybills Breakdown */}
+              <div style={{ padding: '28px 32px', borderBottom: '1px solid #E2E8F0' }}>
+                {(() => {
+                  const invoice = invoices.find(i => i.id === sub.invoiceId);
+                  let invoiceWaybills = waybills.filter(w => w.invoiceId === invoice?.id || w.invoiceId === sub.invoiceNumber || invoice?.waybillIds?.includes(w.id));
+                  if (invoiceWaybills.length === 0) {
+                    invoiceWaybills = waybills.filter(w => w.clientCode === sub.clientId);
+                  }
+                  return (
+                    <>
+                      <h4 style={{ margin: '0 0 20px 0', fontSize: '0.85rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>INCLUDED WAYBILLS ({invoiceWaybills.length})</h4>
+                      <div style={{ maxHeight: '180px', overflowY: 'auto', paddingRight: 4 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.2fr 1fr', paddingBottom: 10, borderBottom: '1px solid #E2E8F0', fontSize: 11, fontWeight: 800, color: '#64748B', textTransform: 'uppercase' }}>
+                          <span>Waybill No.</span>
+                          <span>Delivery Date</span>
+                          <span style={{ textAlign: 'right' }}>Amount</span>
+                        </div>
+                        {invoiceWaybills.length > 0 ? invoiceWaybills.map((wb, i) => {
+                          const br = billingRecords.find(r => r.waybillId === wb.id);
+                          const amount = br ? br.grandTotal : 0;
+                          return (
+                            <div key={wb.id} style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.2fr 1fr', padding: '12px 0', borderBottom: i < invoiceWaybills.length - 1 ? '1px solid #F1F5F9' : 'none', fontSize: 13, alignItems: 'center' }}>
+                              <span style={{ fontWeight: 600, color: '#0F172A' }}>{wb.waybillNumber}</span>
+                              <span style={{ color: '#64748B' }}>{new Date(wb.deliveryDate).toLocaleDateString()}</span>
+                              <span style={{ textAlign: 'right', fontWeight: 700, color: '#0F172A' }}>₱{amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                          );
+                        }) : (
+                          <div style={{ padding: '16px 0', fontSize: 13, color: '#94A3B8' }}>No waybills found.</div>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+
+              {/* Proof of Payment */}
+              <div style={{ padding: '28px 32px' }}>
+                <h4 style={{ margin: '0 0 20px 0', fontSize: '0.85rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>PROOF OF PAYMENT</h4>
+                {sub.proofFileUrl ? (
+                  <div
+                    onClick={() => setPreviewImage(sub.proofFileUrl!)}
+                    style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 16, background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8, padding: '16px', transition: 'all 0.2s', ':hover': { borderColor: '#94A3B8', background: '#F1F5F9' } } as any}
+                    title="Click to view full image"
+                  >
+                    <div style={{ width: 44, height: 44, borderRadius: 8, background: '#E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <i className="ti ti-file-text" style={{ fontSize: 24, color: '#64748B' }} />
+                    </div>
+                    <div style={{ flex: 1, overflow: 'hidden' }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                        {sub.proofFileName || 'receipt_image.jpg'}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>Uploaded · Click to preview</div>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 14, color: '#94A3B8' }}>No proof uploaded</div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Validation Decision (Bottom) */}
+          <div style={{ borderTop: '1px solid #E2E8F0', background: '#F8FAFC', padding: '28px 32px' }}>
+            <h4 style={{ margin: '0 0 20px 0', fontSize: '0.85rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>LOG DECISION</h4>
+            
+            {(sub.status !== 'Validated' && sub.status !== 'Rejected') ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#0F172A', marginBottom: 8 }}>Decision</label>
                   <select
                     value={validationStatus}
                     onChange={(e) => setValidationStatus(e.target.value as 'Approve' | 'Reject')}
                     style={{
-                      width: '100%', padding: '12px 16px',
-                      border: validationStatus === 'Approve' ? '2px solid #10B981' : validationStatus === 'Reject' ? '2px solid #EF4444' : '1px solid #E2E8F0',
-                      borderRadius: 8, fontSize: 14, outline: 'none',
-                      background: validationStatus === 'Approve' ? '#F0FDF4' : validationStatus === 'Reject' ? '#FEF2F2' : '#F8FAFC',
-                      color: validationStatus === 'Approve' ? '#047857' : validationStatus === 'Reject' ? '#B91C1C' : '#0F172A',
-                      cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700
+                      width: '100%', maxWidth: '100%', padding: '12px 16px',
+                      border: '1px solid #E2E8F0',
+                      borderRadius: 6, fontSize: 15, outline: 'none',
+                      background: '#fff', color: '#0F172A',
+                      cursor: 'pointer', fontFamily: 'inherit',
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                     }}
                   >
                     <option value="" disabled style={{ color: '#64748B' }}>Select Decision...</option>
-                    <option value="Approve" style={{ color: '#0F172A' }}>Accept Payment</option>
-                    <option value="Reject" style={{ color: '#0F172A' }}>Reject Payment</option>
+                    <option value="Approve" style={{ color: '#0F172A' }}>Validate payment</option>
+                    <option value="Reject" style={{ color: '#0F172A' }}>Reject payment</option>
                   </select>
                 </div>
                 {validationStatus === 'Reject' && (
                   <div>
-                    <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: '#0F172A', marginBottom: 6 }}>REJECTION REASON <span style={{ color: '#EF4444' }}>*</span></label>
+                    <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: '#0F172A', marginBottom: 8 }}>Rejection Reason <span style={{ color: '#EF4444' }}>*</span></label>
                     <textarea
                       value={rejectionReason}
                       onChange={e => setRejectionReason(e.target.value)}
-                      placeholder="Provide a clear reason for rejection (e.g., amount mismatch, invalid proof)..."
-                      rows={4}
-                      style={{ width: '100%', padding: '12px 16px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14, outline: 'none', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' }}
+                      placeholder="Enter reason for rejection..."
+                      rows={2}
+                      style={{ width: '100%', padding: '12px 16px', border: '1px solid #FECACA', borderRadius: 6, fontSize: 15, outline: 'none', resize: 'none', fontFamily: 'inherit', boxSizing: 'border-box', background: '#FEF2F2', color: '#7F1D1D' }}
                     />
                   </div>
                 )}
-                <hr style={{ border: 0, borderTop: '1px solid #E2E8F0', margin: 0 }} />
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16 }}>
-                  <Button title="Cancel" variant="secondary" onClick={() => navigate('/speedpay-validation')} />
-                  <Button
-                    title={isSubmitting ? 'Processing...' : 'Submit'}
+                
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, marginTop: 12 }}>
+                  <button onClick={() => navigate('/speedpay-validation')} style={{ background: 'transparent', color: '#0F172A', border: '1px solid #E2E8F0', padding: '12px 24px', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: 15 }}>
+                    Back
+                  </button>
+                  <button
                     onClick={() => handleValidate(sub)}
                     disabled={isSubmitting || validationStatus === '' || (validationStatus === 'Reject' && !rejectionReason.trim())}
-                  />
+                    style={{
+                      padding: '12px 32px', borderRadius: 6, border: 'none', fontWeight: 700, fontSize: 15, cursor: (isSubmitting || validationStatus === '') ? 'not-allowed' : 'pointer', transition: 'opacity 0.2s',
+                      background: (isSubmitting || validationStatus === '') ? '#94A3B8' : '#0F172A',
+                      color: '#fff'
+                    }}
+                  >
+                    {isSubmitting ? 'Processing...' : 'Submit Validation'}
+                  </button>
                 </div>
-              </>
+              </div>
             ) : (
-              <div style={{ textAlign: 'center', padding: '16px 0', color: '#64748B', fontSize: 14 }}>
-                This submission has already been <strong>{sub.status}</strong>.
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: statusColor, fontWeight: 700, fontSize: 16 }}>
+                  <i className={`ti ${sub.status === 'Validated' ? 'ti-circle-check' : 'ti-circle-x'}`} style={{ fontSize: 28 }} />
+                  This submission has already been {sub.status}.
+                </div>
+                <button onClick={() => navigate('/speedpay-validation')} style={{ background: '#fff', color: '#0F172A', border: '1px solid #E2E8F0', padding: '10px 24px', borderRadius: 6, fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
+                  Back to List
+                </button>
               </div>
             )}
           </div>
         </Card>
+
+        {/* Image Preview Modal */}
+        {previewImage && (
+          <div 
+            style={{ position: 'fixed', inset: 0, zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', padding: 40, backdropFilter: 'blur(4px)' }} 
+            onClick={() => setPreviewImage(null)}
+          >
+            <div style={{ position: 'relative', maxWidth: '90%', maxHeight: '90%', display: 'flex', flexDirection: 'column', background: '#fff', padding: 8, borderRadius: 12 }} onClick={e => e.stopPropagation()}>
+              <button 
+                onClick={() => setPreviewImage(null)} 
+                style={{ position: 'absolute', top: -16, right: -16, background: '#EF4444', border: 'none', color: '#fff', fontSize: 24, width: 32, height: 32, borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 6px rgba(0,0,0,0.2)' }}
+              >
+                &times;
+              </button>
+              <img src={previewImage} alt="Proof of Payment Preview" style={{ maxWidth: '100%', maxHeight: 'calc(90vh - 40px)', objectFit: 'contain', borderRadius: 8 }} />
+            </div>
+          </div>
+        )}
+
       </div>
     );
   }
@@ -368,22 +510,34 @@ export const SpeedPayValidation: React.FC = () => {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
 
       {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16 }}>
         {[
-          { label: 'Pending Validation', value: pending, color: '#F59E0B', icon: 'ti-clock', sub: `₱${pendingAmount.toLocaleString('en-PH', { maximumFractionDigits: 0 })} awaiting` },
-          { label: 'Validated', value: validated, color: '#10B981', icon: 'ti-check', sub: `Today: ${validatedToday}` },
-          { label: 'Rejected', value: rejected, color: '#EF4444', icon: 'ti-x', sub: `Total returned` },
-          { label: 'Total Collected', value: `₱${(totalCollected/1000).toFixed(1)}k`, color: '#6366F1', icon: 'ti-cash', sub: `From validated payments` },
-        ].map(kpi => (
-          <div key={kpi.label} style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: '20px 24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-              <div style={{ width: 40, height: 40, borderRadius: 10, background: kpi.color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <i className={`ti ${kpi.icon}`} style={{ fontSize: 20, color: kpi.color }} />
-              </div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: '#0F172A' }}>{kpi.value}</div>
-            </div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#64748B' }}>{kpi.label}</div>
-            <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>{kpi.sub}</div>
+          { label: 'PENDING VALIDATION', value: pending, border: '#FDE68A', bg: '#FFFBEB', color: '#D97706', sub: `₱${pendingAmount.toLocaleString('en-PH', { maximumFractionDigits: 0 })} awaiting` },
+          { label: 'VALIDATED', value: validated, border: '#BBF7D0', bg: '#F0FDF4', color: '#16A34A', sub: `Today: ${validatedToday}` },
+          { label: 'REJECTED', value: rejected, border: '#FECACA', bg: '#FFF5F5', color: '#B91C1C', sub: `Total returned` },
+          { label: 'TOTAL COLLECTED', value: `₱${(totalCollected / 1000).toFixed(1)}k`, border: '#C7D2FE', bg: '#EEF2FF', color: '#4F46E5', sub: `From validated payments` },
+        ].map((kpi: any, i) => (
+          <div
+            key={i}
+            style={{
+              background: kpi.bg, border: `1px solid ${kpi.border}`,
+              borderTop: '4px solid transparent', borderRadius: 12,
+              padding: '14px 20px', transition: 'all 0.3s ease', cursor: 'pointer'
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.transform = 'translateY(-5px)';
+              e.currentTarget.style.boxShadow = '0 10px 25px -5px rgba(0,0,0,0.1)';
+              e.currentTarget.style.borderTop = `4px solid ${kpi.color}`;
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = 'none';
+              e.currentTarget.style.borderTop = '4px solid transparent';
+            }}
+          >
+            <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: kpi.color, letterSpacing: '0.06em' }}>{kpi.label}</p>
+            <p style={{ margin: '0 0 4px', fontSize: 32, fontWeight: 800, color: '#111827', lineHeight: 1 }}>{kpi.value}</p>
+            <p style={{ margin: 0, fontSize: 12, color: '#9CA3AF' }}>{kpi.sub}</p>
           </div>
         ))}
       </div>
