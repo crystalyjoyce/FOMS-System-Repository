@@ -541,21 +541,6 @@ export const DuplicateAlerts: React.FC = () => {
     }
   };
 
-  // Sample Receipt Fast-Test helper
-  const handleUseSampleReceipt = async () => {
-    try {
-      const res = await fetch('/mock_receipt.png');
-      const blob = await res.blob();
-      const sampleFile = new File([blob], 'Official_Receipt_SpeedEx.png', { type: 'image/png' });
-      setUploadFile(sampleFile);
-      setPreviewDocUrl('/mock_receipt.png');
-      setSourceType('Uploaded');
-      runExtractionSimulation('Official_Receipt_SpeedEx.png', sampleFile);
-    } catch (e) {
-      console.error('Failed to load sample receipt', e);
-    }
-  };
-
   // Real Webcam Scanning Console
   const handleOpenScanner = async () => {
     setCapturedImage(null);
@@ -1454,17 +1439,13 @@ export const DuplicateAlerts: React.FC = () => {
                   Support JPG, JPEG, and PNG receipt statements up to 10MB.
                 </p>
 
-                <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }} onClick={(e) => e.stopPropagation()}>
+                <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }} onClick={(e) => e.stopPropagation()}>
                   <button className="btn btn-primary" onClick={() => document.getElementById('simplified-uploader')?.click()} style={{ height: '38px', padding: '0 20px', fontWeight: 700 }}>
                     Choose File
                   </button>
                   <button className="btn btn-outline" onClick={handleOpenScanner} style={{ height: '38px', padding: '0 20px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                     <Camera size={16} />
                     <span>Scan Document</span>
-                  </button>
-                  <button className="btn" onClick={handleUseSampleReceipt} style={{ height: '38px', padding: '0 16px', fontWeight: 700, background: '#F0FDFA', color: '#0F766E', border: '1px solid #99F6E4', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                    <FileText size={16} />
-                    <span>Test Sample Receipt</span>
                   </button>
                 </div>
               </div>
@@ -1661,18 +1642,11 @@ export const DuplicateAlerts: React.FC = () => {
                     <Camera size={14} /> Scan Again
                   </button>
                   <button
-                    className="btn"
-                    onClick={() => { handleResetScanConsole(); setTimeout(() => handleUseSampleReceipt(), 100); }}
-                    style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#0f766e', color: '#fff', border: 'none', height: '40px', borderRadius: '8px', padding: '0 18px', fontWeight: 700, fontSize: '13px', boxShadow: '0 2px 8px rgba(15,118,110,0.25)' }}
-                  >
-                    <FileText size={14} /> Test Sample Official Receipt
-                  </button>
-                  <button
-                    className="btn btn-outline"
+                    className="btn btn-primary"
                     onClick={() => { handleResetScanConsole(); setTimeout(() => document.getElementById('simplified-uploader')?.click(), 100); }}
-                    style={{ display: 'flex', alignItems: 'center', gap: '8px', height: '40px', borderRadius: '8px', padding: '0 18px', fontWeight: 600, fontSize: '13px' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px', height: '40px', borderRadius: '8px', padding: '0 20px', fontWeight: 600, fontSize: '13px' }}
                   >
-                    <UploadCloud size={14} /> Upload Another File
+                    <UploadCloud size={14} /> Upload Valid Document
                   </button>
                 </div>
               </div>
