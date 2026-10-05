@@ -1519,89 +1519,199 @@ export const DuplicateAlerts: React.FC = () => {
 
             {/* FLOW 3.5: INVALID / NON-FINANCIAL DOCUMENT RESULT */}
             {(scanResultMode === 'INVALID' || scanState === 'INVALID_DOCUMENT') && (
-              <div className="card fade-in" style={{ padding: '32px', borderRadius: '16px', border: '2px solid #fca5a5', background: 'linear-gradient(135deg, #fff1f2 0%, #fff7ed 100%)' }}>
-                {/* Header */}
+              <div className="card fade-in" style={{
+                padding: '28px',
+                borderRadius: '16px',
+                border: '1px solid #fecaca',
+                background: '#ffffff',
+                boxShadow: '0 4px 20px -2px rgba(220, 38, 38, 0.08), 0 2px 6px -1px rgba(0, 0, 0, 0.04)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}>
+                {/* Decorative top accent border */}
+                <div style={{
+                  position: 'absolute', top: 0, left: 0, right: 0, height: '4px',
+                  background: 'linear-gradient(90deg, #dc2626 0%, #f87171 50%, #fb923c 100%)'
+                }} />
+
+                {/* Header Section */}
                 <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', alignItems: 'flex-start' }}>
                   <div style={{
-                    width: '48px', height: '48px', borderRadius: '50%',
-                    background: '#fee2e2', flexShrink: 0,
+                    width: '46px', height: '46px', borderRadius: '12px',
+                    background: '#fee2e2', border: '1px solid #fecaca', flexShrink: 0,
                     display: 'flex', alignItems: 'center', justifyContent: 'center'
                   }}>
-                    <AlertTriangle size={24} style={{ color: '#dc2626' }} strokeWidth={2.5} />
+                    <AlertTriangle size={24} style={{ color: '#dc2626' }} strokeWidth={2.3} />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <h3 style={{ margin: '0 0 6px', fontSize: '18px', fontWeight: 800, color: '#9f1239' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '5px',
+                        padding: '3px 9px', borderRadius: '9999px',
+                        fontSize: '11px', fontWeight: 800, letterSpacing: '0.5px',
+                        textTransform: 'uppercase', background: '#fee2e2', color: '#991b1b',
+                        border: '1px solid #fca5a5'
+                      }}>
+                        <AlertOctagon size={12} strokeWidth={2.5} /> AI Document Validation Gate
+                      </span>
+                      <span style={{ fontSize: '12px', color: '#dc2626', fontWeight: 700 }}>
+                        • Duplicate Scan Halted
+                      </span>
+                    </div>
+
+                    <h3 style={{ margin: '0 0 6px', fontSize: '20px', fontWeight: 800, color: '#991b1b', letterSpacing: '-0.3px' }}>
                       Invalid Document Uploaded
                     </h3>
-                    <p style={{ margin: '0 0 8px', fontSize: '14.5px', color: '#881337', fontWeight: 600, lineHeight: 1.6 }}>
+
+                    <p style={{ margin: '0 0 12px', fontSize: '14px', color: '#475569', lineHeight: 1.6, maxWidth: '880px' }}>
                       The uploaded image does not appear to be an invoice, official receipt, billing statement, or payment-related document. Duplicate scanning was stopped to protect the accuracy of the AI results.
                     </p>
-                    <p style={{ margin: 0, fontSize: '13.5px', color: '#64748b', lineHeight: 1.6 }}>
-                      {ocrWarning || 'Only official receipts, invoices, billing statements, or payment-related finance documents are allowed. Please upload a valid FOMS financial document.'}
-                    </p>
+
+                    {/* Specific AI Detection Callout */}
+                    {ocrWarning && (
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: '10px',
+                        padding: '10px 14px', borderRadius: '8px',
+                        background: '#fff1f2', border: '1px solid #fecaca',
+                        maxWidth: '880px'
+                      }}>
+                        <Info size={16} style={{ color: '#dc2626', flexShrink: 0 }} />
+                        <div style={{ fontSize: '13px', color: '#881337', lineHeight: 1.5 }}>
+                          <strong style={{ fontWeight: 700 }}>AI Detection Note: </strong>
+                          {ocrWarning}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 {/* Divider */}
-                <div style={{ borderTop: '1px solid #fecaca', margin: '0 0 20px' }} />
+                <div style={{ borderTop: '1px solid #f1f5f9', margin: '0 0 20px' }} />
 
-                {/* Two-column: preview + rules */}
-                <div style={{ display: 'flex', gap: '20px', marginBottom: '24px', alignItems: 'stretch', flexWrap: 'wrap' }}>
-                  {/* Uploaded image preview */}
-                  {previewDocUrl && (
-                    <div style={{ flex: '0 0 160px', background: '#fff', borderRadius: '10px', padding: '14px', textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.08)', border: '1px solid #fecaca' }}>
-                      <img src={previewDocUrl} alt="Rejected document" style={{ maxHeight: '110px', maxWidth: '100%', objectFit: 'contain', borderRadius: '4px', opacity: 0.75, filter: 'grayscale(30%)' }} />
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: '#dc2626', marginTop: '10px', fontWeight: 700, background: '#fee2e2', borderRadius: '4px', padding: '3px 8px' }}>
-                        <X size={10} strokeWidth={3} /> NOT ALLOWED
+                {/* 3-Column Arranged Grid: Preview + Allowed Types + Rejected Content */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+                  {/* Card 1: Uploaded Preview */}
+                  <div style={{
+                    background: '#f8fafc', borderRadius: '12px', padding: '16px',
+                    border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', textAlign: 'center'
+                  }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: '10px' }}>
+                      Uploaded Document
+                    </span>
+                    {previewDocUrl ? (
+                      <div style={{
+                        position: 'relative', width: '100%', height: '125px',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: '#fff', borderRadius: '8px', border: '1px solid #fecaca',
+                        padding: '6px', marginBottom: '10px', overflow: 'hidden'
+                      }}>
+                        <img
+                          src={previewDocUrl}
+                          alt="Rejected upload"
+                          style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain', borderRadius: '4px' }}
+                        />
+                      </div>
+                    ) : (
+                      <div style={{
+                        width: '100%', height: '125px', display: 'flex',
+                        alignItems: 'center', justifyContent: 'center',
+                        background: '#fff', borderRadius: '8px', border: '1px dashed #cbd5e1',
+                        marginBottom: '10px'
+                      }}>
+                        <FileText size={32} style={{ color: '#94a3b8' }} />
+                      </div>
+                    )}
+                    <span style={{
+                      fontSize: '12px', fontWeight: 600, color: '#334155',
+                      maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap', marginBottom: '8px'
+                    }}>
+                      {uploadFile?.name || 'Uploaded File'}
+                    </span>
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '4px',
+                      fontSize: '11px', fontWeight: 700, color: '#dc2626',
+                      background: '#fee2e2', borderRadius: '4px', padding: '3px 8px'
+                    }}>
+                      <X size={12} strokeWidth={3} /> NOT ALLOWED
+                    </span>
+                  </div>
+
+                  {/* Card 2: Allowed Document Types */}
+                  <div style={{
+                    background: '#f0fdf4', borderRadius: '12px', padding: '18px 20px',
+                    border: '1px solid #bbf7d0', display: 'flex', flexDirection: 'column'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                      <CheckCircle size={16} style={{ color: '#16a34a' }} />
+                      <span style={{ fontSize: '12px', fontWeight: 800, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
+                        Allowed Document Types
                       </span>
                     </div>
-                  )}
-
-                  {/* Allowed types notice */}
-                  <div style={{ flex: 1, minWidth: '220px', background: '#fff', borderRadius: '10px', padding: '18px 20px', border: '1px solid #e2e8f0' }}>
-                    <p style={{ fontSize: '12.5px', fontWeight: 700, color: '#166534', margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      ✅ Allowed Document Types
-                    </p>
-                    <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', color: '#334155', lineHeight: 1.8 }}>
+                    <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '13px', color: '#14532d', lineHeight: 1.8 }}>
                       <li>Official Receipt (OR)</li>
-                      <li>Invoice / Billing Invoice</li>
-                      <li>Billing Statement / Statement of Account</li>
-                      <li>Payment Receipt / Proof of Payment (SpeedPay, Bank, GCash)</li>
+                      <li>Sales / Billing Invoice</li>
+                      <li>Billing Statement / SOA</li>
+                      <li>Payment Receipt (SpeedPay, Bank, GCash)</li>
                     </ul>
-                    <p style={{ fontSize: '12.5px', fontWeight: 700, color: '#9f1239', margin: '14px 0 8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      ❌ Rejected Content
-                    </p>
-                    <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', color: '#64748b', lineHeight: 1.8 }}>
-                      <li>Human / person / selfie / portrait image</li>
+                  </div>
+
+                  {/* Card 3: Rejected Content */}
+                  <div style={{
+                    background: '#fff1f2', borderRadius: '12px', padding: '18px 20px',
+                    border: '1px solid #fecaca', display: 'flex', flexDirection: 'column'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                      <AlertOctagon size={16} style={{ color: '#dc2626' }} />
+                      <span style={{ fontSize: '12px', fontWeight: 800, color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
+                        Rejected Content
+                      </span>
+                    </div>
+                    <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '13px', color: '#881337', lineHeight: 1.8 }}>
+                      <li>Human / Person / Selfie / Portrait image</li>
                       <li>Animal, food, scenery, or random photograph</li>
-                      <li>Screenshot unrelated to finance (quizzes, wallpapers, memes)</li>
-                      <li>Image with no invoice number, OR number, amount, or payment context</li>
+                      <li>Screenshot unrelated to finance (quizzes, memes)</li>
+                      <li>Image with no invoice, OR, or payment details</li>
                     </ul>
                   </div>
                 </div>
 
-                {/* Action buttons */}
-                <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                {/* Action Buttons */}
+                <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap' }}>
                   <button
                     className="btn"
                     onClick={handleResetScanConsole}
-                    style={{ background: '#fff', border: '1px solid #e2e8f0', color: '#64748b', padding: '0 16px', height: '40px', borderRadius: '8px', fontWeight: 600, fontSize: '13px' }}
+                    style={{
+                      background: '#fff', border: '1px solid #e2e8f0', color: '#64748b',
+                      padding: '0 16px', height: '40px', borderRadius: '8px', fontWeight: 600,
+                      fontSize: '13px', cursor: 'pointer'
+                    }}
                   >
                     Clear Console
                   </button>
                   <button
                     className="btn"
                     onClick={() => { handleResetScanConsole(); setTimeout(() => handleOpenScanner(), 100); }}
-                    style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#fff', border: '1px solid #e2e8f0', color: '#334155', height: '40px', borderRadius: '8px', padding: '0 16px', fontWeight: 600, fontSize: '13px' }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '8px', background: '#fff',
+                      border: '1px solid #e2e8f0', color: '#334155', height: '40px',
+                      borderRadius: '8px', padding: '0 16px', fontWeight: 600, fontSize: '13px',
+                      cursor: 'pointer'
+                    }}
                   >
-                    <Camera size={14} /> Scan Again
+                    <Camera size={14} /> Scan with Camera
                   </button>
                   <button
                     className="btn btn-primary"
                     onClick={() => { handleResetScanConsole(); setTimeout(() => document.getElementById('simplified-uploader')?.click(), 100); }}
-                    style={{ display: 'flex', alignItems: 'center', gap: '8px', height: '40px', borderRadius: '8px', padding: '0 20px', fontWeight: 600, fontSize: '13px' }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '8px', height: '40px',
+                      borderRadius: '8px', padding: '0 20px', fontWeight: 600, fontSize: '13px',
+                      cursor: 'pointer'
+                    }}
                   >
-                    <UploadCloud size={14} /> Upload Valid Document
+                    <UploadCloud size={15} /> Upload Valid Document
                   </button>
                 </div>
               </div>
