@@ -251,27 +251,63 @@ def _fallback_heuristic_classification(
         }
 
     # ── 2. Visual Analysis with Pillow ─────────────────────────────────────────
-    # Detects color photographs (selfies, scenery, food, vivid art) vs document scans (mostly monochrome/high brightness)
+    # Distinguishes paper documents (high brightness, white background, low color spread, text edges)
+    # from photos (selfies, persons, food, scenery, games, dark mode code screens)
     is_photo_visual = False
+    is_document_visual = False
     photo_reason = ""
     try:
-        from PIL import Image, ImageStat
+        from PIL import Image, ImageStat, ImageFilter
         im = Image.open(io.BytesIO(file_bytes)).convert("RGB")
         stat = ImageStat.Stat(im)
         mean_r, mean_g, mean_b = stat.mean[:3]
         brightness = (mean_r + mean_g + mean_b) / 3.0
         color_spread = max(mean_r, mean_g, mean_b) - min(mean_r, mean_g, mean_b)
 
-        # Real receipts & invoices are monochrome / printed paper with very low color spread (< 15)
-        # Photos of people, food, scenery, or colorful graphics have color spread > 25
-        if color_spread > 25.0:
+        # Fast downsample for pixel analysis
+        im_thumb = im.copy()
+        im_thumb.thumbnail((400, 400))
+        thumb_pixels = list(im_thumb.getdata())
+        n_pixels = len(thumb_pixels)
+
+        # White/light paper background ratio
+        white_px = sum(1 for px in thumb_pixels if px[0] > 180 and px[1] > 180 and px[2] > 180)
+        white_ratio = white_px / n_pixels if n_pixels > 0 else 0.0
+
+        # Edge detection for text and line contours
+        gray_thumb = im_thumb.convert("L")
+        edges = gray_thumb.filter(ImageFilter.FIND_EDGES)
+        edge_mean = ImageStat.Stat(edges).mean[0]
+
+        # Contrast range
+        lum_pixels = list(gray_thumb.getdata())
+        min_lum = min(lum_pixels) if lum_pixels else 0
+        max_lum = max(lum_pixels) if lum_pixels else 255
+        contrast = max_lum - min_lum
+
+        # Visual Document Signature:
+        # A paper document / invoice / receipt scan or screenshot has:
+        # 1. Light/white paper background (white_ratio >= 35%)
+        # 2. Low color saturation (color_spread <= 22.0)
+        # 3. High overall brightness (brightness >= 120.0)
+        # 4. Dense text line contours (edge_mean >= 3.0)
+        # 5. Contrast between paper and ink (contrast >= 40)
+        if white_ratio >= 0.35 and color_spread <= 22.0 and brightness >= 120.0 and edge_mean >= 3.0 and contrast >= 40:
+            is_document_visual = True
+
+        # Photo / Non-document signatures:
+        if color_spread > 22.0:
             is_photo_visual = True
             photo_reason = f"The uploaded image has high color saturation ({color_spread:.1f}) typical of a photograph or selfie, and lacks financial document structure."
-        elif brightness < 80.0:
+        elif brightness < 100.0 or white_ratio < 0.15:
             is_photo_visual = True
-            photo_reason = f"The uploaded image has very low brightness ({brightness:.1f}). Financial documents must be legible and high-contrast."
+            photo_reason = f"The uploaded image is too dark or lacks a document background (brightness: {brightness:.1f}, light background: {white_ratio:.1%})."
+        elif edge_mean < 2.0 or contrast < 30:
+            is_photo_visual = True
+            photo_reason = "The uploaded image appears blank or lacks readable document text and structure."
+
     except Exception as e:
-        logger.debug(f"[OCR-FALLBACK] PIL analysis skipped: {e}")
+        logger.debug(f"[OCR-FALLBACK] PIL analysis error: {e}")
 
     # ── 3. Check for positive financial indicators ─────────────────────────────
     name_no_ext = filename.rsplit('.', 1)[0].lower()
@@ -282,6 +318,7 @@ def _fallback_heuristic_classification(
     is_soa = bool(re.search(r"billing[-_]?statement|billing|soa|statement[-_]?of[-_]?account|statement", name_no_ext))
     is_pay = bool(re.search(r"payment[-_]?receipt|proof[-_]?of[-_]?payment|deposit[-_]?slip|speedpay|pay[-_]?\d+", name_no_ext))
     is_wbl = bool(re.search(r"waybill|wbl[-_]?\d+", name_no_ext))
+    is_pdf = filename.lower().endswith(".pdf")
 
     # Check raw bytes for text markers (e.g. in PDFs or plaintext)
     sample_bytes = file_bytes[:16384].upper()
@@ -296,7 +333,7 @@ def _fallback_heuristic_classification(
     )
 
     # If the image was visually detected as a photo, and does NOT have explicit finance markers, reject it immediately!
-    if is_photo_visual and not (has_bytes_receipt or has_bytes_invoice or has_bytes_billing):
+    if is_photo_visual and not (has_bytes_receipt or has_bytes_invoice or has_bytes_billing or is_or or is_inv or is_soa or is_pay):
         logger.info(f"[OCR-FALLBACK] Visually rejected non-document '{filename}': {photo_reason}")
         return {
             "documentType": "PERSON_PHOTO" if "selfie" in photo_reason or "photograph" in photo_reason else "INVALID_OR_UNRELATED_IMAGE",
@@ -316,9 +353,9 @@ def _fallback_heuristic_classification(
             "geminiUnavailable": False,
         }
 
-    # If NO financial indicators are found at all, REJECT! NEVER default to OFFICIAL_RECEIPT!
-    if not has_any_financial_token:
-        logger.info(f"[OCR-FALLBACK] Rejected document '{filename}' - no financial indicators found.")
+    # If neither financial tokens nor visual document structure was found, REJECT!
+    if not has_any_financial_token and not is_document_visual and not is_pdf:
+        logger.info(f"[OCR-FALLBACK] Rejected non-document '{filename}' - no financial indicators or document structure found.")
         return {
             "documentType": "INVALID_OR_UNRELATED_IMAGE",
             "isAllowed": False,
@@ -341,26 +378,31 @@ def _fallback_heuristic_classification(
         }
 
     # ── 4. Categorize valid financial document ─────────────────────────────────
+    digits = re.findall(r"\d+", name_no_ext)
+    # Suffix for document number: use the last digit sequence in the filename if >= 3 chars, or timestamp
+    last_digits = digits[-1] if (digits and len(digits[-1]) >= 3) else datetime.utcnow().strftime("%H%M%S")
+
     if is_inv or has_bytes_invoice:
         doc_type = "INVOICE"
-        num_match = re.search(r"(?:inv[-_]?)([a-z0-9_-]+)", name_no_ext)
-        doc_num = f"INV-{num_match.group(1).upper()}" if num_match else f"INV-{datetime.utcnow().strftime('%Y%m')}-001"
+        num_match = re.search(r"(?:inv|invoice)[-_]+([a-z0-9_-]+)", name_no_ext)
+        doc_num = f"INV-{num_match.group(1).upper()}" if num_match else f"INV-{last_digits}"
     elif is_soa or has_bytes_billing:
         doc_type = "BILLING_STATEMENT"
-        num_match = re.search(r"(?:soa[-_]?)([a-z0-9_-]+)", name_no_ext)
-        doc_num = f"SOA-{num_match.group(1).upper()}" if num_match else f"SOA-{datetime.utcnow().strftime('%Y%m')}-001"
+        num_match = re.search(r"(?:soa|billing)[-_]+([a-z0-9_-]+)", name_no_ext)
+        doc_num = f"SOA-{num_match.group(1).upper()}" if num_match else f"SOA-{last_digits}"
     elif is_pay or has_bytes_pay:
         doc_type = "PAYMENT_RECEIPT"
-        num_match = re.search(r"(?:pay[-_]?|ref[-_]?)([a-z0-9_-]+)", name_no_ext)
-        doc_num = f"PAY-{num_match.group(1).upper()}" if num_match else f"PAY-{datetime.utcnow().strftime('%Y%m')}-001"
+        num_match = re.search(r"(?:pay|payment|ref)[-_]+([a-z0-9_-]+)", name_no_ext)
+        doc_num = f"PAY-{num_match.group(1).upper()}" if num_match else f"PAY-{last_digits}"
     elif is_wbl:
         doc_type = "OFFICIAL_RECEIPT"
-        num_match = re.search(r"(?:wbl[-_]?)([a-z0-9_-]+)", name_no_ext)
-        doc_num = f"WBL-{num_match.group(1).upper()}" if num_match else "WBL-2026-001"
+        num_match = re.search(r"(?:wbl|waybill)[-_]+([a-z0-9_-]+)", name_no_ext)
+        doc_num = f"WBL-{num_match.group(1).upper()}" if num_match else f"WBL-{last_digits}"
     else:
+        # Default for official receipts and document screenshots
         doc_type = "OFFICIAL_RECEIPT"
-        num_match = re.search(r"(?:or[-_]?)([a-z0-9_-]+)", name_no_ext)
-        doc_num = f"OR-{num_match.group(1).upper()}" if num_match else f"OR-{datetime.utcnow().strftime('%Y%m')}-001"
+        num_match = re.search(r"(?:or|receipt)[-_]+([a-z0-9_-]+)", name_no_ext)
+        doc_num = f"OR-{num_match.group(1).upper()}" if num_match else f"OR-{last_digits}"
 
     # Extract client
     if "lazada" in fn_lower:
@@ -374,7 +416,10 @@ def _fallback_heuristic_classification(
 
     # Extract date
     date_match = re.search(r"(\d{4}[-_]\d{2}[-_]\d{2})", name_no_ext)
-    tx_date = date_match.group(1).replace('_', '-') if date_match else datetime.utcnow().strftime("%Y-%m-%d")
+    if date_match:
+        tx_date = date_match.group(1).replace('_', '-')
+    else:
+        tx_date = datetime.utcnow().strftime("%Y-%m-%d")
 
     # Extract amount
     amt_match = re.search(r"(?:amt|amount|php|p)[-_]?(\d+(?:\.\d{2})?)", fn_lower)
