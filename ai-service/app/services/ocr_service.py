@@ -72,8 +72,8 @@ def extract_document_fields(file_bytes: bytes, filename: str, mime_type: str = "
     gemini_api_key = os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
     gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 
-    # Only attempt Gemini API if key is configured and matches Google AI Studio key pattern (starts with AIzaSy)
-    if gemini_api_key and gemini_api_key.startswith("AIzaSy"):
+    # Attempt Gemini API if key is configured (AIzaSy standard key or modern AQ. auth key)
+    if gemini_api_key and (gemini_api_key.startswith("AIzaSy") or gemini_api_key.startswith("AQ.")):
         try:
             # Handle mime type fallback
             if not mime_type or mime_type == "application/octet-stream":
@@ -100,9 +100,14 @@ def extract_document_fields(file_bytes: bytes, filename: str, mime_type: str = "
                 }
             }
 
+            headers = {
+                "Content-Type": "application/json",
+                "x-goog-api-key": gemini_api_key
+            }
+
             response = requests.post(
                 f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent?key={gemini_api_key}",
-                headers={"Content-Type": "application/json"},
+                headers=headers,
                 json=payload,
                 timeout=60
             )
@@ -150,12 +155,12 @@ def extract_document_fields(file_bytes: bytes, filename: str, mime_type: str = "
 
             elif response.status_code == 401:
                 logger.warning(
-                    "[OCR] Gemini authentication failed (401). GEMINI_API_KEY is invalid or expired. "
+                    "[OCR] Gemini returned 401 (UNAUTHENTICATED). "
                     "Falling back to local heuristic document classifier."
                 )
             else:
                 logger.warning(
-                    f"[OCR] Gemini REST call failed with HTTP {response.status_code}: {response.text[:200]}. "
+                    f"[OCR] Gemini REST call returned HTTP {response.status_code}: {response.text[:200]}. "
                     "Falling back to local heuristic document classifier."
                 )
 
@@ -164,8 +169,7 @@ def extract_document_fields(file_bytes: bytes, filename: str, mime_type: str = "
 
     else:
         logger.info(
-            "[OCR] No valid Google AI Studio key configured (must start with 'AIzaSy'). "
-            "Using resilient heuristic document classifier."
+            "[OCR] No Gemini API key configured. Using resilient heuristic document classifier."
         )
 
     # Resilient fallback: classify file deterministically based on document markers
