@@ -92,8 +92,19 @@ export interface AuditEvent {
   relatedRecordId: string;
   description: string;
   previousStatus: string;
-  newStatus: string;
 }
+
+// Explicit Frontend State Flow (§2 Document Type Validation)
+export type ScanState = 
+  | 'IDLE' 
+  | 'UPLOADING' 
+  | 'VALIDATING_DOCUMENT' 
+  | 'INVALID_DOCUMENT' 
+  | 'VALID_DOCUMENT' 
+  | 'SCANNING_DUPLICATE' 
+  | 'DUPLICATE_FOUND' 
+  | 'UNIQUE_DOCUMENT' 
+  | 'SCAN_ERROR';
 
 export const DuplicateAlerts: React.FC = () => {
   const { token, user } = useAuth();
@@ -180,8 +191,10 @@ export const DuplicateAlerts: React.FC = () => {
   const streamRef = useRef<MediaStream | null>(null);
   const capturedFileRef = useRef<File | null>(null);
 
+  const [scanState, setScanState] = useState<ScanState>('IDLE');
+
   // Load progress
-  const [checkingStep, setCheckingStep] = useState<number>(0); // 0: Idle, 1: Reading, 2: Extracting, 3: Comparing, 4: Results
+  const [checkingStep, setCheckingStep] = useState<number>(0); // 0: Idle, 1: Validating, 2: Extracting, 3: Comparing, 4: Results
   const [checkingProgress, setCheckingProgress] = useState(0);
 
   // AI OCR extraction state (editable form)
@@ -494,6 +507,7 @@ export const DuplicateAlerts: React.FC = () => {
     }
 
     // Reset all previous scan results immediately so stale INVALID/CLEAR/DUPLICATE cards don't persist
+    setScanState('UPLOADING');
     setScanResultMode('NONE');
     setExtractionDone(false);
     setMatchedRecordDetails(null);
@@ -512,8 +526,8 @@ export const DuplicateAlerts: React.FC = () => {
     // Audit Upload Event
     logAuditEvent('DOCUMENT_UPLOADED', `DOC-${Date.now()}`, 'NONE', `Document ${file.name} uploaded successfully.`, 'NONE', 'UPLOADED');
 
-    // Run AI parameter extraction automatically
-    runExtractionSimulation(file.name, file);
+    // Run AI document type validation followed by duplicate detection
+    runDocumentValidationAndScan(file.name, file);
   };
 
   // ── Camera helpers ───────────────────────────────────────────
@@ -603,52 +617,136 @@ export const DuplicateAlerts: React.FC = () => {
       setUploadFile(capturedFileRef.current);
       setPreviewDocUrl(capturedImage);
       logAuditEvent('DOCUMENT_SCANNED', `DOC-${Date.now()}`, 'NONE', `Physical document scanned and confirmed by user.`, 'NONE', 'SCANNED');
-      runExtractionSimulation(capturedFileRef.current.name, capturedFileRef.current);
+      runDocumentValidationAndScan(capturedFileRef.current.name, capturedFileRef.current);
     } else {
       // Fallback if capture somehow failed
       logAuditEvent('DOCUMENT_SCANNED', `DOC-${Date.now()}`, 'NONE', `Physical document scanned and confirmed by user.`, 'NONE', 'SCANNED');
-      runExtractionSimulation('scanned_receipt.png');
+      runDocumentValidationAndScan('scanned_receipt.png');
     }
   };
 
   // ==========================================
-  // FLOW 2: AI PARAMETER EXTRACTION
+  // FLOW 2: AI DOCUMENT VALIDATION & DUPLICATE SCAN
   // ==========================================
-  const runExtractionSimulation = async (fileName: string, fileOverride?: File) => {
-    setCheckingStep(1); // Reading document
-    setCheckingProgress(25);
+  const runDocumentValidationAndScan = async (fileName: string, fileOverride?: File) => {
+    // ── STEP 1: DOCUMENT TYPE VALIDATION GATE ────────────────────────────────
+    setScanState('VALIDATING_DOCUMENT');
+    setCheckingStep(1); // Validating document type & financial fields
+    setCheckingProgress(30);
+
+    const targetFile = fileOverride || uploadFile || new File(["scanned_doc"], fileName, { type: "image/png" });
+    const formData = new FormData();
+    formData.append('file', targetFile);
 
     try {
-      setCheckingStep(2); // Extracting information
-      setCheckingProgress(60);
-
-      const targetFile = fileOverride || uploadFile || new File(["scanned_doc"], fileName, { type: "image/png" });
-      const formData = new FormData();
-      formData.append('file', targetFile);
-
-      const res = await fetch('/api/ai/duplicates/scan', {
+      // Call document validation endpoint first
+      const valRes = await fetch('/api/ai/documents/validate', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
+        headers: { 'Authorization': `Bearer ${token}` },
         body: formData
       });
 
-      if (res.ok) {
-        const apiRes = await res.json();
-        const scanData = apiRes.data || {};
-        const extracted = scanData.extracted || {};
-        console.log('[SCAN DEBUG] Full API response:', JSON.stringify(apiRes));
-        console.log('[SCAN DEBUG] scanData.status:', scanData.status, '| extracted.documentType:', extracted.documentType);
+      let isValidDocument = false;
+      let rejectReason = '';
+      let detectedDocType = '';
 
-        const docType = (extracted.documentType as any) || 'OFFICIAL_RECEIPT';
-        const docNum = (extracted.documentNumber && extracted.documentNumber.trim() !== '') ? extracted.documentNumber : `OR-${Date.now().toString().slice(-6)}`;
-        const clientName = (extracted.clientName && extracted.clientName.trim() !== '') ? extracted.clientName : 'Customer Name Not Read';
+      if (valRes.ok) {
+        const valData = await valRes.json();
+        if (valData.isAllowed === true) {
+          isValidDocument = true;
+          detectedDocType = valData.documentType || 'OFFICIAL_RECEIPT';
+        } else {
+          isValidDocument = false;
+          rejectReason = valData.reason || valData.message || 'The uploaded file is not a supported financial document.';
+          detectedDocType = valData.documentType || 'INVALID_OR_UNRELATED_IMAGE';
+        }
+      } else {
+        const errJson = await valRes.json().catch(() => ({}));
+        isValidDocument = false;
+        rejectReason = errJson?.detail?.message || errJson?.detail?.details?.reason || errJson?.message || 'Unsupported or invalid document uploaded.';
+        detectedDocType = errJson?.detail?.details?.detectedType || 'INVALID_OR_UNRELATED_IMAGE';
+      }
+
+      // If document validation failed: STOP SCAN IMMEDIATELY!
+      if (!isValidDocument) {
+        setScanState('INVALID_DOCUMENT');
+        setScanResultMode('INVALID');
+        setExtractionDone(false);
+        setSimilarityScore(0);
+        setMatchedRecordDetails(null);
+        setExtDocNum('');
+        setExtClient('');
+        setExtAmount('');
+        setExtRef('');
+        setOcrWarning(rejectReason || 'Only official receipts, invoices, billing statements, or payment-related finance documents are allowed. Please upload a valid FOMS financial document.');
+
+        toast.warning(
+          'Invalid file content. Please upload an invoice, official receipt, or payment document only.',
+          'Invalid Document'
+        );
+
+        logAuditEvent(
+          'INVALID_DOCUMENT_REJECTED',
+          fileName,
+          'NONE',
+          `Document rejected by AI validation step: ${detectedDocType || 'INVALID_OR_UNRELATED_IMAGE'}.`,
+          'UPLOADED',
+          'REJECTED'
+        );
+
+        setCheckingStep(0);
+        setCheckingProgress(0);
+        return; // HALT PIPELINE
+      }
+
+      // ── STEP 2: FINANCIAL EXTRACTION & DUPLICATE DETECTION ──────────────────
+      setScanState('VALID_DOCUMENT');
+      setScanState('SCANNING_DUPLICATE');
+      setCheckingStep(2); // Extracting information & comparing
+      setCheckingProgress(65);
+
+      const scanRes = await fetch('/api/ai/documents/scan', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+
+      // Handle 422 Unprocessable Entity (Invalid Document)
+      if (scanRes.status === 422) {
+        const err422 = await scanRes.json().catch(() => ({}));
+        const detail = err422?.detail || {};
+        const rejMsg = detail?.message || detail?.details?.reason || 'Only official receipts, invoices, billing statements, or payment-related finance documents are allowed.';
+
+        setScanState('INVALID_DOCUMENT');
+        setScanResultMode('INVALID');
+        setExtractionDone(false);
+        setSimilarityScore(0);
+        setMatchedRecordDetails(null);
+        setOcrWarning(rejMsg);
+
+        toast.warning(
+          'Invalid file content. Please upload an invoice, official receipt, or payment document only.',
+          'Invalid Document'
+        );
+
+        setCheckingStep(0);
+        setCheckingProgress(0);
+        return;
+      }
+
+      if (scanRes.ok) {
+        const apiRes = await scanRes.json();
+        const scanData = apiRes.data || {};
+        const extracted = scanData.extracted || apiRes.extractedFields || {};
+
+        const docType = (extracted.documentType as any) || detectedDocType || 'OFFICIAL_RECEIPT';
+        const docNum = extracted.documentNumber || extracted.officialReceiptNumber || extracted.invoiceNumber || `OR-${Date.now().toString().slice(-6)}`;
+        const clientName = extracted.clientName || 'Customer Name Not Read';
         const rawAmount = extracted.amount != null ? String(extracted.amount).trim() : '';
         const amt = rawAmount && rawAmount !== 'null' ? rawAmount : 'Missing';
-        const warningText = extracted.warning || (amt === 'Missing' ? 'OCR amount could not be read because Gemini quota is exhausted. Please check your Gemini billing/quota in Google AI Studio.' : '');
-        const dt = extracted.transactionDate || new Date().toISOString().split('T')[0];
-        const ref = extracted.referenceNumber || `REF-${docNum}`;
+        const warningText = extracted.warning || '';
+        const dt = extracted.transactionDate || extracted.dateIssued || new Date().toISOString().split('T')[0];
+        const ref = extracted.referenceNumber || extracted.paymentReference || `REF-${docNum}`;
 
         setExtDocType(docType === 'PROOF_OF_PAYMENT' ? 'OFFICIAL_RECEIPT' : docType);
         setExtDocNum(docNum);
@@ -682,90 +780,17 @@ export const DuplicateAlerts: React.FC = () => {
         setCheckingProgress(100);
         setExtractionDone(true);
 
-        // ── Document Validation Gate ─────────────────────────────────────────
-        // The backend returns HTTP 200 for UNIQUE/DUPLICATE results and HTTP 422
-        // for INVALID_DOCUMENT. This block handles the HTTP 200 path (still need
-        // to check data-level flags as a belt-and-suspenders guard).
-        //
-        // Trigger INVALID state on ANY of these conditions:
-        //   a) status is INVALID_DOCUMENT (backend rejected)
-        //   b) top-level is_valid is explicitly false
-        //   c) extracted.is_valid is explicitly false  ← Bug Fix #3 enables this
-        //   d) documentType is in the invalid set
-        //   e) NEEDS_GEMINI_REVIEW — Gemini was offline so we cannot auto-approve
-        //   f) reason_code signals a rejection (LOW_CONFIDENCE, INVALID_DOCUMENT)
+        const isDuplicate = apiRes.status === 'DUPLICATE_FOUND' || scanData.status === 'FLAGGED_DUPLICATE';
 
-        const INVALID_DOC_TYPES = [
-          'INVALID_DOCUMENT', 'INVALID_OR_UNRELATED_IMAGE',
-          'PERSON_PHOTO', 'SELFIE', 'NON_FINANCIAL_DOCUMENT',
-          'RANDOM_SCREENSHOT', 'UNKNOWN_IMAGE'
-        ];
-
-        const isGeminiUnavailable = (
-          extracted.documentType === 'NEEDS_GEMINI_REVIEW' ||
-          scanData.reason_code === 'GEMINI_UNAVAILABLE' ||
-          extracted.geminiUnavailable === true ||
-          scanData.status === 'GEMINI_UNAVAILABLE'
-        );
-
-        const isInvalidDocument = (
-          scanData.status === 'INVALID_DOCUMENT' ||
-          scanData.is_valid === false ||
-          extracted.is_valid === false ||
-          INVALID_DOC_TYPES.includes(extracted.documentType) ||
-          scanData.reason_code === 'INVALID_DOCUMENT' ||
-          scanData.reason_code === 'LOW_CONFIDENCE' ||
-          scanData.reason_code === 'UNRECOGNIZED_DOCUMENT_TYPE'
-        );
-
-        if (isGeminiUnavailable) {
-          // AI service offline — show specific message, do NOT show duplicate result
-          toast.error(
-            'AI classification service is temporarily unavailable. Please try again in a few minutes.',
-            'AI Service Unavailable'
-          );
-          setScanResultMode('INVALID');
-          setExtractionDone(false);
-          // Update the INVALID card message via ocrWarning
-          setOcrWarning(
-            extracted.validationMessage ||
-            'AI document classification is temporarily unavailable. Duplicate scanning has been stopped to prevent false results. Please try again in a few minutes.'
-          );
-        } else if (isInvalidDocument) {
-          // Non-financial image uploaded — stop scan, show error card
-          const invalidMsg =
-            scanData.message ||
-            extracted.validationMessage ||
-            'The uploaded image does not appear to be an invoice, official receipt, billing statement, or payment document. Duplicate scanning was stopped.';
-
-          toast.warning(
-            'Invalid file content. Please upload an invoice, official receipt, billing statement, or payment document only.',
-            'Invalid Document'
-          );
-          setScanResultMode('INVALID');
-          setExtractionDone(false); // Never show extraction form for invalid docs
-          setOcrWarning(invalidMsg);
-          // Clear any stale extracted values so they don't leak into UI
-          setExtDocNum('');
-          setExtClient('');
-          setExtAmount('');
-          setExtRef('');
-
-          logAuditEvent(
-            'INVALID_DOCUMENT_REJECTED',
-            fileName,
-            'NONE',
-            `Document rejected by AI classifier: ${extracted.documentType || 'UNKNOWN'}.`,
-            'UPLOADED',
-            'REJECTED'
-          );
-        } else if (scanData.status === 'FLAGGED_DUPLICATE') {
+        if (isDuplicate) {
+          setScanState('DUPLICATE_FOUND');
           setScanResultMode('DUPLICATE');
-          setSimilarityScore(scanData.confidence_score || 95);
+          const score = scanData.confidence_score || (apiRes.duplicateResult?.matchScore ? Math.round(apiRes.duplicateResult.matchScore * 100) : 95);
+          setSimilarityScore(score);
 
           const matchedRecord = scanData.matched_record || {};
           setMatchedRecordDetails({
-            record_id: matchedRecord.record_id || `REC-${Date.now()}`,
+            record_id: matchedRecord.record_id || apiRes.duplicateResult?.matchedRecordId || `REC-${Date.now()}`,
             registered_or: matchedRecord.documentNumber || matchedRecord.receiptNumber || matchedRecord.invoiceNumber || matchedRecord.waybillNumber || docNum,
             client_name: matchedRecord.clientName || clientName,
             amount: matchedRecord.amount || amt || '0.00',
@@ -774,105 +799,33 @@ export const DuplicateAlerts: React.FC = () => {
             waybill_no: matchedRecord.waybillNumber || `WBL-${docNum}`,
             status: 'FLAGGED'
           });
-          toast.warning(`Duplicate detected (${scanData.confidence_score}% similarity). Review required.`, 'AI Gemini Scan');
-        } else if (scanData.status === 'UNIQUE_DOCUMENT') {
+          toast.warning(`Duplicate detected (${score}% similarity). Review required.`, 'AI Gemini Scan');
+        } else {
+          setScanState('UNIQUE_DOCUMENT');
           setScanResultMode('CLEAR');
           setSimilarityScore(0);
+          setMatchedRecordDetails(null);
           toast.success('Document cataloged as Unique Document (0% similarity match).', 'AI Gemini Scan');
         }
         return;
-      }
-
-      // ── Non-OK HTTP response (e.g. 415 Unsupported, 422 INVALID_DOCUMENT) ──
-      // Bug Fix #5: The backend now returns HTTP 422 with a structured `detail`
-      // object for INVALID_DOCUMENT cases. Parse it and route to the INVALID card
-      // instead of a generic error toast.
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-
-        // `detail` may be a structured object (422) or a plain string (other errors)
-        const detail = errBody?.detail || {};
-        const detailIsObject = typeof detail === 'object' && detail !== null;
-
-        const detailStatus: string = detailIsObject ? (detail.status || '') : '';
-        const detailMsg: string = detailIsObject
-          ? (detail.message || '')
-          : (typeof detail === 'string' ? detail : '');
-        const detailExtracted: any = detailIsObject ? (detail.extracted || detail.details || {}) : {};
-        const detailReasonCode: string = detailIsObject ? (detail.details?.reason || detail.reason_code || '') : '';
-
-        const is422Invalid =
-          res.status === 422 &&
-          (
-            detailStatus === 'INVALID_DOCUMENT' ||
-            detailReasonCode === 'INVALID_DOCUMENT' ||
-            detailReasonCode === 'LOW_CONFIDENCE' ||
-            detailReasonCode === 'GEMINI_UNAVAILABLE' ||
-            detailReasonCode === 'UNRECOGNIZED_DOCUMENT_TYPE'
-          );
-
-        if (is422Invalid && detailReasonCode === 'GEMINI_UNAVAILABLE') {
-          // AI classification offline
-          toast.error(
-            'AI classification service is temporarily unavailable. Please try again in a few minutes.',
-            'AI Service Unavailable'
-          );
-          setScanResultMode('INVALID');
-          setExtractionDone(false);
-          setOcrWarning(
-            detailMsg ||
-            detailExtracted?.validationMessage ||
-            'AI document classification is temporarily unavailable. Duplicate scanning has been stopped to prevent false results. Please try again in a few minutes.'
-          );
-        } else if (is422Invalid) {
-          // Invalid / non-financial document — show the INVALID card
-          const invalidMsg =
-            detailMsg ||
-            detailExtracted?.validationMessage ||
-            'The uploaded image does not appear to be an invoice, official receipt, billing statement, or payment document. Duplicate scanning was stopped.';
-
-          toast.warning(
-            'Invalid file content. Please upload an invoice, official receipt, billing statement, or payment document only.',
-            'Invalid Document'
-          );
-          setScanResultMode('INVALID');
-          setExtractionDone(false);
-          setOcrWarning(invalidMsg);
-          setExtDocNum('');
-          setExtClient('');
-          setExtAmount('');
-          setExtRef('');
-
-          logAuditEvent(
-            'INVALID_DOCUMENT_REJECTED',
-            fileName,
-            'NONE',
-            `Document rejected by AI classifier (HTTP 422): ${detailExtracted?.documentType || 'UNKNOWN'}.`,
-            'UPLOADED',
-            'REJECTED'
-          );
-        } else {
-          // Generic HTTP error (415, 413, 400, etc.)
-          const errMsg = (typeof detail === 'string' ? detail : detailMsg) || `Scan failed (HTTP ${res.status}).`;
-          toast.error(errMsg, 'Scan Error');
-          setScanResultMode('INVALID');
-          setExtractionDone(false);
-          setOcrWarning(errMsg);
-        }
-
-        setCheckingStep(0);
-        setCheckingProgress(0);
-        return;
+      } else {
+        const errBody = await scanRes.json().catch(() => ({}));
+        const errMsg = errBody?.message || errBody?.detail?.message || `Scan failed (HTTP ${scanRes.status}).`;
+        toast.error(errMsg, 'Scan Error');
+        setScanState('SCAN_ERROR');
+        setScanResultMode('NONE');
+        setExtractionDone(false);
       }
     } catch (err) {
       console.error('OCR API error:', err);
       toast.error('Network error. Could not reach the AI scan service.', 'Scan Error');
+      setScanState('SCAN_ERROR');
+      setScanResultMode('NONE');
+      setExtractionDone(false);
+    } finally {
+      setCheckingStep(0);
+      setCheckingProgress(0);
     }
-
-    // Network issue fallback
-    setCheckingStep(0);
-    setCheckingProgress(0);
-    setExtractionDone(false);
   };
 
 
@@ -957,12 +910,14 @@ export const DuplicateAlerts: React.FC = () => {
 
 
   const handleResetScanConsole = () => {
+    setScanState('IDLE');
     setUploadFile(null);
     setPreviewDocUrl(null);
     setCapturedImage(null);
     setExtractionDone(false);
     setScanResultMode('NONE');
     setMatchedRecordDetails(null);
+    setSimilarityScore(0);
     setShowManualReviewPanel(false);
     setZoomLevel(1.0);
     setExtDocType('OFFICIAL_RECEIPT');
@@ -971,6 +926,7 @@ export const DuplicateAlerts: React.FC = () => {
     setExtAmount('');
     setExtDate('');
     setExtRef('');
+    setOcrWarning('');
   };
 
   // Send to Manual Review flow
@@ -1464,19 +1420,19 @@ export const DuplicateAlerts: React.FC = () => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '13px', color: 'var(--ts)', maxWidth: '280px', margin: '0 auto', textAlign: 'left' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: checkingStep >= 1 ? 'var(--tp)' : 'var(--tt)' }}>
                     {checkingStep > 1 ? <CheckCircle size={14} style={{ color: 'var(--teal)' }} /> : <Clock size={14} />}
-                    <span>Reading document</span>
+                    <span>1. Validating document type &amp; financial markers</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: checkingStep >= 2 ? 'var(--tp)' : 'var(--tt)' }}>
                     {checkingStep > 2 ? <CheckCircle size={14} style={{ color: 'var(--teal)' }} /> : <Clock size={14} />}
-                    <span>Extracting information</span>
+                    <span>2. Extracting financial metadata (OR/Inv/Amount)</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: checkingStep >= 3 ? 'var(--tp)' : 'var(--tt)' }}>
                     {checkingStep > 3 ? <CheckCircle size={14} style={{ color: 'var(--teal)' }} /> : <Clock size={14} />}
-                    <span>Comparing existing records</span>
+                    <span>3. Scanning for duplicate ledger records</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: checkingStep >= 4 ? 'var(--tp)' : 'var(--tt)' }}>
                     {checkingStep > 4 ? <CheckCircle size={14} style={{ color: 'var(--teal)' }} /> : <Clock size={14} />}
-                    <span>Preparing result</span>
+                    <span>4. Finalizing duplicate verification results</span>
                   </div>
                 </div>
               </div>
@@ -1562,7 +1518,7 @@ export const DuplicateAlerts: React.FC = () => {
             )}
 
             {/* FLOW 3.5: INVALID / NON-FINANCIAL DOCUMENT RESULT */}
-            {scanResultMode === 'INVALID' && (
+            {(scanResultMode === 'INVALID' || scanState === 'INVALID_DOCUMENT') && (
               <div className="card fade-in" style={{ padding: '32px', borderRadius: '16px', border: '2px solid #fca5a5', background: 'linear-gradient(135deg, #fff1f2 0%, #fff7ed 100%)' }}>
                 {/* Header */}
                 <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', alignItems: 'flex-start' }}>
@@ -1574,14 +1530,14 @@ export const DuplicateAlerts: React.FC = () => {
                     <AlertTriangle size={24} style={{ color: '#dc2626' }} strokeWidth={2.5} />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <h3 style={{ margin: '0 0 6px', fontSize: '17px', fontWeight: 800, color: '#9f1239' }}>
-                      {ocrWarning?.includes('unavailable') || ocrWarning?.includes('temporarily')
-                        ? 'AI Classification Service Unavailable'
-                        : 'Non-Financial Document Rejected (Security Filter Active)'}
+                    <h3 style={{ margin: '0 0 6px', fontSize: '18px', fontWeight: 800, color: '#9f1239' }}>
+                      Invalid Document Uploaded
                     </h3>
+                    <p style={{ margin: '0 0 8px', fontSize: '14.5px', color: '#881337', fontWeight: 600, lineHeight: 1.6 }}>
+                      The uploaded image does not appear to be an invoice, official receipt, billing statement, or payment-related document. Duplicate scanning was stopped to protect the accuracy of the AI results.
+                    </p>
                     <p style={{ margin: 0, fontSize: '13.5px', color: '#64748b', lineHeight: 1.6 }}>
-                      {ocrWarning ||
-                        'The uploaded image does not appear to be an invoice, official receipt, billing statement, or payment-related document. Duplicate scanning was stopped.'}
+                      {ocrWarning || 'Only official receipts, invoices, billing statements, or payment-related finance documents are allowed. Please upload a valid FOMS financial document.'}
                     </p>
                   </div>
                 </div>
@@ -1593,34 +1549,33 @@ export const DuplicateAlerts: React.FC = () => {
                 <div style={{ display: 'flex', gap: '20px', marginBottom: '24px', alignItems: 'stretch', flexWrap: 'wrap' }}>
                   {/* Uploaded image preview */}
                   {previewDocUrl && (
-                    <div style={{ flex: '0 0 150px', background: '#fff', borderRadius: '10px', padding: '14px', textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.08)', border: '1px solid #fecaca' }}>
-                      <img src={previewDocUrl} alt="Rejected document" style={{ maxHeight: '100px', maxWidth: '100%', objectFit: 'contain', borderRadius: '4px', opacity: 0.75, filter: 'grayscale(30%)' }} />
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: '#dc2626', marginTop: '10px', fontWeight: 700, background: '#fee2e2', borderRadius: '4px', padding: '2px 8px' }}>
-                        <X size={10} strokeWidth={3} /> REJECTED
+                    <div style={{ flex: '0 0 160px', background: '#fff', borderRadius: '10px', padding: '14px', textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.08)', border: '1px solid #fecaca' }}>
+                      <img src={previewDocUrl} alt="Rejected document" style={{ maxHeight: '110px', maxWidth: '100%', objectFit: 'contain', borderRadius: '4px', opacity: 0.75, filter: 'grayscale(30%)' }} />
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: '#dc2626', marginTop: '10px', fontWeight: 700, background: '#fee2e2', borderRadius: '4px', padding: '3px 8px' }}>
+                        <X size={10} strokeWidth={3} /> NOT ALLOWED
                       </span>
                     </div>
                   )}
 
                   {/* Allowed types notice */}
-                  <div style={{ flex: 1, minWidth: '200px', background: '#fff', borderRadius: '10px', padding: '18px 20px', border: '1px solid #e2e8f0' }}>
-                    <p style={{ fontSize: '12.5px', fontWeight: 700, color: '#1e293b', margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      ✅ Accepted Document Types
+                  <div style={{ flex: 1, minWidth: '220px', background: '#fff', borderRadius: '10px', padding: '18px 20px', border: '1px solid #e2e8f0' }}>
+                    <p style={{ fontSize: '12.5px', fontWeight: 700, color: '#166534', margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      ✅ Allowed Document Types
                     </p>
                     <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', color: '#334155', lineHeight: 1.8 }}>
                       <li>Official Receipt (OR)</li>
-                      <li>Sales Invoice or Billing Invoice</li>
+                      <li>Invoice / Billing Invoice</li>
                       <li>Billing Statement / Statement of Account</li>
-                      <li>Waybill or Delivery Receipt</li>
-                      <li>Proof of Payment (bank slip, GCash, SpeedPay)</li>
+                      <li>Payment Receipt / Proof of Payment (SpeedPay, Bank, GCash)</li>
                     </ul>
-                    <p style={{ fontSize: '12.5px', fontWeight: 700, color: '#9f1239', margin: '12px 0 8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      ❌ Not Accepted
+                    <p style={{ fontSize: '12.5px', fontWeight: 700, color: '#9f1239', margin: '14px 0 8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      ❌ Rejected Content
                     </p>
                     <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', color: '#64748b', lineHeight: 1.8 }}>
-                      <li>Selfies, portraits, or person photos</li>
-                      <li>Food, scenery, or random photos</li>
-                      <li>Screenshots unrelated to finance</li>
-                      <li>School quizzes, assignments, or documents with no invoice / OR number</li>
+                      <li>Human / person / selfie / portrait image</li>
+                      <li>Animal, food, scenery, or random photograph</li>
+                      <li>Screenshot unrelated to finance (quizzes, wallpapers, memes)</li>
+                      <li>Image with no invoice number, OR number, amount, or payment context</li>
                     </ul>
                   </div>
                 </div>
@@ -1632,7 +1587,7 @@ export const DuplicateAlerts: React.FC = () => {
                     onClick={handleResetScanConsole}
                     style={{ background: '#fff', border: '1px solid #e2e8f0', color: '#64748b', padding: '0 16px', height: '40px', borderRadius: '8px', fontWeight: 600, fontSize: '13px' }}
                   >
-                    Clear
+                    Clear Console
                   </button>
                   <button
                     className="btn"
