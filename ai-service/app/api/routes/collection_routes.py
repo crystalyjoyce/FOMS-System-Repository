@@ -12,7 +12,6 @@ from app.constants.roles import (
 from datetime import datetime
 from typing import List
 import uuid
-# Collection intelligence router
 
 router = APIRouter()
 

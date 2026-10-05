@@ -142,7 +142,7 @@ public class CashFlowTransaction
             _date = value;
             if (DateTime.TryParse(value, out var parsed))
             {
-                TransactionDate = DateTime.SpecifyKind(parsed, DateTimeKind.Utc);
+                TransactionDate = parsed;
             }
         }
     }

@@ -24,7 +24,6 @@ from app.constants.roles import (
 from app.core.rate_limit import limiter
 from typing import List, Optional
 
-# Duplicate detection router
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -299,10 +298,10 @@ async def scan_document(
             detail={
                 "success": False,
                 "status": "INVALID_DOCUMENT",
-                "message": "Only official receipts, invoices, billing statements, or payment-related finance documents are allowed.",
+                "message": result.get("message", "Only official receipts, invoices, billing statements, or payment-related finance documents are allowed."),
                 "details": {
                     "detectedType": result.get("extracted", {}).get("documentType", "INVALID_OR_UNRELATED_IMAGE"),
-                    "reason": result.get("extracted", {}).get("reason", result.get("message", "The uploaded image does not contain finance document fields.")),
+                    "reason": result.get("reason_code", "INVALID_DOCUMENT"),
                     "confidence": result.get("confidence", 0.0)
                 }
             }

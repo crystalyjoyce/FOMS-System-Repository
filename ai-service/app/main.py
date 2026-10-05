@@ -21,7 +21,6 @@ from app.api.routes import (
 logging.basicConfig(level=logging.INFO, handlers=[logging.FileHandler("error.log"), logging.StreamHandler()])
 logger = logging.getLogger(__name__)
 
-# Core rate limiter
 from app.core.rate_limit import limiter
 
 
