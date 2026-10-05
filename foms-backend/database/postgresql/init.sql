@@ -32,8 +32,12 @@ CREATE TABLE IF NOT EXISTS ai_duplicate_alerts (
     matched_record_id VARCHAR(100) NOT NULL,
     matched_reference VARCHAR(150),
     confidence_score DECIMAL(5,2) NOT NULL, -- e.g., 95.50
+    severity VARCHAR(20),
+    matched_fields JSONB,
     match_reason TEXT NOT NULL,
-    warning_message TEXT NOT NULL,
+    warning_message TEXT DEFAULT '',
+    output_version VARCHAR(20),
+    trace_id VARCHAR(100),
     status VARCHAR(50) DEFAULT 'Needs Review' NOT NULL, -- 'Needs Review', 'Cleared for Manual Validation', 'Dismissed'
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
