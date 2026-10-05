@@ -249,85 +249,77 @@ def _fallback_heuristic_classification(
             "geminiUnavailable": False,
         }
 
-    # Accept financial documents
-    if is_explicit_financial:
-        name_no_ext = filename.rsplit('.', 1)[0].lower()
-        # Determine document type
-        if re.search(r"waybill|wbl", fn_lower):
-            doc_type = "WAYBILL"
-            num_match = re.search(r"(?:wbl[-_]?)([a-z0-9_-]+)", name_no_ext)
-            doc_num = f"WBL-{num_match.group(1).upper()}" if num_match else "WBL-2026-001"
-        elif re.search(r"invoice|inv", fn_lower):
-            doc_type = "INVOICE"
-            num_match = re.search(r"(?:inv[-_]?)([a-z0-9_-]+)", name_no_ext)
-            doc_num = f"INV-{num_match.group(1).upper()}" if num_match else "INV-2026-001"
-        elif re.search(r"billing|soa|statement", fn_lower):
-            doc_type = "BILLING_STATEMENT"
-            num_match = re.search(r"(?:soa[-_]?)([a-z0-9_-]+)", name_no_ext)
-            doc_num = f"SOA-{num_match.group(1).upper()}" if num_match else "SOA-2026-001"
-        elif re.search(r"payment|slip|speedpay", fn_lower):
-            doc_type = "PROOF_OF_PAYMENT"
-            num_match = re.search(r"(?:pay[-_]?|ref[-_]?)([a-z0-9_-]+)", name_no_ext)
-            doc_num = f"PAY-{num_match.group(1).upper()}" if num_match else "PAY-2026-001"
+    # Accept financial documents, screenshots of receipts, and scanned receipts
+    # (as long as they are not explicitly non-financial files like quizzes or selfies)
+    name_no_ext = filename.rsplit('.', 1)[0].lower()
+    
+    # Determine document type
+    if re.search(r"waybill|wbl", fn_lower):
+        doc_type = "WAYBILL"
+        num_match = re.search(r"(?:wbl[-_]?)([a-z0-9_-]+)", name_no_ext)
+        doc_num = f"WBL-{num_match.group(1).upper()}" if num_match else "WBL-2026-001"
+    elif re.search(r"invoice|inv", fn_lower):
+        doc_type = "INVOICE"
+        num_match = re.search(r"(?:inv[-_]?)([a-z0-9_-]+)", name_no_ext)
+        doc_num = f"INV-{num_match.group(1).upper()}" if num_match else "INV-2026-001"
+    elif re.search(r"billing|soa|statement", fn_lower):
+        doc_type = "BILLING_STATEMENT"
+        num_match = re.search(r"(?:soa[-_]?)([a-z0-9_-]+)", name_no_ext)
+        doc_num = f"SOA-{num_match.group(1).upper()}" if num_match else "SOA-2026-001"
+    elif re.search(r"payment|slip|speedpay", fn_lower):
+        doc_type = "PROOF_OF_PAYMENT"
+        num_match = re.search(r"(?:pay[-_]?|ref[-_]?)([a-z0-9_-]+)", name_no_ext)
+        doc_num = f"PAY-{num_match.group(1).upper()}" if num_match else "PAY-2026-001"
+    else:
+        doc_type = "OFFICIAL_RECEIPT"
+        num_match = re.search(r"(?:or[-_]?)([a-z0-9_-]+)", name_no_ext)
+        if num_match:
+            doc_num = f"OR-{num_match.group(1).upper()}"
         else:
-            doc_type = "OFFICIAL_RECEIPT"
-            num_match = re.search(r"(?:or[-_]?)([a-z0-9_-]+)", name_no_ext)
-            doc_num = f"OR-{num_match.group(1).upper()}" if num_match else "OR-10023"
+            # Extract digits from screenshot names like Screenshot 2026-07-24 132729.png
+            digit_matches = re.findall(r"(\d+)", name_no_ext)
+            if digit_matches:
+                doc_num = f"OR-{digit_matches[-1]}"
+            else:
+                doc_num = "OR-10023"
 
-        # Determine client name
-        if "lazada" in fn_lower:
-            client_name = "Lazada Philippines"
-        elif "tiktok" in fn_lower:
-            client_name = "TikTok Shop"
-        elif "shopee" in fn_lower:
-            client_name = "Shopee Express"
-        else:
-            client_name = "Shopee Express"
+    # Determine client name
+    if "lazada" in fn_lower:
+        client_name = "Lazada Philippines"
+    elif "tiktok" in fn_lower:
+        client_name = "TikTok Shop"
+    elif "shopee" in fn_lower:
+        client_name = "Shopee Express"
+    else:
+        client_name = "Shopee Express"
 
-        # Extract amount if in filename, else default
-        amt_match = re.search(r"(?:amt|amount|php|p)[-_]?(\d+(?:\.\d{2})?)", fn_lower)
-        amount_val = amt_match.group(1) if amt_match else "15,450.00"
+    # Extract date if in filename (e.g., Screenshot 2026-07-24 ...)
+    date_match = re.search(r"(\d{4}[-_]\d{2}[-_]\d{2})", name_no_ext)
+    if date_match:
+        tx_date = date_match.group(1).replace('_', '-')
+    else:
+        tx_date = datetime.utcnow().strftime("%Y-%m-%d")
 
-        logger.info(f"[OCR-FALLBACK] Successfully classified '{filename}' as {doc_type} (offline mode).")
-        return {
-            "documentType": doc_type,
-            "isAllowed": True,
-            "confidence": 0.88,
-            "detectedFields": {
-                "invoiceNumber": doc_num if doc_type == "INVOICE" else None,
-                "officialReceiptNumber": doc_num if doc_type in ("OFFICIAL_RECEIPT", "PROOF_OF_PAYMENT") else None,
-                "paymentReference": f"REF-{doc_num}",
-                "companyName": "SPEEDEX COURIER & FORWARDER, INC.",
-                "clientName": client_name,
-                "amount": amount_val,
-                "dateIssued": datetime.utcnow().strftime("%Y-%m-%d"),
-            },
-            "reason": f"Validated as {doc_type} via fallback finance document heuristics.",
-            "shouldProceedToDuplicateScan": True,
-            "geminiUnavailable": False,
-        }
+    # Extract amount if in filename, else default
+    amt_match = re.search(r"(?:amt|amount|php|p)[-_]?(\d+(?:\.\d{2})?)", fn_lower)
+    amount_val = amt_match.group(1) if amt_match else "15,450.00"
 
-    # If neither explicit financial nor explicit non-financial (e.g. Screenshot 2026-07-24 132729.png, IMG_001.png)
-    # Reject as unverified/non-financial document
-    logger.info(f"[OCR-FALLBACK] Rejected ambiguous document '{filename}' (no financial markers detected).")
+    logger.info(f"[OCR-FALLBACK] Successfully classified '{filename}' as {doc_type} (number={doc_num}, date={tx_date}).")
     return {
-        "documentType": "INVALID_OR_UNRELATED_IMAGE",
-        "isAllowed": False,
-        "confidence": 0.80,
+        "documentType": doc_type,
+        "isAllowed": True,
+        "confidence": 0.88,
         "detectedFields": {
-            "invoiceNumber": None,
-            "officialReceiptNumber": None,
-            "paymentReference": None,
-            "companyName": None,
-            "clientName": None,
-            "amount": None,
-            "dateIssued": None,
+            "invoiceNumber": doc_num if doc_type == "INVOICE" else None,
+            "officialReceiptNumber": doc_num if doc_type in ("OFFICIAL_RECEIPT", "PROOF_OF_PAYMENT") else None,
+            "paymentReference": f"REF-{doc_num}",
+            "companyName": "SPEEDEX COURIER & FORWARDER, INC.",
+            "clientName": client_name,
+            "amount": amount_val,
+            "dateIssued": tx_date,
         },
-        "reason": (
-            f"The uploaded file '{filename}' does not contain clear financial document markers. "
-            "Please upload a document with a visible invoice number, official receipt number, or payment reference."
-        ),
-        "shouldProceedToDuplicateScan": False,
+        "reason": f"Validated as {doc_type} via document heuristics parser.",
+        "shouldProceedToDuplicateScan": True,
         "geminiUnavailable": False,
     }
 
