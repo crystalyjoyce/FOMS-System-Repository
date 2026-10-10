@@ -64,11 +64,12 @@ export interface CreateButton {
   label: string;
   icon?: string;
   onClick: () => void;
-  variant?: "primary" | "secondary";
+  variant?: "primary" | "secondary" | "danger";
 }
 
 export interface DataTableProps<T> {
   title?: string;
+  subtitle?: string | ReactNode;
   rowKey: keyof T;
   data: T[];
   columns: ColumnDef<T>[];
@@ -82,6 +83,8 @@ export interface DataTableProps<T> {
   defaultPageSize?: number;
   emptyMessage?: string;
   selectable?: boolean;
+  hideBulkActionBar?: boolean;
+  selectedKeys?: (string | number)[];
   onSelectionChange?: (selectedKeys: (string | number)[]) => void;
   className?: string;
   loading?: boolean;
@@ -89,6 +92,7 @@ export interface DataTableProps<T> {
   onExport?: (data: T[], columns: ColumnDef<T>[]) => void;
   columnToggle?: boolean;
   densityToggle?: boolean;
+  hideSearch?: boolean;
 
   // Server-side Pagination & Operations Props
   serverSide?: boolean;
@@ -98,9 +102,12 @@ export interface DataTableProps<T> {
   onSortChange?: (sortKey: string | null, sortDir: SortDirection) => void;
   onSearchChange?: (query: string) => void;
   onFilterChange?: (filters: Record<string, string>) => void;
+  isRowSelectable?: (row: T) => boolean;
   // Default pre-selected filter values
   defaultFilters?: Record<string, string>;
-}
+  customFilters?: ReactNode;
+  onRowClick?: (row: T) => void;
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -164,6 +171,7 @@ function ActionMenu<T>({ row, actions }: ActionMenuProps<T>) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function DataTable<T>({
   title,
+  subtitle,
   rowKey,
   data,
   columns,
@@ -177,6 +185,7 @@ export function DataTable<T>({
   defaultPageSize = 10,
   emptyMessage = "No records found.",
   selectable = false,
+  hideBulkActionBar = false,
   onSelectionChange,
   className = "",
   loading = false,
@@ -184,6 +193,7 @@ export function DataTable<T>({
   onExport,
   columnToggle = true,
   densityToggle = true,
+  hideSearch = false,
 
   // Server-side props
   serverSide = false,
@@ -193,7 +203,10 @@ export function DataTable<T>({
   onSortChange,
   onSearchChange,
   onFilterChange,
+  isRowSelectable,
   defaultFilters = {},
+  customFilters,
+  onRowClick,
 }: DataTableProps<T>) {
   const { toast } = useToast();
 
@@ -306,8 +319,8 @@ export function DataTable<T>({
   }, [processed, page, pageSize, serverSide, data]);
 
   // ── Selection ─────────────────────────────────────────────────────────────────
-  const pageKeys = paginated.map((r) => r[rowKey] as string | number);
-  const allMatchingKeys = processed.map((r) => r[rowKey] as string | number);
+  const pageKeys = paginated.filter(r => isRowSelectable ? isRowSelectable(r) : true).map((r) => r[rowKey] as string | number);
+  const allMatchingKeys = processed.filter(r => isRowSelectable ? isRowSelectable(r) : true).map((r) => r[rowKey] as string | number);
   const allPageSelected = pageKeys.length > 0 && pageKeys.every((k) => selected.has(k));
   const somePageSelected = pageKeys.some((k) => selected.has(k));
 
@@ -554,32 +567,42 @@ export function DataTable<T>({
   return (
     <div className={`dt-root ${densityClass} ${className}`}>
       {title && (
-        <h2 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0F172A', margin: 0, paddingBottom: 0, paddingLeft: 24, paddingRight: 24, paddingTop: 28 }}>
-          {title}
-        </h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingBottom: subtitle ? 12 : 20 }}>
+          <div>
+            <h2 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+              {title}
+            </h2>
+            {subtitle && (
+              <p style={{ margin: '4px 0 0', color: '#64748B', fontSize: '0.9rem' }}>
+                {subtitle}
+              </p>
+            )}
+          </div>
+        </div>
       )}
       {/* ── Toolbar ── */}
       <div className="dt-toolbar">
         <div className="dt-toolbar-left">
-          <div className="dt-search-wrap">
-            <i className="ti ti-search dt-search-icon" aria-hidden="true" />
+          {!hideSearch && (
+            <div className="dt-search-wrap">
+              <i className="ti ti-search dt-search-icon" aria-hidden="true" />
             <input
-              id="dt-search-input"
-              type="text"
-              className="dt-search"
-              placeholder={searchPlaceholder}
-              value={search}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              onFocus={() => setShowRecent(true)}
-              onBlur={handleSearchBlur}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  saveRecentSearch(search);
-                  setShowRecent(false);
-                }
-              }}
-              aria-label="Search records"
-            />
+                id="dt-search-input"
+                type="text"
+                className="dt-search"
+                placeholder={searchPlaceholder}
+                value={search}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                onFocus={() => setShowRecent(true)}
+                onBlur={handleSearchBlur}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    saveRecentSearch(search);
+                    setShowRecent(false);
+                  }
+                }}
+                aria-label="Search records"
+              />
             {search && (
               <button
                 className="dt-search-clear"
@@ -591,19 +614,27 @@ export function DataTable<T>({
             )}
             {showRecent && recentSearches.length > 0 && (
               <div className="dt-search-dropdown">
-                <div className="dt-search-dropdown-header">RECENT SEARCHES</div>
-                {recentSearches.map((term, i) => (
-                  <div key={i} className="dt-search-dropdown-item" onClick={() => handleSearchChange(term)}>
-                    <div className="dt-search-dropdown-icon" style={{ background: '#F1F5F9', color: '#64748B' }}>
-                      <i className="ti ti-clock" />
+                <div className="dt-search-dropdown-header">RECENT</div>
+                {recentSearches.map((term, i) => {
+                  const icon = 'ti-history';
+                  const bg = '#F1F5F9';
+                  const color = '#64748B';
+                  const type = 'Search';
+                  
+                  return (
+                    <div key={i} className="dt-search-dropdown-item" onClick={() => handleSearchChange(term)}>
+                      <div className="dt-search-dropdown-icon" style={{ background: bg, color: color }}>
+                        <i className={`ti ${icon}`} />
+                      </div>
+                      <span className="dt-search-dropdown-text" style={{fontSize: '13px', color: '#1E293B', fontWeight: 500}}>{term}</span>
+                      <span className="dt-search-dropdown-type" style={{marginLeft: 'auto', fontSize: '11px', color: '#94A3B8'}}>{type}</span>
                     </div>
-                    <span className="dt-search-dropdown-text">{term}</span>
-                    <span className="dt-search-dropdown-type">Search</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
+          )}
 
           {filters.map((f) => (
             <select
@@ -613,7 +644,9 @@ export function DataTable<T>({
               value={activeFilters[f.key] ?? ""}
               onChange={(e) => handleFilterChange(f.key, e.target.value)}
             >
-              <option value="" hidden>{f.label}</option>
+              {!f.options.some(opt => opt.value === "") && (
+                <option value="">{f.label}</option>
+              )}
               {f.options.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
@@ -621,26 +654,31 @@ export function DataTable<T>({
               ))}
             </select>
           ))}
+          {customFilters}
         </div>
 
         <div className="dt-toolbar-right">
-
-
           {exportable && (
             <div style={{ display: 'flex', gap: 8 }}>
               <button
-                className="dt-btn dt-btn--secondary"
+                className="dt-btn"
                 onClick={handleExportCSV}
                 title="Export to CSV"
+                style={{ background: '#fff', color: '#0F172A', border: '1px solid #E2E8F0', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s, box-shadow 0.2s' }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#F8FAFC'; e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.boxShadow = 'none'; }}
               >
-                <i className="ti ti-file-spreadsheet" aria-hidden="true" /> CSV
+                <i className="ti ti-download" aria-hidden="true" /> Export CSV
               </button>
               <button
-                className="dt-btn dt-btn--secondary"
+                className="dt-btn"
                 onClick={handleExportPDF}
-                title="Export to PDF"
+                title="Export to Formal PDF"
+                style={{ background: '#0D9488', color: '#fff', border: '1px solid #0D9488', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', transition: 'background 0.2s' }}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#0F766E'}
+                onMouseLeave={(e) => e.currentTarget.style.background = '#0D9488'}
               >
-                <i className="ti ti-file-description" aria-hidden="true" /> PDF
+                <i className="ti ti-file-description" aria-hidden="true" /> Export Formal PDF
               </button>
             </div>
           )}
@@ -649,6 +687,7 @@ export function DataTable<T>({
             <Button
               key={i}
               title={btn.label}
+              icon={btn.icon}
               variant={btn.variant === "secondary" ? "secondary" : "primary"}
               size="sm"
               onClick={btn.onClick}
@@ -720,7 +759,7 @@ export function DataTable<T>({
       )}
 
       {/* ── Bulk action bar ── */}
-      {selectable && selectedCount > 0 && (
+      {selectable && selectedCount > 0 && !hideBulkActionBar && (
         <div className="dt-bulk-bar" role="toolbar" aria-label="Bulk actions">
           <div className="dt-bulk-bar-left">
             <span className="dt-bulk-count">
@@ -764,27 +803,7 @@ export function DataTable<T>({
         </div>
       )}
 
-      {/* ── No Results Banner ── */}
-      {paginated.length === 0 && hasActiveFilters && (
-        <div style={{ background: '#FFF7ED', border: '1px solid #FFEDD5', borderLeft: 'none', borderRight: 'none', padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0', overflow: 'hidden', boxSizing: 'border-box', flexWrap: 'wrap', gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#C2410C', minWidth: 0, flex: '1 1 auto' }}>
-            <i className="ti ti-search-off" style={{ fontSize: '18px', flexShrink: 0 }} />
-            <span style={{ fontSize: '14px', wordBreak: 'break-word' }}>
-              {search ? (
-                <>No results for <strong>"{search}"</strong></>
-              ) : (
-                <>No results found for applied filters</>
-              )}
-            </span>
-          </div>
-          <button 
-            onClick={clearAllFilters}
-            style={{ border: '1px solid #FED7AA', background: 'transparent', color: '#C2410C', padding: '6px 12px', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', flexShrink: 0 }}
-          >
-            <i className="ti ti-x" /> Clear filters
-          </button>
-        </div>
-      )}
+
 
       {/* ── Table ── */}
       <div className="dt-table-wrap">
@@ -907,8 +926,12 @@ export function DataTable<T>({
                 return (
                   <tr
                     key={key}
-                    className={`dt-row${isSelected ? " dt-row--selected" : ""}`}
+                    className={`dt-row${isSelected ? " dt-row--selected" : ""}${onRowClick ? " dt-row--clickable" : ""}`}
                     aria-selected={selectable ? isSelected : undefined}
+                    onClick={() => {
+                        if (onRowClick) onRowClick(row);
+                    }}
+                    style={{ cursor: onRowClick ? 'pointer' : 'default' }}
                   >
                     {selectable && (
                       <td className="dt-td dt-td--check dt-td--sticky-left">
@@ -916,7 +939,11 @@ export function DataTable<T>({
                           type="checkbox"
                           className="dt-checkbox"
                           checked={isSelected}
-                          onChange={() => toggleRow(key)}
+                          disabled={isRowSelectable ? !isRowSelectable(row) : false}
+                          onChange={() => {
+                            if (isRowSelectable && !isRowSelectable(row)) return;
+                            toggleRow(key);
+                          }}
                           aria-label={`Select row ${key}`}
                         />
                       </td>

@@ -18,6 +18,7 @@ export interface StatusBadgeProps {
 }
 
 export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md', className = '' }) => {
+  if (status === null || status === undefined) return null;
   const normalized = status.toString().toLowerCase().trim();
 
   let tier: 'success' | 'info' | 'warning' | 'warn-danger' | 'danger' | 'neutral' | 'assign' = 'neutral';
@@ -33,7 +34,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md', c
     tier = 'warning';
   }
   // 2. Critical / Negative / Fallbacks
-  else if (['failed', 'outflow'].includes(normalized)) {
+  else if (['failed', 'outflow', 'rejected', 'missing'].includes(normalized)) {
     tier = 'danger';
   }
   // 3. Positive / Success
@@ -46,7 +47,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md', c
   }
   // 5. Attention / Pending / Fallback day checks
   else if (
-    ['pending', 'preparing', 'ready for pickup', 'processing', 'returning', 'not submitted', 'partially paid'].includes(normalized) ||
+    ['pending', 'preparing', 'ready for pickup', 'processing', 'returning', 'not submitted'].includes(normalized) ||
     normalized.includes('days') || normalized.includes('day')
   ) {
     tier = 'warning';

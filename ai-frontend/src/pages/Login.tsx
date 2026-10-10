@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Lock, User, KeyRound, Sparkles, ShieldCheck, HelpCircle, RefreshCw } from 'lucide-react';
+import { Lock, User, KeyRound, Sparkles, ShieldCheck, HelpCircle, RefreshCw, Eye, EyeOff } from 'lucide-react';
+import { useToast } from '../components';
 
 export const Login: React.FC = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [selectedRole, setSelectedRole] = useState<string>('Financial Manager');
   const [username, setUsername] = useState<string>('EMP-001');
   const [password, setPassword] = useState<string>('Password@123');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const roles = [
     "Financial Manager",
@@ -51,23 +53,27 @@ export const Login: React.FC = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password.trim()) {
-      setError("Please fill in both Employee ID and password fields.");
+      toast.warning("Please fill in both Employee ID and password fields.");
       return;
     }
-    setError(null);
     setLoading(true);
     try {
       await login(username, password);
-      if (selectedRole === 'Client') {
+      toast.success("Successfully logged in!");
+      const storedUser = localStorage.getItem('foms_ai_user');
+      const parsedUser = storedUser ? JSON.parse(storedUser) : null;
+      const userRole = (parsedUser?.role || selectedRole || '').replace(/[\s_-]+/g, '').toLowerCase();
+
+      if (userRole === 'client' || username.trim().toUpperCase() === 'EMP-006') {
         navigate('/unauthorized');
       } else {
         navigate('/ai/dashboard');
       }
     } catch (e) {
       if (e instanceof Error) {
-        setError(e.message);
+        toast.error(e.message);
       } else {
-        setError("Invalid Employee ID or password. No account found with those credentials.");
+        toast.error("Invalid Employee ID or password. No account found with those credentials.");
       }
     } finally {
       setLoading(false);
@@ -246,12 +252,6 @@ export const Login: React.FC = () => {
             Enter your employee credentials below to connect to Speedex operations.
           </p>
 
-          {error && (
-            <div className="advisory-banner danger" style={{ padding: '12px 16px', marginBottom: '24px', borderRadius: '10px', fontSize: '13.5px', boxSizing: 'border-box' }}>
-              <strong>Error:</strong> {error}
-            </div>
-          )}
-
           <form onSubmit={handleLogin}>
             {/* Employee ID */}
             <div className="form-group" style={{ marginBottom: '18px' }}>
@@ -261,6 +261,7 @@ export const Login: React.FC = () => {
               <div style={{ position: 'relative' }}>
                 <User size={16} style={{ position: 'absolute', left: '14px', top: '13px', color: 'var(--ts)' }} />
                 <input
+                  id="ai-employee-id"
                   type="text"
                   className="form-control"
                   style={{
@@ -287,21 +288,38 @@ export const Login: React.FC = () => {
               <div style={{ position: 'relative' }}>
                 <Lock size={16} style={{ position: 'absolute', left: '14px', top: '13px', color: 'var(--ts)' }} />
                 <input
-                  type="password"
+                  id="ai-password"
+                  type={showPassword ? 'text' : 'password'}
                   className="form-control"
                   style={{
                     paddingLeft: '42px',
+                    paddingRight: '42px',
                     height: '42px',
                     borderRadius: '8px',
                     fontSize: '14px',
                     fontFamily: 'var(--fb)',
-                    border: '1px solid var(--border)'
+                    border: '1px solid var(--border)',
+                    width: '100%',
+                    boxSizing: 'border-box'
                   }}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
                 />
+                <button 
+                  type="button" 
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{
+                    position: 'absolute', right: '14px', top: '13px',
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: 'var(--ts)', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center'
+                  }}
+                  tabIndex={-1}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
               </div>
             </div>
 
@@ -315,6 +333,7 @@ export const Login: React.FC = () => {
 
             {/* Submit Button */}
             <button
+              id="ai-login-btn"
               type="submit"
               disabled={loading}
               className="btn btn-primary"

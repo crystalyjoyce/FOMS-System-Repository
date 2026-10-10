@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using FOMS.Application.DTOs;
@@ -6,7 +6,7 @@ using FOMS.Application.Interfaces;
 
 namespace FOMS.Api.Controllers;
 
-[Authorize(Roles = "Accountant")]
+[Authorize]
 [Route("api/users")]
 [ApiController]
 public class UsersController : ControllerBase

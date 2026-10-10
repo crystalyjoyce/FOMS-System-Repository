@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -22,7 +22,7 @@ public class PayrollController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetPayrollRecords() => Ok(await _context.PayrollRecords.Include(r => r.DeductionLines).ToListAsync());
 
-    [Authorize(Roles = "Payroll Officer")]
+    [Authorize]
     [HttpPost]
     public async Task<IActionResult> CreatePayrollRecord([FromBody] PayrollRecord request)
     {

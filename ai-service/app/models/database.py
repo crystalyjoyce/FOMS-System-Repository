@@ -1,10 +1,10 @@
-from sqlalchemy import create_engine, Column, Integer, String, Numeric, DateTime, Date, ForeignKey, Text
+from sqlalchemy import create_engine, Column, Integer, String, Numeric, DateTime, Date, ForeignKey, Text, Boolean
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from datetime import datetime
 from app.core.config import settings
 
-engine = create_engine(settings.POSTGRES_URI)
+engine = create_engine(settings.POSTGRES_URI, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -192,4 +192,18 @@ class AIReviewHistory(Base):
     recommended_action = Column(String(150))
     review_date = Column(DateTime, default=datetime.utcnow, index=True)
     trace_id = Column(String(100))
+
+# 12. AI Scan Logs (Document Validation)
+class AIScanLog(Base):
+    __tablename__ = "ai_scan_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(100))
+    uploaded_file_name = Column(String(255), nullable=False)
+    detected_document_type = Column(String(100))
+    is_allowed = Column(Boolean, default=False)
+    validation_status = Column(String(50))
+    reason = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
 

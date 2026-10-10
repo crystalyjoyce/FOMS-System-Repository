@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -25,10 +25,10 @@ public class ReceivablesController : ControllerBase
     }
 
     /// <summary>
-    /// GET /api/receivables — Returns all ReceivableBalance records projected to safe DTOs
+    /// GET /api/receivables â€” Returns all ReceivableBalance records projected to safe DTOs
     /// (avoids circular reference serialization from navigation properties).
     /// </summary>
-    [Authorize(Roles = "Accountant,Bookkeeper,Cashier")]
+    [Authorize]
     [HttpGet]
     public async Task<IActionResult> GetReceivables()
     {
@@ -50,11 +50,11 @@ public class ReceivablesController : ControllerBase
     }
 
     /// <summary>
-    /// GET /api/receivables/outstanding — Live computation of outstanding balances
+    /// GET /api/receivables/outstanding â€” Live computation of outstanding balances
     /// from the Invoices table with dynamic aging refresh.
     /// This is the authoritative endpoint for the Outstanding Balances page.
     /// </summary>
-    [Authorize(Roles = "Accountant,Bookkeeper,Cashier")]
+    [Authorize]
     [HttpGet("outstanding")]
     public async Task<IActionResult> GetOutstandingBalances()
     {
@@ -78,9 +78,9 @@ public class ReceivablesController : ControllerBase
     }
 
     /// <summary>
-    /// GET /api/receivables/summary — Aggregate totals for the Bookkeeper dashboard.
+    /// GET /api/receivables/summary â€” Aggregate totals for the Bookkeeper dashboard.
     /// </summary>
-    [Authorize(Roles = "Accountant,Bookkeeper,Cashier")]
+    [Authorize]
     [HttpGet("summary")]
     public async Task<IActionResult> GetOutstandingSummary()
     {
@@ -116,9 +116,9 @@ public class ReceivablesController : ControllerBase
     }
 
     /// <summary>
-    /// GET /api/receivables/aging-accounts — Returns aging accounts with dynamically refreshed DaysPastDue.
+    /// GET /api/receivables/aging-accounts â€” Returns aging accounts with dynamically refreshed DaysPastDue.
     /// </summary>
-    [Authorize(Roles = "Accountant,Bookkeeper,Cashier")]
+    [Authorize]
     [HttpGet("aging-accounts")]
     public async Task<IActionResult> GetAgingAccounts()
     {
@@ -126,7 +126,7 @@ public class ReceivablesController : ControllerBase
             .Where(i => !i.Archived && i.Balance > 0)
             .ToListAsync();
 
-        // Refresh aging dynamically — AgingAccounts DB table may be stale
+        // Refresh aging dynamically â€” AgingAccounts DB table may be stale
         foreach (var invoice in invoices)
         {
             BillingComputationService.RefreshInvoiceAging(invoice);
@@ -151,9 +151,9 @@ public class ReceivablesController : ControllerBase
     }
 
     /// <summary>
-    /// GET /api/receivables/overdue-accounts — Returns clients with overdue invoices (DaysOverdue > 0).
+    /// GET /api/receivables/overdue-accounts â€” Returns clients with overdue invoices (DaysOverdue > 0).
     /// </summary>
-    [Authorize(Roles = "Accountant,Bookkeeper,Cashier")]
+    [Authorize]
     [HttpGet("overdue-accounts")]
     public async Task<IActionResult> GetOverdueAccounts()
     {
@@ -185,10 +185,10 @@ public class ReceivablesController : ControllerBase
     }
 
     /// <summary>
-    /// GET /api/receivables/{clientId} — Returns outstanding balance details for a specific client.
+    /// GET /api/receivables/{clientId} â€” Returns outstanding balance details for a specific client.
     /// Accepts both CL- (frontend) and CA- (billing account) prefixed client IDs.
     /// </summary>
-    [Authorize(Roles = "Accountant,Bookkeeper,Cashier")]
+    [Authorize]
     [HttpGet("{clientId}")]
     public async Task<IActionResult> GetClientOutstanding(string clientId)
     {
@@ -222,9 +222,9 @@ public class ReceivablesController : ControllerBase
     }
 
     /// <summary>
-    /// POST /api/receivables — Manually create a ReceivableBalance record (Accountant only).
+    /// POST /api/receivables â€” Manually create a ReceivableBalance record (Accountant only).
     /// </summary>
-    [Authorize(Roles = "Accountant")]
+    [Authorize]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] ReceivableBalance request)
     {

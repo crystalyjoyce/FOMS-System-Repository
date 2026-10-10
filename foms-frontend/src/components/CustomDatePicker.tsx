@@ -7,6 +7,7 @@ interface CustomDatePickerProps {
   disabled?: boolean;
   minDate?: string;
   maxDate?: string;
+  placeholder?: string;
 }
 
 export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({ 
@@ -15,7 +16,8 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
   isInvalid, 
   disabled,
   minDate,
-  maxDate
+  maxDate,
+  placeholder
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -81,7 +83,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
           type="text"
           readOnly
           value={formatInput(value)}
-          placeholder="Select date..."
+          placeholder={placeholder || "Select date..."}
           style={{ 
             width: '100%', 
             padding: '11px 14px 11px 42px', 
@@ -158,7 +160,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
                   outline: 'none'
                 }}
               >
-                {Array.from({ length: 21 }, (_, i) => 2015 + i).map(year => (
+                {Array.from({ length: 10 }, (_, i) => 2015 + i).map(year => (
                   <option key={year} value={year}>{year}</option>
                 ))}
               </select>

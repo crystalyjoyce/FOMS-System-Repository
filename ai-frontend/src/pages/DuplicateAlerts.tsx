@@ -92,8 +92,19 @@ export interface AuditEvent {
   relatedRecordId: string;
   description: string;
   previousStatus: string;
-  newStatus: string;
 }
+
+// Explicit Frontend State Flow (§2 Document Type Validation)
+export type ScanState = 
+  | 'IDLE' 
+  | 'UPLOADING' 
+  | 'VALIDATING_DOCUMENT' 
+  | 'INVALID_DOCUMENT' 
+  | 'VALID_DOCUMENT' 
+  | 'SCANNING_DUPLICATE' 
+  | 'DUPLICATE_FOUND' 
+  | 'UNIQUE_DOCUMENT' 
+  | 'SCAN_ERROR';
 
 export const DuplicateAlerts: React.FC = () => {
   const { token, user } = useAuth();
@@ -180,8 +191,10 @@ export const DuplicateAlerts: React.FC = () => {
   const streamRef = useRef<MediaStream | null>(null);
   const capturedFileRef = useRef<File | null>(null);
 
+  const [scanState, setScanState] = useState<ScanState>('IDLE');
+
   // Load progress
-  const [checkingStep, setCheckingStep] = useState<number>(0); // 0: Idle, 1: Reading, 2: Extracting, 3: Comparing, 4: Results
+  const [checkingStep, setCheckingStep] = useState<number>(0); // 0: Idle, 1: Validating, 2: Extracting, 3: Comparing, 4: Results
   const [checkingProgress, setCheckingProgress] = useState(0);
 
   // AI OCR extraction state (editable form)
@@ -231,10 +244,11 @@ export const DuplicateAlerts: React.FC = () => {
   // ==========================================
   // ROLE-BASED ACCESS CONTROL (RBAC) GUARDS
   // ==========================================
-  const isFinancialManager = useMemo(() => user?.role === 'Financial Manager', [user]);
-  const isHeadAccountant = useMemo(() => user?.role === 'Head Accountant', [user]);
-  const isAccountant = useMemo(() => user?.role === 'Accountant', [user]);
-  const isCoordinator = useMemo(() => user?.role === 'Coordinator', [user]);
+  const roleNorm = useMemo(() => (user?.role || '').replace(/[\s_-]+/g, '').toLowerCase(), [user]);
+  const isFinancialManager = useMemo(() => roleNorm === 'financialmanager' || roleNorm === 'financemanager', [roleNorm]);
+  const isHeadAccountant = useMemo(() => roleNorm === 'headaccountant', [roleNorm]);
+  const isAccountant = useMemo(() => roleNorm === 'accountant', [roleNorm]);
+  const isCoordinator = useMemo(() => roleNorm === 'coordinator', [roleNorm]);
 
   const canValidate = useMemo(() => {
     return isFinancialManager || isHeadAccountant || isAccountant;
@@ -256,7 +270,23 @@ export const DuplicateAlerts: React.FC = () => {
       });
       if (resUniques.ok) {
         const data = await resUniques.json();
-        setUniques(Array.isArray(data) ? data : []);
+        const mappedUniques: UniqueDocument[] = (Array.isArray(data) ? data : []).map((u: any) => ({
+          id: u.id || `REC-${Date.now()}`,
+          documentType: u.documentType || 'OFFICIAL_RECEIPT',
+          documentNumber: u.documentNumber || '',
+          clientName: u.clientName || 'N/A',
+          amount: String(u.amount || '0.00'),
+          transactionDate: u.transactionDate || new Date().toISOString().split('T')[0],
+          source: u.sourceType || 'Scanned',
+          aiConfidence: u.similarityScore || 0,
+          reviewedBy: u.scannedBy || 'System',
+          reviewerRole: u.scannedRole || 'Staff',
+          reviewedDate: u.createdAt || new Date().toISOString(),
+          status: 'Unique',
+          reviewerNote: u.aiResult || '',
+          reason: 'No duplicate detected'
+        }));
+        setUniques(mappedUniques);
       }
 
       // 2. Fetch flagged duplicate alerts from backend PostgreSQL DB
@@ -297,7 +327,21 @@ export const DuplicateAlerts: React.FC = () => {
       });
       if (resHistory.ok) {
         const data = await resHistory.json();
-        setHistoryList(Array.isArray(data) ? data : []);
+        const mappedHistory: HistoryRecord[] = (Array.isArray(data) ? data : []).map((h: any) => ({
+          id: String(h.id),
+          documentType: h.target_type || 'OFFICIAL_RECEIPT',
+          documentNumber: h.target_id || '',
+          clientName: 'System Record',
+          aiResult: h.recommended_action || 'Review Required',
+          finalDecision: h.decision || 'Marked as Duplicate',
+          reviewer: h.reviewer_username || 'Reviewer',
+          reviewerRole: h.reviewer_role || 'Staff',
+          decisionReason: h.remarks || '',
+          reviewerNote: h.remarks || '',
+          reviewedDate: h.review_date || new Date().toISOString(),
+          relatedRecordId: h.target_id || ''
+        }));
+        setHistoryList(mappedHistory);
       }
     } catch (e) {
       console.error("Failed loading database records from PostgreSQL:", e);
@@ -463,6 +507,7 @@ export const DuplicateAlerts: React.FC = () => {
     }
 
     // Reset all previous scan results immediately so stale INVALID/CLEAR/DUPLICATE cards don't persist
+    setScanState('UPLOADING');
     setScanResultMode('NONE');
     setExtractionDone(false);
     setMatchedRecordDetails(null);
@@ -481,8 +526,8 @@ export const DuplicateAlerts: React.FC = () => {
     // Audit Upload Event
     logAuditEvent('DOCUMENT_UPLOADED', `DOC-${Date.now()}`, 'NONE', `Document ${file.name} uploaded successfully.`, 'NONE', 'UPLOADED');
 
-    // Run AI parameter extraction automatically
-    runExtractionSimulation(file.name, file);
+    // Run AI document type validation followed by duplicate detection
+    runDocumentValidationAndScan(file.name, file);
   };
 
   // ── Camera helpers ───────────────────────────────────────────
@@ -572,52 +617,136 @@ export const DuplicateAlerts: React.FC = () => {
       setUploadFile(capturedFileRef.current);
       setPreviewDocUrl(capturedImage);
       logAuditEvent('DOCUMENT_SCANNED', `DOC-${Date.now()}`, 'NONE', `Physical document scanned and confirmed by user.`, 'NONE', 'SCANNED');
-      runExtractionSimulation(capturedFileRef.current.name, capturedFileRef.current);
+      runDocumentValidationAndScan(capturedFileRef.current.name, capturedFileRef.current);
     } else {
       // Fallback if capture somehow failed
       logAuditEvent('DOCUMENT_SCANNED', `DOC-${Date.now()}`, 'NONE', `Physical document scanned and confirmed by user.`, 'NONE', 'SCANNED');
-      runExtractionSimulation('scanned_receipt.png');
+      runDocumentValidationAndScan('scanned_receipt.png');
     }
   };
 
   // ==========================================
-  // FLOW 2: AI PARAMETER EXTRACTION
+  // FLOW 2: AI DOCUMENT VALIDATION & DUPLICATE SCAN
   // ==========================================
-  const runExtractionSimulation = async (fileName: string, fileOverride?: File) => {
-    setCheckingStep(1); // Reading document
-    setCheckingProgress(25);
+  const runDocumentValidationAndScan = async (fileName: string, fileOverride?: File) => {
+    // ── STEP 1: DOCUMENT TYPE VALIDATION GATE ────────────────────────────────
+    setScanState('VALIDATING_DOCUMENT');
+    setCheckingStep(1); // Validating document type & financial fields
+    setCheckingProgress(30);
+
+    const targetFile = fileOverride || uploadFile || new File(["scanned_doc"], fileName, { type: "image/png" });
+    const formData = new FormData();
+    formData.append('file', targetFile);
 
     try {
-      setCheckingStep(2); // Extracting information
-      setCheckingProgress(60);
-
-      const targetFile = fileOverride || uploadFile || new File(["scanned_doc"], fileName, { type: "image/png" });
-      const formData = new FormData();
-      formData.append('file', targetFile);
-
-      const res = await fetch('/api/ai/duplicates/scan', {
+      // Call document validation endpoint first
+      const valRes = await fetch('/api/ai/documents/validate', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
+        headers: { 'Authorization': `Bearer ${token}` },
         body: formData
       });
 
-      if (res.ok) {
-        const apiRes = await res.json();
-        const scanData = apiRes.data || {};
-        const extracted = scanData.extracted || {};
-        console.log('[SCAN DEBUG] Full API response:', JSON.stringify(apiRes));
-        console.log('[SCAN DEBUG] scanData.status:', scanData.status, '| extracted.documentType:', extracted.documentType);
+      let isValidDocument = false;
+      let rejectReason = '';
+      let detectedDocType = '';
 
-        const docType = (extracted.documentType as any) || 'OFFICIAL_RECEIPT';
-        const docNum = (extracted.documentNumber && extracted.documentNumber.trim() !== '') ? extracted.documentNumber : `OR-${Date.now().toString().slice(-6)}`;
-        const clientName = (extracted.clientName && extracted.clientName.trim() !== '') ? extracted.clientName : 'Customer Name Not Read';
+      if (valRes.ok) {
+        const valData = await valRes.json();
+        if (valData.isAllowed === true) {
+          isValidDocument = true;
+          detectedDocType = valData.documentType || 'OFFICIAL_RECEIPT';
+        } else {
+          isValidDocument = false;
+          rejectReason = valData.reason || valData.message || 'The uploaded file is not a supported financial document.';
+          detectedDocType = valData.documentType || 'INVALID_OR_UNRELATED_IMAGE';
+        }
+      } else {
+        const errJson = await valRes.json().catch(() => ({}));
+        isValidDocument = false;
+        rejectReason = errJson?.detail?.message || errJson?.detail?.details?.reason || errJson?.message || 'Unsupported or invalid document uploaded.';
+        detectedDocType = errJson?.detail?.details?.detectedType || 'INVALID_OR_UNRELATED_IMAGE';
+      }
+
+      // If document validation failed: STOP SCAN IMMEDIATELY!
+      if (!isValidDocument) {
+        setScanState('INVALID_DOCUMENT');
+        setScanResultMode('INVALID');
+        setExtractionDone(false);
+        setSimilarityScore(0);
+        setMatchedRecordDetails(null);
+        setExtDocNum('');
+        setExtClient('');
+        setExtAmount('');
+        setExtRef('');
+        setOcrWarning(rejectReason || 'Only official receipts, invoices, billing statements, or payment-related finance documents are allowed. Please upload a valid FOMS financial document.');
+
+        toast.warning(
+          'Invalid file content. Please upload an invoice, official receipt, or payment document only.',
+          'Invalid Document'
+        );
+
+        logAuditEvent(
+          'INVALID_DOCUMENT_REJECTED',
+          fileName,
+          'NONE',
+          `Document rejected by AI validation step: ${detectedDocType || 'INVALID_OR_UNRELATED_IMAGE'}.`,
+          'UPLOADED',
+          'REJECTED'
+        );
+
+        setCheckingStep(0);
+        setCheckingProgress(0);
+        return; // HALT PIPELINE
+      }
+
+      // ── STEP 2: FINANCIAL EXTRACTION & DUPLICATE DETECTION ──────────────────
+      setScanState('VALID_DOCUMENT');
+      setScanState('SCANNING_DUPLICATE');
+      setCheckingStep(2); // Extracting information & comparing
+      setCheckingProgress(65);
+
+      const scanRes = await fetch('/api/ai/documents/scan', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+
+      // Handle 422 Unprocessable Entity (Invalid Document)
+      if (scanRes.status === 422) {
+        const err422 = await scanRes.json().catch(() => ({}));
+        const detail = err422?.detail || {};
+        const rejMsg = detail?.message || detail?.details?.reason || 'Only official receipts, invoices, billing statements, or payment-related finance documents are allowed.';
+
+        setScanState('INVALID_DOCUMENT');
+        setScanResultMode('INVALID');
+        setExtractionDone(false);
+        setSimilarityScore(0);
+        setMatchedRecordDetails(null);
+        setOcrWarning(rejMsg);
+
+        toast.warning(
+          'Invalid file content. Please upload an invoice, official receipt, or payment document only.',
+          'Invalid Document'
+        );
+
+        setCheckingStep(0);
+        setCheckingProgress(0);
+        return;
+      }
+
+      if (scanRes.ok) {
+        const apiRes = await scanRes.json();
+        const scanData = apiRes.data || {};
+        const extracted = scanData.extracted || apiRes.extractedFields || {};
+
+        const docType = (extracted.documentType as any) || detectedDocType || 'OFFICIAL_RECEIPT';
+        const docNum = extracted.documentNumber || extracted.officialReceiptNumber || extracted.invoiceNumber || `OR-${Date.now().toString().slice(-6)}`;
+        const clientName = extracted.clientName || 'Customer Name Not Read';
         const rawAmount = extracted.amount != null ? String(extracted.amount).trim() : '';
         const amt = rawAmount && rawAmount !== 'null' ? rawAmount : 'Missing';
-        const warningText = extracted.warning || (amt === 'Missing' ? 'OCR amount could not be read because Gemini quota is exhausted. Please check your Gemini billing/quota in Google AI Studio.' : '');
-        const dt = extracted.transactionDate || new Date().toISOString().split('T')[0];
-        const ref = extracted.referenceNumber || `REF-${docNum}`;
+        const warningText = extracted.warning || '';
+        const dt = extracted.transactionDate || extracted.dateIssued || new Date().toISOString().split('T')[0];
+        const ref = extracted.referenceNumber || extracted.paymentReference || `REF-${docNum}`;
 
         setExtDocType(docType === 'PROOF_OF_PAYMENT' ? 'OFFICIAL_RECEIPT' : docType);
         setExtDocNum(docNum);
@@ -651,21 +780,17 @@ export const DuplicateAlerts: React.FC = () => {
         setCheckingProgress(100);
         setExtractionDone(true);
 
-        // Only show INVALID when the backend explicitly confirms it is not a financial document.
-        // Require BOTH status AND documentType to be INVALID_DOCUMENT to avoid false rejections
-        // (e.g. when Gemini quota is exhausted and the heuristic fallback is used).
-        if (scanData.status === 'INVALID_DOCUMENT' && extracted.documentType === 'INVALID_DOCUMENT') {
-          toast.warning("Not a financial document. Please scan an invoice, official receipt, or waybill.", "Invalid Document");
-          setScanResultMode('INVALID');
-          setExtractionDone(false); // Don't show extraction form
-        } else if (scanData.status === 'FLAGGED_DUPLICATE') {
+        const isDuplicate = apiRes.status === 'DUPLICATE_FOUND' || scanData.status === 'FLAGGED_DUPLICATE';
 
+        if (isDuplicate) {
+          setScanState('DUPLICATE_FOUND');
           setScanResultMode('DUPLICATE');
-          setSimilarityScore(scanData.confidence_score || 95);
+          const score = scanData.confidence_score || (apiRes.duplicateResult?.matchScore ? Math.round(apiRes.duplicateResult.matchScore * 100) : 95);
+          setSimilarityScore(score);
 
           const matchedRecord = scanData.matched_record || {};
           setMatchedRecordDetails({
-            record_id: matchedRecord.record_id || `REC-${Date.now()}`,
+            record_id: matchedRecord.record_id || apiRes.duplicateResult?.matchedRecordId || `REC-${Date.now()}`,
             registered_or: matchedRecord.documentNumber || matchedRecord.receiptNumber || matchedRecord.invoiceNumber || matchedRecord.waybillNumber || docNum,
             client_name: matchedRecord.clientName || clientName,
             amount: matchedRecord.amount || amt || '0.00',
@@ -674,24 +799,33 @@ export const DuplicateAlerts: React.FC = () => {
             waybill_no: matchedRecord.waybillNumber || `WBL-${docNum}`,
             status: 'FLAGGED'
           });
-          toast.warning(`Duplicate detected (${scanData.confidence_score}% similarity). Review required.`, 'AI Gemini Scan');
-        } else if (scanData.status === 'UNIQUE_DOCUMENT') {
+          toast.warning(`Duplicate detected (${score}% similarity). Review required.`, 'AI Gemini Scan');
+        } else {
+          setScanState('UNIQUE_DOCUMENT');
           setScanResultMode('CLEAR');
           setSimilarityScore(0);
+          setMatchedRecordDetails(null);
           toast.success('Document cataloged as Unique Document (0% similarity match).', 'AI Gemini Scan');
         }
         return;
+      } else {
+        const errBody = await scanRes.json().catch(() => ({}));
+        const errMsg = errBody?.message || errBody?.detail?.message || `Scan failed (HTTP ${scanRes.status}).`;
+        toast.error(errMsg, 'Scan Error');
+        setScanState('SCAN_ERROR');
+        setScanResultMode('NONE');
+        setExtractionDone(false);
       }
     } catch (err) {
       console.error('OCR API error:', err);
-    }
-
-    // Fallback if network issue
-    setTimeout(() => {
+      toast.error('Network error. Could not reach the AI scan service.', 'Scan Error');
+      setScanState('SCAN_ERROR');
+      setScanResultMode('NONE');
+      setExtractionDone(false);
+    } finally {
       setCheckingStep(0);
-      setCheckingProgress(100);
-      setExtractionDone(true);
-    }, 500);
+      setCheckingProgress(0);
+    }
   };
 
 
@@ -776,12 +910,14 @@ export const DuplicateAlerts: React.FC = () => {
 
 
   const handleResetScanConsole = () => {
+    setScanState('IDLE');
     setUploadFile(null);
     setPreviewDocUrl(null);
     setCapturedImage(null);
     setExtractionDone(false);
     setScanResultMode('NONE');
     setMatchedRecordDetails(null);
+    setSimilarityScore(0);
     setShowManualReviewPanel(false);
     setZoomLevel(1.0);
     setExtDocType('OFFICIAL_RECEIPT');
@@ -790,6 +926,7 @@ export const DuplicateAlerts: React.FC = () => {
     setExtAmount('');
     setExtDate('');
     setExtRef('');
+    setOcrWarning('');
   };
 
   // Send to Manual Review flow
@@ -1218,13 +1355,14 @@ export const DuplicateAlerts: React.FC = () => {
         {activeTab === 'scan' && (
           <div className="tab-pane fade-in">
             {/* Scan Step 0: Upload dropzone/Scan button console */}
-            {!extractionDone && checkingStep === 0 && (
+            {!extractionDone && checkingStep === 0 && scanResultMode === 'NONE' && (
               <div
                 className={`card ${dragActive ? 'drag-active' : ''}`}
                 style={{
                   padding: '56px 24px', borderRadius: '16px',
-                  border: dragActive ? '2px dashed var(--teal)' : '2px dashed var(--border)',
+                  border: dragActive ? '2px dashed var(--teal)' : '2px dashed #CBD5E1',
                   background: dragActive ? 'var(--teal-bg)' : '#ffffff',
+                  boxShadow: '0 10px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.01)',
                   textAlign: 'center', cursor: 'pointer', transition: 'all 0.2s ease',
                   position: 'relative'
                 }}
@@ -1282,19 +1420,19 @@ export const DuplicateAlerts: React.FC = () => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '13px', color: 'var(--ts)', maxWidth: '280px', margin: '0 auto', textAlign: 'left' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: checkingStep >= 1 ? 'var(--tp)' : 'var(--tt)' }}>
                     {checkingStep > 1 ? <CheckCircle size={14} style={{ color: 'var(--teal)' }} /> : <Clock size={14} />}
-                    <span>Reading document</span>
+                    <span>1. Validating document type &amp; financial markers</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: checkingStep >= 2 ? 'var(--tp)' : 'var(--tt)' }}>
                     {checkingStep > 2 ? <CheckCircle size={14} style={{ color: 'var(--teal)' }} /> : <Clock size={14} />}
-                    <span>Extracting information</span>
+                    <span>2. Extracting financial metadata (OR/Inv/Amount)</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: checkingStep >= 3 ? 'var(--tp)' : 'var(--tt)' }}>
                     {checkingStep > 3 ? <CheckCircle size={14} style={{ color: 'var(--teal)' }} /> : <Clock size={14} />}
-                    <span>Comparing existing records</span>
+                    <span>3. Scanning for duplicate ledger records</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: checkingStep >= 4 ? 'var(--tp)' : 'var(--tt)' }}>
                     {checkingStep > 4 ? <CheckCircle size={14} style={{ color: 'var(--teal)' }} /> : <Clock size={14} />}
-                    <span>Preparing result</span>
+                    <span>4. Finalizing duplicate verification results</span>
                   </div>
                 </div>
               </div>
@@ -1379,67 +1517,206 @@ export const DuplicateAlerts: React.FC = () => {
               </div>
             )}
 
-            {/* FLOW 3.5: INVALID / NON-OFFICIAL RECEIPT DOCUMENT RESULT */}
-            {scanResultMode === 'INVALID' && (
-              <div className="card fade-in" style={{ padding: '32px', borderRadius: '16px', border: '1px solid rgba(225, 29, 72, 0.3)', background: 'linear-gradient(135deg, #fff1f2 0%, #fff 100%)' }}>
-                <div style={{ display: 'flex', gap: '16px', marginBottom: '24px' }}>
+            {/* FLOW 3.5: INVALID / NON-FINANCIAL DOCUMENT RESULT */}
+            {(scanResultMode === 'INVALID' || scanState === 'INVALID_DOCUMENT') && (
+              <div className="card fade-in" style={{
+                padding: '28px',
+                borderRadius: '16px',
+                border: '1px solid #fecaca',
+                background: '#ffffff',
+                boxShadow: '0 4px 20px -2px rgba(220, 38, 38, 0.08), 0 2px 6px -1px rgba(0, 0, 0, 0.04)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}>
+                {/* Decorative top accent border */}
+                <div style={{
+                  position: 'absolute', top: 0, left: 0, right: 0, height: '4px',
+                  background: 'linear-gradient(90deg, #dc2626 0%, #f87171 50%, #fb923c 100%)'
+                }} />
+
+                {/* Header Section */}
+                <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', alignItems: 'flex-start' }}>
                   <div style={{
-                    width: '52px', height: '52px', borderRadius: '50%',
-                    backgroundColor: '#ffe4e6', color: 'var(--err)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                    width: '46px', height: '46px', borderRadius: '12px',
+                    background: '#fee2e2', border: '1px solid #fecaca', flexShrink: 0,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center'
                   }}>
-                    <AlertTriangle size={26} />
+                    <AlertTriangle size={24} style={{ color: '#dc2626' }} strokeWidth={2.3} />
                   </div>
-                  <div>
-                    <h3 style={{ margin: '0 0 4px', fontSize: '18px', fontWeight: 800, color: 'var(--err)' }}>
-                      Unacceptable Document: Not an Official Receipt / Billing Invoice
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '5px',
+                        padding: '3px 9px', borderRadius: '9999px',
+                        fontSize: '11px', fontWeight: 800, letterSpacing: '0.5px',
+                        textTransform: 'uppercase', background: '#fee2e2', color: '#991b1b',
+                        border: '1px solid #fca5a5'
+                      }}>
+                        <AlertOctagon size={12} strokeWidth={2.5} /> AI Document Validation Gate
+                      </span>
+                      <span style={{ fontSize: '12px', color: '#dc2626', fontWeight: 700 }}>
+                        • Duplicate Scan Halted
+                      </span>
+                    </div>
+
+                    <h3 style={{ margin: '0 0 6px', fontSize: '20px', fontWeight: 800, color: '#991b1b', letterSpacing: '-0.3px' }}>
+                      Invalid Document Uploaded
                     </h3>
-                    <p style={{ margin: 0, fontSize: '14px', color: 'var(--ts)' }}>
-                      The AI document validator determined that this file is <strong>NOT an acceptable Official Receipt or Billing Invoice</strong>. Non-financial images or unofficial notes cannot be processed for duplicate validation.
+
+                    <p style={{ margin: '0 0 12px', fontSize: '14px', color: '#475569', lineHeight: 1.6, maxWidth: '880px' }}>
+                      The uploaded image does not appear to be an invoice, official receipt, billing statement, or payment-related document. Duplicate scanning was stopped to protect the accuracy of the AI results.
                     </p>
+
+                    {/* Specific AI Detection Callout */}
+                    {ocrWarning && (
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: '10px',
+                        padding: '10px 14px', borderRadius: '8px',
+                        background: '#fff1f2', border: '1px solid #fecaca',
+                        maxWidth: '880px'
+                      }}>
+                        <Info size={16} style={{ color: '#dc2626', flexShrink: 0 }} />
+                        <div style={{ fontSize: '13px', color: '#881337', lineHeight: 1.5 }}>
+                          <strong style={{ fontWeight: 700 }}>AI Detection Note: </strong>
+                          {ocrWarning}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* Preview of what was scanned */}
-                {previewDocUrl && (
-                  <div style={{ display: 'flex', gap: '20px', marginBottom: '24px', alignItems: 'flex-start' }}>
-                    <div style={{ flex: '0 0 160px', background: '#fff', border: '1px solid var(--err-bg)', borderRadius: '10px', padding: '8px', textAlign: 'center' }}>
-                      <img src={previewDocUrl} alt="Rejected scan" style={{ maxHeight: '120px', maxWidth: '100%', objectFit: 'contain', borderRadius: '6px' }} />
-                      <p style={{ fontSize: '11px', color: 'var(--err)', marginTop: '6px', fontWeight: 600 }}>Image Submitted</p>
-                    </div>
-                    <div style={{ flex: 1, background: '#fef2f2', borderRadius: '10px', padding: '16px 18px', border: '1px solid #fecaca' }}>
-                      <p style={{ fontSize: '13.5px', fontWeight: 700, color: '#991b1b', margin: '0 0 8px 0' }}>⚠️ Validation Requirement Notice:</p>
-                      <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '13px', color: '#7f1d1d', lineHeight: 1.8 }}>
-                        <li>This document does <strong>NOT match the official receipt or billing invoice format</strong>.</li>
-                        <li>Please upload or scan an official <strong>Speedex Official Receipt, Billing Invoice, or Waybill</strong>.</li>
-                        <li>Ensure all text fields, OR number, and total amounts are clear and readable.</li>
-                        <li>Non-financial images, personal photos, or unofficial notes are strictly rejected.</li>
-                      </ul>
-                    </div>
-                  </div>
-                )}
+                {/* Divider */}
+                <div style={{ borderTop: '1px solid #f1f5f9', margin: '0 0 20px' }} />
 
-                <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                  <button className="btn btn-outline" onClick={handleResetScanConsole}>Clear / Reset</button>
+                {/* 3-Column Arranged Grid: Preview + Allowed Types + Rejected Content */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+                  {/* Card 1: Uploaded Preview */}
+                  <div style={{
+                    background: '#f8fafc', borderRadius: '12px', padding: '16px',
+                    border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', textAlign: 'center'
+                  }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: '10px' }}>
+                      Uploaded Document
+                    </span>
+                    {previewDocUrl ? (
+                      <div style={{
+                        position: 'relative', width: '100%', height: '125px',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: '#fff', borderRadius: '8px', border: '1px solid #fecaca',
+                        padding: '6px', marginBottom: '10px', overflow: 'hidden'
+                      }}>
+                        <img
+                          src={previewDocUrl}
+                          alt="Rejected upload"
+                          style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain', borderRadius: '4px' }}
+                        />
+                      </div>
+                    ) : (
+                      <div style={{
+                        width: '100%', height: '125px', display: 'flex',
+                        alignItems: 'center', justifyContent: 'center',
+                        background: '#fff', borderRadius: '8px', border: '1px dashed #cbd5e1',
+                        marginBottom: '10px'
+                      }}>
+                        <FileText size={32} style={{ color: '#94a3b8' }} />
+                      </div>
+                    )}
+                    <span style={{
+                      fontSize: '12px', fontWeight: 600, color: '#334155',
+                      maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap', marginBottom: '8px'
+                    }}>
+                      {uploadFile?.name || 'Uploaded File'}
+                    </span>
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '4px',
+                      fontSize: '11px', fontWeight: 700, color: '#dc2626',
+                      background: '#fee2e2', borderRadius: '4px', padding: '3px 8px'
+                    }}>
+                      <X size={12} strokeWidth={3} /> NOT ALLOWED
+                    </span>
+                  </div>
+
+                  {/* Card 2: Allowed Document Types */}
+                  <div style={{
+                    background: '#f0fdf4', borderRadius: '12px', padding: '18px 20px',
+                    border: '1px solid #bbf7d0', display: 'flex', flexDirection: 'column'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                      <CheckCircle size={16} style={{ color: '#16a34a' }} />
+                      <span style={{ fontSize: '12px', fontWeight: 800, color: '#166534', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
+                        Allowed Document Types
+                      </span>
+                    </div>
+                    <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '13px', color: '#14532d', lineHeight: 1.8 }}>
+                      <li>Official Receipt (OR)</li>
+                      <li>Sales / Billing Invoice</li>
+                      <li>Billing Statement / SOA</li>
+                      <li>Payment Receipt (SpeedPay, Bank, GCash)</li>
+                    </ul>
+                  </div>
+
+                  {/* Card 3: Rejected Content */}
+                  <div style={{
+                    background: '#fff1f2', borderRadius: '12px', padding: '18px 20px',
+                    border: '1px solid #fecaca', display: 'flex', flexDirection: 'column'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                      <AlertOctagon size={16} style={{ color: '#dc2626' }} />
+                      <span style={{ fontSize: '12px', fontWeight: 800, color: '#991b1b', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
+                        Rejected Content
+                      </span>
+                    </div>
+                    <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '13px', color: '#881337', lineHeight: 1.8 }}>
+                      <li>Human / Person / Selfie / Portrait image</li>
+                      <li>Animal, food, scenery, or random photograph</li>
+                      <li>Screenshot unrelated to finance (quizzes, memes)</li>
+                      <li>Image with no invoice, OR, or payment details</li>
+                    </ul>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap' }}>
                   <button
-                    className="btn btn-primary"
-                    onClick={() => { handleResetScanConsole(); setTimeout(() => handleOpenScanner(), 100); }}
-                    style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                    className="btn"
+                    onClick={handleResetScanConsole}
+                    style={{
+                      background: '#fff', border: '1px solid #e2e8f0', color: '#64748b',
+                      padding: '0 16px', height: '40px', borderRadius: '8px', fontWeight: 600,
+                      fontSize: '13px', cursor: 'pointer'
+                    }}
                   >
-                    <Camera size={15} />
-                    Scan Again
+                    Clear Console
                   </button>
                   <button
-                    className="btn btn-outline"
-                    onClick={() => { handleResetScanConsole(); document.getElementById('file-upload-input')?.click(); }}
-                    style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                    className="btn"
+                    onClick={() => { handleResetScanConsole(); setTimeout(() => handleOpenScanner(), 100); }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '8px', background: '#fff',
+                      border: '1px solid #e2e8f0', color: '#334155', height: '40px',
+                      borderRadius: '8px', padding: '0 16px', fontWeight: 600, fontSize: '13px',
+                      cursor: 'pointer'
+                    }}
                   >
-                    <UploadCloud size={15} />
-                    Upload Document Instead
+                    <Camera size={14} /> Scan with Camera
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => { handleResetScanConsole(); setTimeout(() => document.getElementById('simplified-uploader')?.click(), 100); }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '8px', height: '40px',
+                      borderRadius: '8px', padding: '0 20px', fontWeight: 600, fontSize: '13px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <UploadCloud size={15} /> Upload Valid Document
                   </button>
                 </div>
               </div>
             )}
+
 
             {/* FLOW 4: NO POSSIBLE DUPLICATE FOUND RESULT (CLEAR) */}
             {scanResultMode === 'CLEAR' && (
@@ -1496,18 +1773,21 @@ export const DuplicateAlerts: React.FC = () => {
 
                   <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                     <button className="btn btn-outline" onClick={handleResetScanConsole}>Upload Another Document</button>
-                    <button 
-                      className="btn btn-outline" 
-                      onClick={handleSendToManualReview}
-                      disabled={!canValidate}
-                      style={{ borderColor: 'var(--warn)', color: 'var(--warn-dark)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                    >
-                      <Clock size={15} />
-                      Send for Manual Review
-                    </button>
-                    <button className="btn btn-primary" onClick={handleMarkAsUniqueClick} disabled={!canValidate}>
-                      Mark as Unique
-                    </button>
+                    {canValidate && (
+                      <>
+                        <button 
+                          className="btn btn-outline" 
+                          onClick={handleSendToManualReview}
+                          style={{ borderColor: 'var(--warn)', color: 'var(--warn-dark)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                        >
+                          <Clock size={15} />
+                          Send for Manual Review
+                        </button>
+                        <button className="btn btn-primary" onClick={handleMarkAsUniqueClick}>
+                          Mark as Unique
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1679,12 +1959,16 @@ export const DuplicateAlerts: React.FC = () => {
                       <button className="btn btn-outline" onClick={() => setShowManualReviewPanel(true)}>
                         Need Manual Review
                       </button>
-                      <button className="btn btn-secondary animate-hover" onClick={handleMarkAsUniqueClick} disabled={!canValidate}>
-                        Mark as Unique
-                      </button>
-                      <button className="btn btn-primary animate-hover" onClick={handleMarkAsDuplicateClick} disabled={!canValidate}>
-                        Mark as Duplicate
-                      </button>
+                      {canValidate && (
+                        <>
+                          <button className="btn btn-secondary animate-hover" onClick={handleMarkAsUniqueClick}>
+                            Mark as Unique
+                          </button>
+                          <button className="btn btn-primary animate-hover" onClick={handleMarkAsDuplicateClick}>
+                            Mark as Duplicate
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>

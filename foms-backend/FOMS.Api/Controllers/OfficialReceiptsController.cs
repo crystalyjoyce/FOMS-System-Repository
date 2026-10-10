@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using FOMS.Application.Interfaces;
@@ -20,11 +20,11 @@ public class OfficialReceiptsController : ControllerBase
         _context = context;
     }
 
-    [Authorize(Roles = "Accountant,Bookkeeper,Cashier")]
+    [Authorize]
     [HttpGet]
     public async Task<IActionResult> GetAll() => Ok(await _repository.GetAllAsync());
 
-    [Authorize(Roles = "Accountant,Bookkeeper,Cashier")]
+    [Authorize]
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(string id)
     {
@@ -32,7 +32,7 @@ public class OfficialReceiptsController : ControllerBase
         return item == null ? NotFound() : Ok(item);
     }
 
-    [Authorize(Roles = "Bookkeeper,Cashier")]
+    [Authorize]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] OfficialReceipt request)
     {

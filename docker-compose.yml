@@ -1,188 +1,80 @@
 services:
-
-  # =================================================================
-  # DATABASES & GUI MANAGEMENT TOOLS
-  # =================================================================
-
-  # PostgreSQL Database (AI Layer Relational & Vector DB)
-  foms-ai-postgres:
-    image: pgvector/pgvector:pg16
-    container_name: foms-ai-postgres
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: foms-mssql
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=foms_ai_db
+      - SA_PASSWORD=${MSSQL_SA_PASSWORD}
+      - ACCEPT_EULA=Y
     ports:
-      - "5432:5432"
+      - "${MSSQL_PORT:-1433}:1433"
     volumes:
-      - ./foms-backend/database/postgresql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-      - pgdata:/var/lib/postgresql/data
-    restart: unless-stopped
+      - mssql-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$SA_PASSWORD\" -Q \"SELECT 1\" -C || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P \"$$SA_PASSWORD\" -Q \"SELECT 1\""]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    networks:
+      - foms-network
 
-  # pgAdmin 4 Web GUI for PostgreSQL (http://localhost:5050)
-  foms-pgadmin:
-    image: dpage/pgadmin4
+  postgres:
+    image: postgres:15-alpine
+    container_name: foms-postgres
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-foms_ai_results}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - foms-network
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
     container_name: foms-pgadmin
     environment:
-      - PGADMIN_DEFAULT_EMAIL=admin@foms.com
-      - PGADMIN_DEFAULT_PASSWORD=admin
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_DEFAULT_EMAIL}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_DEFAULT_PASSWORD}
     ports:
-      - "5050:80"
+      - "${PGADMIN_PORT:-5050}:80"
     depends_on:
-      - foms-ai-postgres
-    restart: unless-stopped
+      postgres:
+        condition: service_healthy
+    networks:
+      - foms-network
 
-  # MongoDB Database (Time-Series Trends DB)
-  foms-ai-mongodb:
-    image: mongo:7.0
-    container_name: foms-ai-mongodb
+  mongodb:
+    image: mongo:6.0
+    container_name: foms-mongodb
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
+      - MONGO_INITDB_DATABASE=${MONGO_DB:-foms_trends_db}
     ports:
-      - "27017:27017"
+      - "${MONGO_PORT:-27017}:27017"
     volumes:
-      - ./foms-backend/database/mongodb/init.js:/docker-entrypoint-initdb.d/init.js:ro
-      - mongodata:/data/db
-    restart: unless-stopped
-
-  # Mongo Express Web GUI for MongoDB (http://localhost:8081)
-  foms-mongo-express:
-    image: mongo-express:latest
-    container_name: foms-mongo-express
-    environment:
-      - ME_CONFIG_MONGODB_SERVER=foms-ai-mongodb
-      - ME_CONFIG_MONGODB_PORT=27017
-      - ME_CONFIG_BASICAUTH_USERNAME=admin
-      - ME_CONFIG_BASICAUTH_PASSWORD=pass
-    ports:
-      - "8081:8081"
-    depends_on:
-      - foms-ai-mongodb
-    restart: unless-stopped
-
-  # =================================================================
-  # CORE SERVICES
-  # =================================================================
-
-  # 1. FOMS C# .NET 10 Web API Backend
-  foms-backend:
-    build:
-      context: ./foms-backend
-      dockerfile: Dockerfile
-    container_name: foms-backend
-    ports:
-      - "5000:8080"
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=http://+:8080
-      - PayMongo__SecretKey=${PAYMONGO_SECRET_KEY:-sk_test_fyNzfY2nbwdhfgUcoMmWoZJq}
-      - PayMongo__WebhookSecret=${PAYMONGO_WEBHOOK_SECRET:-whsk_AhGd2fDaqcnLia9sJ79EHsL2}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    restart: unless-stopped
-
-  # 2. FOMS React Staff Web Application Frontend
-  foms-frontend:
-    build:
-      context: ./foms-frontend
-      dockerfile: Dockerfile
-    container_name: foms-frontend
-    ports:
-      - "5173:80"
-    depends_on:
-      - foms-backend
-    restart: unless-stopped
-
-  # 3. SpeedPay React Client Portal
-  speedpay-portal:
-    build:
-      context: ./speedpay-portal
-      dockerfile: Dockerfile
-    container_name: speedpay-portal
-    ports:
-      - "5174:80"
-    depends_on:
-      - foms-backend
-    restart: unless-stopped
-
-  # 4. Python FastAPI AI Service Backend
-  foms-ai-service:
-    build:
-      context: ./ai-service
-      dockerfile: Dockerfile
-    container_name: foms-ai-service
-    ports:
-      - "8000:8000"
-    env_file:
-      - .env
-    environment:
-      - POSTGRES_CONNECTION_STRING=postgresql://postgres:postgres@foms-ai-postgres:5432/foms_ai_db
-      - MONGODB_URI=mongodb://foms-ai-mongodb:27017/
-      - FOMS_READ_API_URL=http://foms-backend:8080
-      - FOMS_AI_SERVICE_API_KEY=${FOMS_AI_SERVICE_API_KEY}
-      - AI_SERVICE_API_KEY=${AI_SERVICE_API_KEY}
-      - SYNC_INTERVAL_MINUTES=${SYNC_INTERVAL_MINUTES}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - GEMINI_MODEL=${GEMINI_MODEL}
-      - FOMS_JWT_PUBLIC_KEY=${FOMS_JWT_PUBLIC_KEY}
-      - FOMS_JWT_ISSUER=${FOMS_JWT_ISSUER}
-      - FOMS_JWT_AUDIENCE=${FOMS_JWT_AUDIENCE}
-      - SERVICE_JWT_SECRET=${SERVICE_JWT_SECRET}
-      - SERVICE_API_KEY=${SERVICE_API_KEY}
-      - RATE_LIMIT_DEFAULT=${RATE_LIMIT_DEFAULT}
-      - RATE_LIMIT_UPLOAD=${RATE_LIMIT_UPLOAD}
-      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
-      - AUDIT_RETENTION_YEARS=${AUDIT_RETENTION_YEARS}
-      - LOG_ROTATION_MAX_SIZE_MB=${LOG_ROTATION_MAX_SIZE_MB}
-      - LOG_ROTATION_DAILY=${LOG_ROTATION_DAILY}
-    depends_on:
-      - foms-backend
-      - foms-ai-postgres
-      - foms-ai-mongodb
-    restart: unless-stopped
-
-  # 5. ASP.NET Core 10 Integration Gateway
-  foms-ai-gateway:
-    build:
-      context: ./ai-gateway
-      dockerfile: Dockerfile
-    container_name: foms-ai-gateway
-    ports:
-      - "5001:5000"
-    environment:
-      - AI_SERVICE_URL=http://foms-ai-service:8000
-      - AI_SERVICE_API_KEY=change-me
-    depends_on:
-      - foms-ai-service
-    restart: unless-stopped
-
-  # 6. React 19 AI Frontend Web Dashboard
-  foms-ai-frontend:
-    build:
-      context: ./ai-frontend
-      dockerfile: Dockerfile
-    container_name: foms-ai-frontend
-    ports:
-      - "5175:80"
-    depends_on:
-      - foms-ai-gateway
-    restart: unless-stopped
-
-  # 7. Global Nginx Router / Reverse Proxy
-  foms-nginx-proxy:
-    image: nginx:alpine
-    container_name: foms-nginx-proxy
-    ports:
-      - "80:80"
-    volumes:
-      - ./proxy/nginx.conf:/etc/nginx/nginx.conf:ro
-    depends_on:
-      - foms-frontend
-      - speedpay-portal
-      - foms-backend
-      - foms-ai-frontend
-      - foms-ai-gateway
-      - foms-ai-service
-    restart: unless-stopped
+      - mongodb-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - foms-network
 
 volumes:
-  pgdata:
-  mongodata:
+  mssql-data:
+  postgres-data:
+  mongodb-data:
+
+networks:
+  foms-network:
+    driver: bridge

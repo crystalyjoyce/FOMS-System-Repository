@@ -73,10 +73,8 @@ public static class BillingComputationService
     /// <summary>
     /// Determine the payment status from balance, amountPaid, and due date.
     ///   Balance = 0                          → Paid
-    ///   Balance > 0, AmountPaid = 0, Overdue → Overdue
-    ///   Balance > 0, AmountPaid > 0, Overdue → Overdue  (overdue takes priority)
-    ///   Balance > 0, AmountPaid > 0          → Partially Paid
-    ///   Balance > 0, AmountPaid = 0          → Unpaid
+    ///   Balance > 0, Overdue                 → Overdue
+    ///   Balance > 0, Not Overdue             → Unpaid
     /// </summary>
     public static string ComputePaymentStatus(decimal balance, decimal amountPaid, string dueDate)
     {
@@ -86,9 +84,6 @@ public static class BillingComputationService
         var isOverdue = IsOverdue(dueDate);
         if (isOverdue)
             return "Overdue";
-
-        if (amountPaid > 0m)
-            return "Partially Paid";
 
         return "Unpaid";
     }
@@ -363,6 +358,14 @@ public static class BillingComputationService
     /// </summary>
     public static void RecalculateInvoice(Invoice invoice)
     {
+        // Fallback for seeded/legacy invoices where TotalAmount was manually set but Freight/Other charges were 0.
+        // We retroactively set FreightCharges so the recalculation preserves the TotalAmount.
+        if (invoice.FreightCharges == 0 && invoice.OtherCharges == 0 && invoice.TotalAmount > 0)
+        {
+            invoice.Subtotal = invoice.TotalAmount / (decimal)(1 + VAT_RATE);
+            invoice.FreightCharges = Math.Round(invoice.Subtotal, 2);
+        }
+
         invoice.Subtotal = invoice.FreightCharges + invoice.OtherCharges;
         invoice.VatRate = VAT_RATE;
         invoice.VatAmount = ComputeVat(invoice.Subtotal);

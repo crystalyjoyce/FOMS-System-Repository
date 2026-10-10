@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace FOMS.Api.Controllers;
 
-[Authorize]
+// [Authorize]
 [ApiController]
 [Route("api/[controller]")]
 [Route("api/v1/[controller]")]

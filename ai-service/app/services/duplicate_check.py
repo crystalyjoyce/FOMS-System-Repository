@@ -1,4 +1,5 @@
 import re
+import logging
 from typing import List, Dict, Tuple, Optional
 from rapidfuzz import fuzz
 from sqlalchemy.orm import Session
@@ -7,6 +8,8 @@ from app.schemas.schemas import WaybillDuplicateRequest, InvoiceDuplicateRequest
 from datetime import datetime
 from app.core.normalizer import normalize_reference, normalize_invoice
 from app.services.foms_client import FomsClient
+
+logger = logging.getLogger(__name__)
 
 def normalize_string(val: str) -> str:
     """
@@ -196,47 +199,127 @@ def check_speedpay_duplicate(db: Session, request: SpeedPayDuplicateRequest, fom
 
     return None
 
-def process_scanned_document(db: Session, file_bytes: bytes, filename: str, mime_type: str = "image/jpeg") -> Dict:
+def process_scanned_document(db: Session, file_bytes: bytes, filename: str, mime_type: str = "image/jpeg", user_id: str = "SYSTEM") -> Dict:
     """
-    Process document image using Gemini 2.5 Flash for OCR extraction and RapidFuzz for duplicate checking against PostgreSQL database.
+    Process document image using Gemini 2.5 Flash for OCR extraction and RapidFuzz for duplicate checking.
+
+    VALIDATION GATE: Document must be classified as a valid financial document before
+    duplicate detection runs. Random images, personal photos, and non-financial documents
+    are rejected here and do NOT proceed to duplicate matching.
     """
-    from app.services.ocr_service import extract_document_fields
+    from app.services.ocr_service import extract_document_fields, VALID_FINANCE_DOC_TYPES, INVALID_DOC_TYPES
+    from app.models.database import AIScanLog
     import uuid
 
-    # 1. OCR Field Extraction via Gemini 2.0 Flash
+    # ── Step 1: AI Document Classification via Gemini ─────────────────────────
     extracted = extract_document_fields(file_bytes, filename, mime_type)
-    
-    doc_type = extracted.get("documentType", "OFFICIAL_RECEIPT")
-    
-    # Only reject if Gemini explicitly classified the document as non-financial.
-    # Valid financial document types are always accepted, even if is_valid is missing.
-    valid_doc_types = {"OFFICIAL_RECEIPT", "INVOICE", "WAYBILL", "PROOF_OF_PAYMENT"}
-    is_financial_doc = doc_type in valid_doc_types
-    is_explicitly_invalid = (doc_type == "INVALID_DOCUMENT") or (
-        extracted.get("is_valid") is False and not is_financial_doc
+
+    doc_type = extracted.get("documentType", "INVALID_OR_UNRELATED_IMAGE")
+    is_allowed = extracted.get("isAllowed", False)
+    confidence = float(extracted.get("confidence", 0.0))
+    gemini_unavailable = extracted.get("geminiUnavailable", False)
+    should_proceed = extracted.get("shouldProceedToDuplicateScan", False)
+
+    # ── Step 2: Validation Gate — stop here if document is not a finance doc ──
+    CONFIDENCE_THRESHOLD = 0.75
+
+    is_explicitly_invalid = (
+        gemini_unavailable
+        or not is_allowed
+        or not should_proceed
+        or doc_type in INVALID_DOC_TYPES
+        or doc_type == "NEEDS_GEMINI_REVIEW"
+        or (doc_type not in VALID_FINANCE_DOC_TYPES and doc_type != "NEEDS_GEMINI_REVIEW")
+        or (confidence > 0 and confidence < CONFIDENCE_THRESHOLD)
     )
 
+    reason_code = "UNKNOWN"
+    user_message = ""
+
     if is_explicitly_invalid:
+        if gemini_unavailable:
+            reason_code = "GEMINI_UNAVAILABLE"
+            user_message = (
+                "AI document classification is temporarily unavailable. "
+                "The duplicate scan has been stopped to prevent false results. "
+                "Please try again in a few minutes."
+            )
+        elif doc_type in INVALID_DOC_TYPES or not is_allowed:
+            reason_code = "INVALID_DOCUMENT"
+            user_message = (
+                "Only official receipts, invoices, billing statements, or payment-related finance documents are allowed."
+            )
+        elif confidence > 0 and confidence < CONFIDENCE_THRESHOLD:
+            reason_code = "LOW_CONFIDENCE"
+            user_message = (
+                f"AI confidence ({confidence:.0%}) is below the required threshold. "
+                "The document could not be reliably classified. "
+                "Please upload a clearer image of the financial document."
+            )
+        else:
+            reason_code = "UNRECOGNIZED_DOCUMENT_TYPE"
+            user_message = (
+                "The uploaded file does not appear to be a supported financial document. "
+                "Accepted types: Official Receipt, Invoice, Billing Statement, Waybill, Proof of Payment."
+            )
+
+        logger.info(
+            f"[SCAN] Document rejected: type={doc_type} allowed={is_allowed} "
+            f"confidence={confidence:.2f} reason={reason_code} file={filename}"
+        )
+
+        # Log invalid upload attempts for audit and debugging
+        scan_log = AIScanLog(
+            user_id=user_id,
+            uploaded_file_name=filename,
+            detected_document_type=doc_type,
+            is_allowed=False,
+            validation_status="INVALID_DOCUMENT",
+            reason=extracted.get("reason", user_message)
+        )
+        db.add(scan_log)
+        db.commit()
+
         return {
             "status": "INVALID_DOCUMENT",
-            "is_valid": False,
-            "message": "INVALID DOCUMENT: The uploaded file is not a valid financial receipt, invoice, or waybill. Please upload a clear financial document.",
-            "extracted": {
-                "documentType": "INVALID_DOCUMENT",
-                "documentNumber": "N/A - Non-Financial Image",
-                "clientName": "Unrecognized Document",
-                "amount": "0.00",
-                "transactionDate": datetime.utcnow().strftime("%Y-%m-%d"),
-                "referenceNumber": "N/A"
-            },
+            "isAllowed": False,
+            "reason_code": reason_code,
+            "message": user_message,
+            "extracted": extracted,
             "duplicate": False,
-            "confidence": 0
+            "confidence": confidence,
         }
 
-    doc_num = extracted.get("documentNumber", f"DOC-{uuid.uuid4().hex[:6].upper()}")
-    client_name = extracted.get("clientName", "Unknown Client")
-    amount = extracted.get("amount", "0.00")
-    tx_date = extracted.get("transactionDate", datetime.utcnow().strftime("%Y-%m-%d"))
+    # Log successful validation
+    scan_log = AIScanLog(
+        user_id=user_id,
+        uploaded_file_name=filename,
+        detected_document_type=doc_type,
+        is_allowed=True,
+        validation_status="VALID_DOCUMENT",
+        reason="Document successfully validated as financial document."
+    )
+    db.add(scan_log)
+    db.commit()
+
+    detected_fields = extracted.get("detectedFields", {})
+    doc_num = detected_fields.get("invoiceNumber") or detected_fields.get("officialReceiptNumber") or f"DOC-{uuid.uuid4().hex[:6].upper()}"
+    client_name = detected_fields.get("clientName", "Unknown Client")
+    amount = detected_fields.get("amount", "0.00")
+    tx_date = detected_fields.get("dateIssued", datetime.utcnow().strftime("%Y-%m-%d"))
+    ref = detected_fields.get("paymentReference") or f"REF-{doc_num}"
+    
+    # We still need to construct the extracted object format that RapidFuzz uses below
+    mapped_extracted = {
+        "documentType": doc_type,
+        "documentNumber": doc_num,
+        "clientName": client_name,
+        "amount": amount,
+        "transactionDate": tx_date,
+        "referenceNumber": ref,
+        "is_valid": True # keep this for any other legacy logic
+    }
+
 
 
     # 2. RapidFuzz check against existing matches in PostgreSQL
@@ -290,7 +373,7 @@ def process_scanned_document(db: Session, file_bytes: bytes, filename: str, mime
 
         match_details = AIDuplicateMatch(
             alert_id=alert.id,
-            source_details=extracted,
+            source_details=mapped_extracted,
             match_details=matched_record.source_details if matched_record else {"status": "FLAGGED_DUPLICATE"}
         )
         db.add(match_details)
@@ -314,7 +397,7 @@ def process_scanned_document(db: Session, file_bytes: bytes, filename: str, mime
             "status": "FLAGGED_DUPLICATE",
             "alert_id": alert.id,
             "confidence_score": highest_score,
-            "extracted": extracted,
+            "extracted": mapped_extracted,
             "matched_record": matched_record_payload,
             "reason": reason,
             "message": f"Duplicate detected ({highest_score:.1f}% similarity). Document flagged for review."
@@ -323,7 +406,7 @@ def process_scanned_document(db: Session, file_bytes: bytes, filename: str, mime
         # Store as Unique Document in PostgreSQL
         match_details = AIDuplicateMatch(
             alert_id=None,
-            source_details=extracted,
+            source_details=mapped_extracted,
             match_details={"status": "UNIQUE_DOCUMENT", "cleared_at": datetime.utcnow().isoformat()}
         )
         db.add(match_details)
@@ -333,7 +416,7 @@ def process_scanned_document(db: Session, file_bytes: bytes, filename: str, mime
             "status": "UNIQUE_DOCUMENT",
             "match_id": match_details.id,
             "confidence_score": highest_score,
-            "extracted": extracted,
+            "extracted": mapped_extracted,
             "reason": "No duplicate detected. Cleared for FOMS normal validation.",
             "message": "Document scanned and cataloged as Unique Document."
         }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -102,7 +102,7 @@ public class SearchController : ControllerBase
         var results = new List<SmartSearchResult>();
         string query = request.SearchQuery?.Trim().ToLower() ?? string.Empty;
 
-        // ─── 1. Filter and Rank Invoices ───
+        // â”€â”€â”€ 1. Filter and Rank Invoices â”€â”€â”€
         foreach (var inv in invoices)
         {
             // Date Filter Check
@@ -161,7 +161,7 @@ public class SearchController : ControllerBase
                 Id = inv.Id,
                 Type = "Invoice",
                 ReferenceNumber = inv.InvoiceNo,
-                Title = $"Invoice {inv.InvoiceNo} — {inv.ClientName}",
+                Title = $"Invoice {inv.InvoiceNo} â€” {inv.ClientName}",
                 Subtitle = inv.Description ?? "No description",
                 Amount = inv.TotalAmount,
                 Date = inv.BillingDate,
@@ -171,7 +171,7 @@ public class SearchController : ControllerBase
             });
         }
 
-        // ─── 2. Filter and Rank Payments ───
+        // â”€â”€â”€ 2. Filter and Rank Payments â”€â”€â”€
         foreach (var p in payments)
         {
             if (DateTime.TryParse(p.PaymentDate, out var pDate))
@@ -220,7 +220,7 @@ public class SearchController : ControllerBase
                 Id = p.Id,
                 Type = "Payment",
                 ReferenceNumber = p.OrNumber,
-                Title = $"Official Receipt {p.OrNumber} — {p.ClientName}",
+                Title = $"Official Receipt {p.OrNumber} â€” {p.ClientName}",
                 Subtitle = $"Paid via {p.PaymentMethod}. Ref: {p.ReferenceNumber ?? "N/A"}",
                 Amount = p.Amount,
                 Date = p.PaymentDate,
@@ -230,7 +230,7 @@ public class SearchController : ControllerBase
             });
         }
 
-        // ─── 3. Filter and Rank CashFlowTransactions ───
+        // â”€â”€â”€ 3. Filter and Rank CashFlowTransactions â”€â”€â”€
         foreach (var entry in cashflow)
         {
             if (DateTime.TryParse(entry.Date, out var cfDate))
@@ -270,7 +270,7 @@ public class SearchController : ControllerBase
                 Id = entry.Id,
                 Type = "CashFlow",
                 ReferenceNumber = entry.ReferenceNo,
-                Title = $"Cash {entry.Type} ({entry.Category}) — {entry.ReferenceNo}",
+                Title = $"Cash {entry.Type} ({entry.Category}) â€” {entry.ReferenceNo}",
                 Subtitle = entry.Description,
                 Amount = entry.Amount,
                 Date = entry.Date,
@@ -280,7 +280,7 @@ public class SearchController : ControllerBase
             });
         }
 
-        // ─── 4. Filter and Rank Clients ───
+        // â”€â”€â”€ 4. Filter and Rank Clients â”€â”€â”€
         if (string.IsNullOrEmpty(request.ClientId))
         {
             foreach (var c in clients)
@@ -315,7 +315,7 @@ public class SearchController : ControllerBase
                     Type = "Client",
                     ReferenceNumber = c.ClientCode,
                     Title = $"Client: {c.Name}",
-                    Subtitle = $"Contact: {c.ContactPerson} ({c.Email}) · Balance: {c.CurrentBalance:C2}",
+                    Subtitle = $"Contact: {c.ContactPerson} ({c.Email}) Â· Balance: {c.CurrentBalance:C2}",
                     Amount = c.CurrentBalance,
                     Date = c.DateRegistered,
                     Status = c.Status,
@@ -325,7 +325,7 @@ public class SearchController : ControllerBase
             }
         }
 
-        // ─── 5. Filter and Rank Audit Logs ───
+        // â”€â”€â”€ 5. Filter and Rank Audit Logs â”€â”€â”€
         foreach (var log in auditLogs)
         {
             if (filterStart.HasValue && log.LoggedAt < filterStart.Value) continue;
@@ -354,7 +354,7 @@ public class SearchController : ControllerBase
                 Type = "AuditLog",
                 ReferenceNumber = log.EntityId,
                 Title = $"Audit Log: {log.Action} on {log.EntityName}",
-                Subtitle = $"User: {log.UserId} · Details: {log.Details}",
+                Subtitle = $"User: {log.UserId} Â· Details: {log.Details}",
                 Amount = 0,
                 Date = log.LoggedAt.ToString("yyyy-MM-dd HH:mm"),
                 Status = "Log",

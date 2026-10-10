@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using FOMS.Application.Interfaces;
@@ -24,7 +24,7 @@ public class NotificationsController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAll() => Ok(await _repository.GetAllAsync());
 
-    [Authorize(Roles = "Bookkeeper,Accountant,Payroll Officer")]
+    [Authorize]
     [HttpPut("{id}/read")]
     public async Task<IActionResult> MarkRead(string id)
     {

@@ -8,6 +8,24 @@ import { useToast } from '../components/ToastContext';
 import { Sparkles, ShieldAlert, CheckCircle, AlertCircle } from 'lucide-react';
 import { normalizeInvoiceNumber } from '../utils/referenceNormalizer';
 
+function PriorityBadge({ level }: { level: string }) {
+  const l = String(level || '').toLowerCase();
+  const isHigh = l.includes('high') || l.includes('urgent') || l.includes('critical');
+  const isMed = l.includes('medium') || l.includes('med');
+
+  const cfg = isHigh
+    ? { bg: '#FEE2E2', color: '#B91C1C', text: 'High Priority' }
+    : isMed
+    ? { bg: '#FEF3C7', color: '#D97706', text: 'Medium Priority' }
+    : { bg: '#D1FAE5', color: '#059669', text: 'Low Priority' };
+
+  return (
+    <span style={{ background: cfg.bg, color: cfg.color, fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 20 }}>
+      {cfg.text}
+    </span>
+  );
+}
+
 export const CollectionRecommendations: React.FC = () => {
   const { token, user } = useAuth();
   const { toast } = useToast();
@@ -27,7 +45,7 @@ export const CollectionRecommendations: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/ai/collection-recommendations?status=${statusFilter}`, {
+      const res = await fetch(`/api/ai/collection/recommendations?status=${statusFilter}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -59,7 +77,7 @@ export const CollectionRecommendations: React.FC = () => {
     }
     setModalLoading(true);
     try {
-      const res = await fetch(`/api/ai/collection-recommendations/${selectedRec.id}/review`, {
+      const res = await fetch(`/api/ai/collection/recommendations/${selectedRec.id}/review`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ decision, remarks, recommendedAction }),
@@ -78,8 +96,9 @@ export const CollectionRecommendations: React.FC = () => {
     }
   };
 
+  const roleNorm = (user?.role || '').replace(/[\s_-]+/g, '').toLowerCase();
   const canSubmitReviews =
-    user?.role && ['Financial Manager', 'Head Accountant', 'Accountant'].includes(user.role);
+    ['financialmanager', 'financemanager', 'headaccountant', 'accountant'].includes(roleNorm);
 
   const priorityToStatus = (lvl: string) => {
     switch (lvl?.toLowerCase()) {
@@ -141,7 +160,7 @@ export const CollectionRecommendations: React.FC = () => {
       label: 'Urgency',
       sortable: true,
       width: '140px',
-      render: (row: any) => <StatusBadge status={priorityToStatus(row.priority?.priority_level)} />,
+      render: (row: any) => <PriorityBadge level={row.priority?.priority_level || 'Low'} />,
     },
     {
       key: 'recommended_action',
@@ -301,7 +320,7 @@ export const CollectionRecommendations: React.FC = () => {
                       <select className="input-select" value={decision} onChange={(e) => setDecision(e.target.value)}>
                         <option value="Accepted as Recommendation">Accept Recommendation</option>
                         <option value="Reviewed">Reviewed &amp; Closed</option>
-                        <option value="Rejected">Reject Priority Assignment</option>
+                        <option value="Rejected">Reject Recommendation</option>
                       </select>
                     </div>
                     <div>

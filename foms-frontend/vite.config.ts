@@ -54,6 +54,14 @@ export default defineConfig(({ mode }) => {
     ],
     server: {
       port: 4173,
+      host: true,
+      proxy: {
+        '/api': {
+          target: 'http://localhost:5007',
+          changeOrigin: true,
+          secure: false,
+        },
+      },
     },
   };
 });

@@ -19,6 +19,13 @@ public class Client
     public decimal TotalBilled { get; set; }
     public decimal TotalPaid { get; set; }
     public string Status { get; set; } = "Active"; // "Active" or "Inactive"
+    public bool IsActive { get; set; } = true;
+    public string DmsClientId { get; set; } = string.Empty;
+    public string DmsStatus { get; set; } = "Active";
+    public bool SyncedFromDms { get; set; } = true;
+    public DateTime LastSyncedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public string DateRegistered { get; set; } = string.Empty;
     public string LastTransaction { get; set; } = string.Empty;
     public bool Archived { get; set; }

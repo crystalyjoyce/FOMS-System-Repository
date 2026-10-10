@@ -1,40 +1,82 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { Invoice, PaymentRecord, ClientUser } from '../data/mockData';
-import { MOCK_INVOICES, MOCK_PAYMENTS, MOCK_CLIENT_USER } from '../data/mockData';
+
+export interface ClientNotification {
+  id: string;
+  type: 'success' | 'alert' | 'info' | 'system';
+  title: string;
+  description: string;
+  invoiceNo?: string;
+  read: boolean;
+  date: string;
+  timestamp: string;
+  source: string;
+  relatedPaymentId?: string;
+  relatedInvoiceId?: string;
+  createdAt: string;
+}
 
 interface ClientContextType {
   user: ClientUser | null;
   invoices: Invoice[];
   payments: PaymentRecord[];
+  notifications: ClientNotification[];
+  unreadCount: number;
   login: (clientId: string, password: string) => { success: boolean; error?: string; requirePasswordChange?: boolean };
   logout: () => void;
   createAccount: (account: Omit<ClientUser, 'avatarInitials' | 'password'>) => { success: boolean; error?: string };
   changePassword: (clientId: string, newPassword: string) => void;
-  submitPayment: (invoiceId: string, paymentMethod: 'GCash' | 'Maya' | 'Bank Transfer', referenceNo: string, amount: number) => void;
+  submitPayment: (invoiceId: string, paymentMethod: 'GCash' | 'Maya' | 'Bank Transfer', referenceNo: string, amount: number, proofFileName?: string, proofFileUrl?: string) => void;
   getDashboardSummary: () => { totalOutstanding: number; nextDueDate: string | null; totalPaidPeriod: number };
+  markAsRead: (id: string) => Promise<void>;
+  markAllAsRead: () => Promise<void>;
 }
 
 const ClientContext = createContext<ClientContextType | undefined>(undefined);
 
 export const ClientProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<ClientUser | null>(null);
+  const [user, setUser] = useState<ClientUser | null>(() => {
+    const saved = localStorage.getItem('speedpay_user');
+    return saved ? JSON.parse(saved) : null;
+  });
   
-  // Use localStorage to persist state across reloads for the demo
+  // Use localStorage to persist registered client accounts across reloads
   const [clients, setClients] = useState<ClientUser[]>(() => {
     const saved = localStorage.getItem('speedpay_clients');
-    if (saved) return JSON.parse(saved);
-    return MOCK_CLIENT_USER.id ? [MOCK_CLIENT_USER] : [];
+    const existing: ClientUser[] = saved ? JSON.parse(saved) : [];
+
+    // Seed the default test account if it doesn't already exist
+    const defaultClient: ClientUser = {
+      id: 'TEST-001',
+      name: 'Test Client',
+      companyName: 'Test Company',
+      email: 'test001@speedpay.test',
+      contactNumber: '09000000001',
+      avatarInitials: 'TC',
+      password: 'password123',
+      isFirstLogin: false,
+    };
+
+    const alreadyExists = existing.some(
+      (c) => c.id.toLowerCase() === defaultClient.id.toLowerCase()
+    );
+
+    if (alreadyExists) {
+      const testUser = existing.find((c) => c.id.toLowerCase() === defaultClient.id.toLowerCase());
+      if (testUser) {
+        testUser.password = 'password123';
+      }
+    }
+
+    return alreadyExists ? existing : [defaultClient, ...existing];
   });
 
-  const [invoices, setInvoices] = useState<Invoice[]>(() => {
-    const saved = localStorage.getItem('speedpay_invoices');
-    return saved ? JSON.parse(saved) : MOCK_INVOICES;
-  });
 
-  const [payments, setPayments] = useState<PaymentRecord[]>(() => {
-    const saved = localStorage.getItem('speedpay_payments');
-    return saved ? JSON.parse(saved) : MOCK_PAYMENTS;
-  });
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+
+  const [payments, setPayments] = useState<PaymentRecord[]>([]);
+
+  const [notifications, setNotifications] = useState<ClientNotification[]>([]);
 
   useEffect(() => {
     localStorage.setItem('speedpay_clients', JSON.stringify(clients));
@@ -47,6 +89,147 @@ export const ClientProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   useEffect(() => {
     localStorage.setItem('speedpay_payments', JSON.stringify(payments));
   }, [payments]);
+
+  const fetchNotifications = useCallback(async (clientId: string) => {
+    try {
+      const res = await fetch(`/api/speedpay/notifications?clientId=${encodeURIComponent(clientId)}`);
+      if (res.ok) {
+        const data: ClientNotification[] = await res.json();
+        setNotifications(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch notifications:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!user) {
+      // Clear data when logged out to ensure isolation
+      setInvoices([]);
+      setPayments([]);
+      setNotifications([]);
+      return;
+    }
+
+    const clientIdParam = encodeURIComponent(user.id);
+
+    fetch(`/api/speedpay/invoices?clientId=${clientIdParam}`)
+      .then(res => res.json())
+      .then((data: any[]) => {
+        if (data && Array.isArray(data) && data.length > 0) {
+          const mapped = data.map(inv => ({
+            id: inv.id,
+            invoiceNumber: inv.invoiceNo ?? inv.id,
+            description: inv.description ?? 'Logistics Services',
+            amount: inv.totalAmount ?? inv.amount ?? 0,
+            dueDate: inv.dueDate ?? new Date().toISOString(),
+            routeArea: inv.routeArea ?? 'National Capital Region',
+            status: (inv.paymentStatus === 'Unpaid' ? 'Unpaid'
+                  : inv.paymentStatus === 'Pending Payment Validation' ? 'Pending Validation'
+                  : 'Paid') as Invoice['status']
+          }));
+          setInvoices(mapped);
+        } else {
+          if (user.id === 'TEST-001') {
+            setInvoices([
+              {
+                id: 'INV-1001',
+                invoiceNumber: 'INV-1001',
+                routeArea: 'National Capital Region',
+                amount: 25000,
+                dueDate: new Date(Date.now() + 86400000 * 5).toISOString(), // 5 days from now
+                status: 'Unpaid',
+                description: 'Logistics Services - Manila to Quezon City'
+              },
+              {
+                id: 'INV-1002',
+                invoiceNumber: 'INV-1002',
+                routeArea: 'CALABARZON',
+                amount: 15000,
+                dueDate: new Date(Date.now() - 86400000 * 2).toISOString(), // 2 days overdue
+                status: 'Overdue',
+                description: 'Warehouse Storage Fee'
+              }
+            ]);
+          } else {
+            setInvoices([]);
+          }
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to fetch invoices:', err);
+        setInvoices([]);
+      });
+
+    fetch(`/api/speedpay/transactions?clientId=${clientIdParam}`)
+      .then(res => res.json())
+      .then((data: any[]) => {
+        if (data && Array.isArray(data) && data.length > 0) {
+          const mapped = data.map(p => ({
+            id: p.transactionId ?? p.id,
+            invoiceId: p.invoiceId,
+            referenceNo: p.referenceNumber,
+            paymentMethod: p.paymentMethod ?? 'Bank Transfer',
+            dateSubmitted: p.submittedAt ?? p.createdAt ?? new Date().toISOString(),
+            amount: p.amountPaid ?? p.amount ?? 0,
+            status: (p.status === 'Completed' || p.status === 'Validated'
+              ? 'Validated'
+              : p.status === 'Rejected'
+              ? 'Rejected'
+              : 'Pending Validation') as PaymentRecord['status'],
+            officialReceipt: p.receiptUrl,
+            rejectionReason: p.remarks
+          }));
+          setPayments(mapped);
+        } else {
+          if (user.id === 'TEST-001') {
+            setPayments([
+              {
+                id: 'PAY-2001',
+                invoiceId: 'INV-0999',
+                referenceNo: 'REF123456789',
+                paymentMethod: 'GCash',
+                dateSubmitted: new Date(Date.now() - 86400000 * 10).toISOString(),
+                amount: 10000,
+                status: 'Validated'
+              }
+            ]);
+          } else {
+            setPayments([]);
+          }
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to fetch payment transactions:', err);
+        setPayments([]);
+      });
+
+    // Fetch notifications immediately and then every 30 seconds
+    fetchNotifications(user.id);
+    const notifInterval = setInterval(() => fetchNotifications(user.id), 30000);
+    return () => clearInterval(notifInterval);
+  }, [user, fetchNotifications]);
+
+  const markAsRead = async (id: string) => {
+    try {
+      await fetch(`/api/speedpay/notifications/${encodeURIComponent(id)}/read`, { method: 'PUT' });
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    } catch (err) {
+      console.error('Failed to mark notification as read:', err);
+    }
+  };
+
+  const markAllAsRead = async () => {
+    if (!user) return;
+    try {
+      await fetch(`/api/speedpay/notifications/mark-all-read?clientId=${encodeURIComponent(user.id)}`, { method: 'PUT' });
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    } catch (err) {
+      console.error('Failed to mark all notifications as read:', err);
+    }
+  };
+
+  const unreadCount = notifications.filter(n => !n.read).length;
 
   // Auth functions
   const login = (clientId: string, password: string) => {
@@ -65,11 +248,13 @@ export const ClientProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     setUser(client);
+    localStorage.setItem('speedpay_user', JSON.stringify(client));
     return { success: true };
   };
 
   const logout = () => {
     setUser(null);
+    localStorage.removeItem('speedpay_user');
   };
 
   const createAccount = (accountData: Omit<ClientUser, 'avatarInitials' | 'password'>) => {
@@ -115,7 +300,33 @@ export const ClientProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   // Payment function
-  const submitPayment = (invoiceId: string, paymentMethod: 'GCash' | 'Maya' | 'Bank Transfer', referenceNo: string, amount: number) => {
+  const submitPayment = async (invoiceId: string, paymentMethod: 'GCash' | 'Maya' | 'Bank Transfer', referenceNo: string, amount: number, proofFileName?: string, proofFileUrl?: string) => {
+    
+    // Call the backend endpoint to persist payment manually
+    try {
+      const response = await fetch('/api/speedpay/submissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          InvoiceId: invoiceId,
+          ClientId: user?.id,
+          ClientName: user?.companyName ?? user?.name,
+          PaymentMethod: paymentMethod,
+          ReferenceNumber: referenceNo,
+          AmountPaid: amount,
+          ProofFileName: proofFileName || 'uploaded-proof.png',
+          ProofFileUrl: proofFileUrl || `https://placehold.co/600x400?text=Proof+${referenceNo}`
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to submit payment to backend');
+      }
+    } catch (err) {
+      console.error(err);
+      // Fallback or handle error if needed
+    }
+
     const newPayment: PaymentRecord = {
       id: `PAY-${Date.now()}`,
       invoiceId,
@@ -161,12 +372,16 @@ export const ClientProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       user,
       invoices,
       payments,
+      notifications,
+      unreadCount,
       login,
       logout,
       createAccount,
       changePassword,
       submitPayment,
-      getDashboardSummary
+      getDashboardSummary,
+      markAsRead,
+      markAllAsRead
     }}>
       {children}
     </ClientContext.Provider>

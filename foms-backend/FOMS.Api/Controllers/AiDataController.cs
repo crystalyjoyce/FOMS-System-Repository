@@ -151,11 +151,14 @@ public class AiDataController : ApiControllerBase
             .Select(r => new
             {
                 id = r.Id,
+                invoiceId = r.InvoiceId,
                 clientId = r.ClientId,
                 clientName = r.Client != null ? r.Client.Name : "",
+                outstandingBalance = r.BalanceAmount,
                 totalOutstanding = r.BalanceAmount,
                 currentAmount = r.BalanceAmount,
                 overdueAmount = 0m,
+                dueDate = r.DueDate.ToString("yyyy-MM-dd"),
                 lastPaymentDate = r.DueDate
             })
             .ToListAsync();
@@ -207,7 +210,7 @@ public class AiDataController : ApiControllerBase
                 amount = p.Amount,
                 paymentMethod = p.PaymentMethod,
                 referenceNumber = p.ReferenceNumber,
-                status = "Completed",
+                status = p.PaymentStatus,
                 date = p.PaymentDate
             })
             .ToListAsync();

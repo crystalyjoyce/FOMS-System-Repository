@@ -207,8 +207,8 @@ def review_duplicate_alert(
 
     review = AIDuplicateReview(
         alert_id=alertId,
-        decision=request.decision,
-        justification=request.justification,
+        decision=body.decision,
+        justification=body.justification,
         reviewed_by=reviewer_name,
         reviewed_role=reviewer_role,
         trace_id=str(uuid.uuid4())
@@ -220,9 +220,87 @@ def review_duplicate_alert(
     
     return MessageResponse(success=True, message=f"Alert {alertId} reviewed successfully.")
 
+# ── Document Validation Only ────────────────────────────────
+@router.post("/validate")
+@limiter.limit("20/minute")
+async def validate_document(
+    request: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    payload: dict = Depends(require_roles(*DOCUMENT_SCAN_ROLES))
+):
+    """
+    Validate whether the uploaded file is an allowed financial document before running duplicate scan.
+    Returns:
+      Valid: {"isAllowed": true, "documentType": "...", "confidence": 0.94, "reason": "..."}
+      Invalid: {"isAllowed": false, "documentType": "...", "confidence": 0.98, "reason": "...", "message": "..."}
+    """
+    if not file:
+        raise HTTPException(status_code=400, detail="No file uploaded")
+    
+    file_bytes = await file.read()
+    _validate_upload(file, file_bytes)
+
+    from app.services.ocr_service import extract_document_fields, VALID_FINANCE_DOC_TYPES, INVALID_DOC_TYPES
+    from app.models.database import AIScanLog
+    from fastapi.responses import JSONResponse
+
+    extracted = extract_document_fields(file_bytes, file.filename, file.content_type)
+    doc_type = extracted.get("documentType", "INVALID_OR_UNRELATED_IMAGE")
+    is_allowed = extracted.get("isAllowed", False)
+    confidence = float(extracted.get("confidence", 0.0))
+    reason = extracted.get("reason", "")
+    user_id = payload.get("sub", "SYSTEM")
+
+    if not is_allowed or doc_type in INVALID_DOC_TYPES or doc_type not in VALID_FINANCE_DOC_TYPES or confidence < 0.75:
+        # Log invalid upload
+        scan_log = AIScanLog(
+            user_id=user_id,
+            uploaded_file_name=file.filename,
+            detected_document_type=doc_type,
+            is_allowed=False,
+            validation_status="INVALID_DOCUMENT",
+            reason=reason or "Uploaded file does not contain invoice, official receipt, payment, or billing fields."
+        )
+        db.add(scan_log)
+        db.commit()
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "isAllowed": False,
+                "documentType": doc_type,
+                "confidence": confidence,
+                "reason": reason or "The image appears to be a personal photo and does not contain invoice, official receipt, payment, or billing fields.",
+                "message": "Only invoices, official receipts, and payment-related documents are allowed."
+            }
+        )
+
+    # Log valid upload
+    scan_log = AIScanLog(
+        user_id=user_id,
+        uploaded_file_name=file.filename,
+        detected_document_type=doc_type,
+        is_allowed=True,
+        validation_status="VALID_DOCUMENT",
+        reason=reason or "Detected official receipt layout, receipt number, amount, and company header."
+    )
+    db.add(scan_log)
+    db.commit()
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "isAllowed": True,
+            "documentType": doc_type,
+            "confidence": confidence,
+            "reason": reason or "Detected official receipt layout, receipt number, amount, and company header."
+        }
+    )
+
 
 # ── Document Scan (OCR + Duplicate Check) ────────────────────────────────
-@router.post("/scan", response_model=MessageResponse)
+@router.post("/scan")
 @limiter.limit("10/minute")
 async def scan_document(
     request: Request,
@@ -231,9 +309,11 @@ async def scan_document(
     payload: dict = Depends(require_roles(*DOCUMENT_SCAN_ROLES))
 ):
     """
-    Scan a financial document image via Gemini OCR.
-    Allowed: Financial Manager, Head Accountant, Accountant.
-    File validation: PDF/JPG/JPEG/PNG only, max 10MB, magic bytes verified.
+    Scan a financial document image:
+    1. Validate file extension and MIME type.
+    2. Classify document type.
+    3. If invalid -> return HTTP 422 with status INVALID_DOCUMENT.
+    4. If valid -> Extract fields, check RapidFuzz duplicates, return HTTP 200.
     """
     if not file:
         raise HTTPException(status_code=400, detail="No file uploaded")
@@ -243,12 +323,56 @@ async def scan_document(
     # §19 File-Upload Security validation
     _validate_upload(file, file_bytes)
 
-    result = process_scanned_document(db, file_bytes, file.filename, file.content_type)
-    
-    return MessageResponse(
-        success=True,
-        message=result["message"],
-        data=result
+    result = process_scanned_document(db, file_bytes, file.filename, file.content_type, user_id=payload.get("sub", "SYSTEM"))
+
+    # When the document is invalid, return HTTP 422 (Unprocessable Entity)
+    if result.get("status") == "INVALID_DOCUMENT":
+        extracted_info = result.get("extracted", {})
+        det_type = extracted_info.get("documentType", "INVALID_OR_UNRELATED_IMAGE")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "success": False,
+                "status": "INVALID_DOCUMENT",
+                "message": result.get("message", "Only official receipts, invoices, billing statements, or payment-related finance documents are allowed."),
+                "details": {
+                    "detectedType": det_type,
+                    "reason": extracted_info.get("reason") or "The uploaded image does not contain finance document fields.",
+                    "confidence": result.get("confidence", 0.0)
+                }
+            }
+        )
+
+    # Valid response
+    from fastapi.responses import JSONResponse
+    extracted_data = result.get("extracted", {})
+    doc_type = extracted_data.get("documentType", "OFFICIAL_RECEIPT")
+    doc_num = extracted_data.get("documentNumber")
+    amt = extracted_data.get("amount")
+    tx_date = extracted_data.get("transactionDate")
+    matched_rec = result.get("matched_record")
+    is_dup = result.get("status") == "FLAGGED_DUPLICATE"
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "status": "DUPLICATE_FOUND" if is_dup else "UNIQUE_DOCUMENT",
+            "documentType": doc_type,
+            "extractedFields": {
+                "officialReceiptNumber": doc_num if doc_type in ("OFFICIAL_RECEIPT", "PAYMENT_RECEIPT") else None,
+                "invoiceNumber": doc_num if doc_type == "INVOICE" else None,
+                "amount": amt,
+                "dateIssued": tx_date
+            },
+            "duplicateResult": {
+                "isDuplicate": is_dup,
+                "matchScore": round(float(result.get("confidence_score", 0.0)) / 100.0, 2) if is_dup else 0.0,
+                "matchedRecordId": matched_rec.get("record_id") if (is_dup and matched_rec) else None
+            },
+            "data": result,
+            "message": result.get("message")
+        }
     )
 
 

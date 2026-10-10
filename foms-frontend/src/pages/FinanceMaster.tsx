@@ -2,13 +2,8 @@ import React, { useState } from 'react';
 import { DataTable } from '../components/DataTable';
 import { StatusBadge } from '../components/StatusBadge';
 import { useToast } from '../components/ToastContext';
-import {
-  SEEDED_CLIENTS,
-  SEEDED_RATES,
-  SEEDED_INVOICES,
-  Client,
-  BillingRate,
-} from '../data/seed';
+import { Client, BillingRate } from '../data/seed';
+import { useAppData } from '../context/AppDataContext';
 import { Card } from '../components/Card';
 import { TableContainer } from '../components/TableContainer';
 
@@ -16,6 +11,7 @@ type MasterTab = 'clients' | 'rates' | 'invoices';
 
 export const FinanceMaster: React.FC = () => {
   const { toast } = useToast();
+  const { clients, invoices } = useAppData();
   const [activeTab, setActiveTab] = useState<MasterTab>('clients');
 
   const tabs: { key: MasterTab; label: string; icon: string }[] = [
@@ -41,10 +37,7 @@ export const FinanceMaster: React.FC = () => {
   ];
 
   // ── Billing Rates ──────────────────────────────────────────────────
-  const enrichedRates = SEEDED_RATES.map(rate => {
-    const client = SEEDED_CLIENTS.find(c => c.id === rate.clientId);
-    return { ...rate, clientName: client?.name ?? 'Unknown' };
-  });
+  const enrichedRates: any[] = []; // Rates fetched via dedicated API when available
 
   const rateColumns = [
     { key: 'id', label: 'RATE CODE', sortable: true },
@@ -62,8 +55,8 @@ export const FinanceMaster: React.FC = () => {
   ];
 
   // ── Invoice Records ────────────────────────────────────────────────
-  const enrichedInvoices = SEEDED_INVOICES.map(inv => {
-    const client = SEEDED_CLIENTS.find(c => c.id === inv.clientId);
+  const enrichedInvoices = invoices.map(inv => {
+    const client = clients.find(c => c.id === inv.clientId);
     return { ...inv, clientName: client?.name ?? 'Unknown', waybillCount: inv.waybillIds.length };
   });
 
@@ -114,7 +107,7 @@ export const FinanceMaster: React.FC = () => {
         {activeTab === 'clients' && (
           <DataTable
             title={tabs.find(t => t.key === activeTab)?.label}
-            data={SEEDED_CLIENTS}
+            data={clients}
             columns={clientColumns}
             actions={clientActions}
             rowKey="id"

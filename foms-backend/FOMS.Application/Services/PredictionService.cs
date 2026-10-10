@@ -57,7 +57,7 @@ public class PredictionService : IPredictionService
 
         // 2. Expected Overdue Accounts Count (Client-specific historical risk probability)
         int predictedOverdueCount = 0;
-        var activeUnpaidInvoices = invoices.Where(i => i.PaymentStatus == "Unpaid" || i.PaymentStatus == "Partially Paid").ToList();
+        var activeUnpaidInvoices = invoices.Where(i => i.PaymentStatus == "Unpaid").ToList();
         
         double totalOverdueProbabilitySum = 0;
         foreach (var inv in activeUnpaidInvoices)

@@ -41,15 +41,8 @@ export const Dashboard: React.FC = () => {
         flaggedAmount: Math.round((t.totalOutstanding || 0) * 0.15)
       }));
     }
-    // Zeroed points if database trends empty
-    return [
-      { dateStr: 'Jul 1', totalOutstanding: 0, collectedAmount: 0, flaggedAmount: 0 },
-      { dateStr: 'Jul 5', totalOutstanding: 0, collectedAmount: 0, flaggedAmount: 0 },
-      { dateStr: 'Jul 10', totalOutstanding: 0, collectedAmount: 0, flaggedAmount: 0 },
-      { dateStr: 'Jul 15', totalOutstanding: 0, collectedAmount: 0, flaggedAmount: 0 },
-      { dateStr: 'Jul 20', totalOutstanding: 0, collectedAmount: 0, flaggedAmount: 0 },
-      { dateStr: 'Jul 22', totalOutstanding: 0, collectedAmount: 0, flaggedAmount: 0 }
-    ];
+    // Return empty if database trends empty
+    return [];
   }, [trends]);
 
   // AI Duplicate Detection Categorization Breakdown
@@ -61,12 +54,25 @@ export const Dashboard: React.FC = () => {
   ];
 
   // Accounts Aging Distribution
-  const agingData = [
-    { range: '< 30 Days', amount: 0, count: 0, status: 'Current', color: 'var(--ok)' },
-    { range: '30-60 Days', amount: 0, count: 0, status: 'Overdue', color: 'var(--teal)' },
-    { range: '60-90 Days', amount: 0, count: 0, status: 'Delinquent', color: 'var(--warn)' },
-    { range: '90+ Days', amount: 0, count: summary?.urgentCollectionAccounts ?? 0, status: 'Severely Delinquent', color: 'var(--err)' }
-  ];
+  const agingData = useMemo(() => {
+    let b60to90 = 0;
+    let b90Plus = 0;
+    
+    attentionAccounts.forEach(acc => {
+      if (acc.daysOverdue >= 90) {
+        b90Plus += acc.outstandingBalance;
+      } else if (acc.daysOverdue >= 60) {
+        b60to90 += acc.outstandingBalance;
+      }
+    });
+
+    return [
+      { range: '< 30 Days', amount: 0, count: 0, status: 'Current', color: 'var(--ok)' },
+      { range: '30-60 Days', amount: 0, count: 0, status: 'Overdue', color: 'var(--teal)' },
+      { range: '60-90 Days', amount: b60to90, count: attentionAccounts.filter(a => a.daysOverdue >= 60 && a.daysOverdue < 90).length, status: 'Delinquent', color: 'var(--warn)' },
+      { range: '90+ Days', amount: b90Plus, count: attentionAccounts.filter(a => a.daysOverdue >= 90).length || summary?.urgentCollectionAccounts || 0, status: 'Severely Delinquent', color: 'var(--err)' }
+    ];
+  }, [attentionAccounts, summary]);
 
   if (loading) {
     return (
@@ -189,18 +195,12 @@ export const Dashboard: React.FC = () => {
             value={String(summary?.totalDuplicateAlerts ?? 0)}
             icon="ti ti-alert-octagon"
             variant="teal"
-            trend={{ value: '12%', type: 'up' }}
-            periodText="vs. last week"
-            sparklineData={[20, 25, 45, 55, 30, 40, 70]}
           />
           <StatusCard
             label="Pending Review"
             value={String(summary?.pendingDuplicateReviews ?? 0)}
             icon="ti ti-clock"
             variant="teal"
-            trend={{ value: '8%', type: 'up' }}
-            periodText="vs. last week"
-            sparklineData={[30, 45, 25, 35, 60, 50, 75]}
           />
           <StatusCard
             label="Exact Match Alerts"
@@ -208,9 +208,6 @@ export const Dashboard: React.FC = () => {
             icon="ti ti-scan"
             variant="danger"
             polarity="lower-is-better"
-            trend={{ value: '4%', type: 'down' }}
-            periodText="vs. last week"
-            sparklineData={[80, 65, 75, 40, 55, 30, 20]}
           />
           <StatusCard
             label="Urgent Collections"
@@ -218,9 +215,6 @@ export const Dashboard: React.FC = () => {
             icon="ti ti-coin"
             variant="warning"
             polarity="lower-is-better"
-            trend={{ value: '15%', type: 'down' }}
-            periodText="vs. last week"
-            sparklineData={[90, 80, 60, 55, 45, 30, 25]}
           />
           <StatusCard
             label="Awaiting Validation"
@@ -228,9 +222,6 @@ export const Dashboard: React.FC = () => {
             icon="ti ti-circle-check"
             variant="warning"
             polarity="lower-is-better"
-            trend={{ value: '8%', type: 'down' }}
-            periodText="vs. last week"
-            sparklineData={[70, 80, 50, 45, 60, 35, 20]}
           />
         </div>
 

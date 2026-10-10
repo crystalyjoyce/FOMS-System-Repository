@@ -87,6 +87,7 @@ class CollectionPrioritySchema(BaseModel):
 class RecommendationDecisionRequest(BaseModel):
     decision: str = Field(..., description="APPROVED or REJECTED")
     remarks: Optional[str] = Field(None, description="Required for REJECTED")
+    recommendedAction: Optional[str] = Field(None)
 
 class RecommendationDashboardSummary(BaseModel):
     total_recommendations: int

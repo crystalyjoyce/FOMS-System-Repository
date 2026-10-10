@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Bell, 
   CheckCheck, 
@@ -22,23 +23,7 @@ import './GlobalHeader.css';
 
 export type { NotificationItem };
 
-const DUMMY_NOTIFICATIONS: NotificationItem[] = [
-  // Logistics Director / Coordinator Alerts
-  { id: '1', title: 'SLA Breach Warning', description: 'Route #8 is running 35 mins behind schedule. SLA impact imminent.', timestamp: '2m ago', date: 'Today', read: false, type: 'alert', category: 'logistics', isToday: true, source: 'TARS Monitor', actionLabel: 'View Route #8' },
-  { id: '2', title: 'Fleet Report Available', description: 'Weekly dispatch efficiency audit is ready for download.', timestamp: '1h ago', date: 'Today', read: false, type: 'success', category: 'logistics', isToday: true, source: 'TARS Analytics' },
-  { id: '3', title: 'New Route Manifest', description: 'Waybill SP-77291 assigned to driver Juan dela Cruz.', timestamp: '3h ago', date: 'Today', read: true, type: 'info', category: 'logistics', isToday: true, source: 'DMS' },
-
-  // Finance approvals
-  { id: '4', title: 'Capital Expenditure Request', description: 'Approval required for fuel replenishment fund PHP 120,000.', timestamp: '5h ago', date: 'Today', read: false, type: 'info', category: 'finance', isToday: true, source: 'FinSys', actionLabel: 'Review Fund' },
-  { id: '5', title: 'Invoice Settlement Failed', description: 'Vendor payout to FastTrack Cargo rejected by bank.', timestamp: 'Yesterday', date: 'Yesterday', read: false, type: 'alert', category: 'finance', isToday: false, source: 'FinSys', actionLabel: 'Re-submit Pay' },
-
-  // Driver notifications
-  { id: '6', title: 'Route Update: Delivery Order', description: 'New dispatch assignment: Pickup at warehouse Cluster B.', timestamp: 'Yesterday', date: 'Yesterday', read: false, type: 'info', category: 'driver', isToday: false, source: 'Fleet Ops' },
-  { id: '7', title: 'Vehicle Maintenance Complete', description: 'Truck Plate TX-492 cleared for long-haul duty.', timestamp: '3 days ago', date: 'March 3, 2025', read: true, type: 'success', category: 'driver', isToday: false, source: 'Fleet Ops' },
-
-  // General System
-  { id: '8', title: 'System Security Update', description: 'Workspace session policies updated for standard users.', timestamp: '4 days ago', date: 'March 3, 2025', read: true, type: 'system', category: 'system', isToday: false, source: 'IT Security' }
-];
+import { useNotifications } from '../contexts/NotificationContext';
 
 export interface BreadcrumbItem {
   label: string;
@@ -91,10 +76,12 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [notifications, setNotifications] = useState<NotificationItem[]>(DUMMY_NOTIFICATIONS);
+  const { notifications, unreadCount, markAllAsRead, clearAll, toggleReadStatus } = useNotifications();
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [bellAnimating, setBellAnimating] = useState(false);
+
+  const navigate = useNavigate();
 
   const notificationRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -162,26 +149,9 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
     return () => document.removeEventListener('keydown', handleEscape);
   }, [showNotifications, showProfileMenu]);
 
-  // Filter notifications by active user role to show relevance
-  const roleRelevantNotifications = useMemo(() => {
-    const role = profile.role.toLowerCase();
-    return notifications.filter(item => {
-      if (role.includes('director') || role.includes('admin') || role.includes('manager')) {
-        return item.category === 'logistics' || item.category === 'finance' || item.category === 'system';
-      }
-      if (role.includes('finance') || role.includes('auditor')) {
-        return item.category === 'finance' || item.category === 'system';
-      }
-      if (role.includes('driver')) {
-        return item.category === 'driver' || item.category === 'system';
-      }
-      return true; // fallback
-    });
-  }, [notifications, profile.role]);
-
   // Apply read/unread tabs
   const filtered = useMemo(() => {
-    let result = roleRelevantNotifications;
+    let result = notifications;
     
     // Read/Unread tab filter
     if (filter === 'unread') {
@@ -189,7 +159,7 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
     }
     
     return result;
-  }, [roleRelevantNotifications, filter]);
+  }, [notifications, filter]);
 
   // Priority severity sorting: unread critical alerts first
   const sortedFiltered = useMemo(() => {
@@ -200,11 +170,6 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
     });
   }, [filtered]);
 
-  // Unread count
-  const unreadCount = useMemo(() => {
-    return roleRelevantNotifications.filter(n => !n.read).length;
-  }, [roleRelevantNotifications]);
-
   // Trigger bell animation on unread count change
   useEffect(() => {
     if (unreadCount > 0) {
@@ -214,23 +179,9 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
     }
   }, [unreadCount]);
 
-  const markAllAsRead = () => {
-    setNotifications(prev => prev.map(n => {
-      const isRelevant = roleRelevantNotifications.some(r => r.id === n.id);
-      return isRelevant ? { ...n, read: true } : n;
-    }));
-  };
-
-  const clearAll = () => {
-    setNotifications(prev => prev.filter(n => {
-      const isRelevant = roleRelevantNotifications.some(r => r.id === n.id);
-      return !isRelevant;
-    }));
-  };
-
-  const toggleReadStatus = (id: string, e: React.MouseEvent) => {
+  const handleToggleReadStatus = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: !n.read } : n));
+    toggleReadStatus(id);
   };
 
   // Group sorted notifications into Today vs Earlier
@@ -371,8 +322,10 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
                                 key={n.id} 
                                 className={`notification-dropdown-item ${!n.read ? 'unread' : ''} ${isCritical ? 'critical' : ''}`}
                                 onClick={() => {
-                                  if (!n.read) {
-                                    setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, read: true } : item));
+                                  if (!n.read) toggleReadStatus(n.id);
+                                  if (n.link) {
+                                    navigate(n.link);
+                                    setShowNotifications(false);
                                   }
                                 }}
                               >
@@ -400,7 +353,7 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
                                           className="mark-as-read-btn-text"
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, read: !item.read } : item));
+                                            toggleReadStatus(n.id);
                                           }}
                                           title={n.read ? "Mark as unread" : "Mark as read"}
                                           aria-label={n.read ? "Mark as unread" : "Mark as read"}
@@ -448,8 +401,10 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
                                 key={n.id} 
                                 className={`notification-dropdown-item ${!n.read ? 'unread' : ''} ${isCritical ? 'critical' : ''}`}
                                 onClick={() => {
-                                  if (!n.read) {
-                                    setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, read: true } : item));
+                                  if (!n.read) toggleReadStatus(n.id);
+                                  if (n.link) {
+                                    navigate(n.link);
+                                    setShowNotifications(false);
                                   }
                                 }}
                               >
@@ -477,7 +432,7 @@ const GlobalHeader: React.FC<GlobalHeaderProps> = ({
                                           className="mark-as-read-btn-text"
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, read: !item.read } : item));
+                                            toggleReadStatus(n.id);
                                           }}
                                           title={n.read ? "Mark as unread" : "Mark as read"}
                                           aria-label={n.read ? "Mark as unread" : "Mark as read"}

@@ -18,34 +18,31 @@ export function useDashboardData() {
     setLoading(true);
     setError(null);
     try {
-      const [summaryRes, attentionRes, activityRes, trendsRes] = await Promise.all([
+      const [summaryRes, attentionRes, activityRes, trendsRes] = await Promise.allSettled([
         fetchDashboardSummary(),
         fetchAttentionAccounts(),
         fetchRecentActivity(),
         fetchTrends()
       ]);
-      
-      setSummary(summaryRes || {
-        totalDuplicateAlerts: 0,
-        pendingDuplicateReviews: 0,
-        exactMatchAlerts: 0,
-        urgentCollectionAccounts: 0,
-        recommendationsAwaitingValidation: 0,
-        lastUpdatedAt: new Date().toISOString()
-      });
-      setAttentionAccounts(attentionRes?.items || []);
-      setActivities(activityRes || []);
-      setTrends(trendsRes || []);
+
+      setSummary(summaryRes.status === 'fulfilled' ? summaryRes.value : null);
+      // fetchAttentionAccounts wraps in { items: [...] }
+      setAttentionAccounts(
+        attentionRes.status === 'fulfilled'
+          ? ((attentionRes.value as any)?.items ?? attentionRes.value ?? [])
+          : []
+      );
+      setActivities(activityRes.status === 'fulfilled' ? activityRes.value : []);
+      setTrends(trendsRes.status === 'fulfilled' ? trendsRes.value : []);
+
+      // Surface an error only if all endpoints failed
+      const allFailed = [summaryRes, attentionRes, activityRes, trendsRes].every(r => r.status === 'rejected');
+      if (allFailed) {
+        setError('Could not load dashboard data. Ensure the AI service is running.');
+      }
     } catch (e: any) {
-      // Clean fallback so dashboard remains online with clean zero metrics
-      setSummary({
-        totalDuplicateAlerts: 0,
-        pendingDuplicateReviews: 0,
-        exactMatchAlerts: 0,
-        urgentCollectionAccounts: 0,
-        recommendationsAwaitingValidation: 0,
-        lastUpdatedAt: new Date().toISOString()
-      });
+      setError(e?.message ?? 'Failed to load dashboard data.');
+      setSummary(null);
       setAttentionAccounts([]);
       setActivities([]);
       setTrends([]);
@@ -53,7 +50,6 @@ export function useDashboardData() {
       setLoading(false);
     }
   }, []);
-
 
   useEffect(() => {
     loadData();

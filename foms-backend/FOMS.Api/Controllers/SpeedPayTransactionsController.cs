@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using FOMS.Application.Interfaces;
@@ -30,7 +30,7 @@ public class SpeedPayTransactionsController : ControllerBase
         return transaction == null ? NotFound() : Ok(transaction);
     }
 
-    [Authorize(Roles = "Bookkeeper,Accountant")]
+    [Authorize]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] SpeedPayTransaction request)
     {

@@ -18,6 +18,7 @@ export interface Invoice {
   amount: number;
   dueDate: string; // ISO Date String
   status: 'Unpaid' | 'Due Soon' | 'Overdue' | 'Paid' | 'Pending Validation';
+  description?: string;
 }
 
 export interface PaymentRecord {
@@ -32,17 +33,3 @@ export interface PaymentRecord {
   rejectionReason?: string;
 }
 
-export const MOCK_CLIENT_USER: ClientUser = {
-  id: '',
-  name: '',
-  email: '',
-  companyName: '',
-  contactNumber: '',
-  avatarInitials: '',
-  password: '',
-  isFirstLogin: false
-};
-
-export const MOCK_INVOICES: Invoice[] = [];
-
-export const MOCK_PAYMENTS: PaymentRecord[] = [];

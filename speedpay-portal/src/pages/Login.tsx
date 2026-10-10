@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Eye, EyeOff, User, Lock, AlertCircle, Mail, Phone } from 'lucide-react';
 import { useClientContext } from '../context/ClientContext';
 import { useNavigate } from 'react-router-dom';
+import { useToast } from '../components/ToastContext';
 import './Login.css';
 
 interface FormErrors {
@@ -12,6 +13,7 @@ interface FormErrors {
 export const Login: React.FC = () => {
   const { login, createAccount, changePassword } = useClientContext();
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   const [clientId, setClientId] = useState('');
   const [password, setPassword] = useState('');
@@ -19,7 +21,6 @@ export const Login: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   
   const [fieldErrors, setFieldErrors] = useState<FormErrors>({});
-  const [globalError, setGlobalError] = useState<string | null>(null);
   const [globalSuccess, setGlobalSuccess] = useState<string | null>(null);
 
   // Modals state
@@ -36,6 +37,7 @@ export const Login: React.FC = () => {
 
   // Change Password State
   const [changePasswordVal, setChangePasswordVal] = useState('');
+  const [showChangePasswordVal, setShowChangePasswordVal] = useState(false);
 
   const FEATURE_HIGHLIGHTS = [
     { step: '1', title: 'Secure Payment Gateway', description: 'Experience fast, reliable, and secure transactions powered by PayMongo.' },
@@ -45,7 +47,6 @@ export const Login: React.FC = () => {
 
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setGlobalError(null);
     setGlobalSuccess(null);
 
     const errors: FormErrors = {};
@@ -54,13 +55,15 @@ export const Login: React.FC = () => {
     
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
+      if (errors.clientId) toast.error(errors.clientId, 'Login Failed');
+      else if (errors.password) toast.error(errors.password, 'Login Failed');
       return;
     }
     setFieldErrors({});
 
     const result = login(clientId.trim(), password);
     if (!result.success && result.error) {
-      setGlobalError(result.error);
+      toast.error(result.error, 'Login Failed');
     } else if (result.success && result.requirePasswordChange) {
       setShowChangePassword(true);
     } else if (result.success) {
@@ -90,7 +93,7 @@ export const Login: React.FC = () => {
       return;
     }
 
-    setGlobalSuccess('Account created successfully! You can now log in.');
+    toast.success('Account created successfully! You can now log in.');
     setClientId(newClientId.trim());
     setPassword('');
     setShowCreateAccount(false);
@@ -106,10 +109,11 @@ export const Login: React.FC = () => {
   const handleChangePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (changePasswordVal.length < 8) {
-      alert("Password must be at least 8 characters.");
+      toast.warning("Password must be at least 8 characters.");
       return;
     }
     changePassword(clientId.trim(), changePasswordVal);
+    toast.success('Password changed successfully.');
     setShowChangePassword(false);
     navigate('/');
   };
@@ -198,7 +202,6 @@ export const Login: React.FC = () => {
                   onChange={(e) => {
                     setClientId(e.target.value);
                     clearFieldError('clientId');
-                    setGlobalError(null);
                   }}
                   autoFocus
                 />
@@ -228,7 +231,6 @@ export const Login: React.FC = () => {
                   onChange={(e) => {
                     setPassword(e.target.value);
                     clearFieldError('password');
-                    setGlobalError(null);
                   }}
                 />
                 <button
@@ -271,13 +273,6 @@ export const Login: React.FC = () => {
               </button>
             </div>
 
-            {globalError && (
-              <div className="login-global-error">
-                <AlertCircle size={15} />
-                {globalError}
-              </div>
-            )}
-            
             {globalSuccess && (
               <div style={{
                 display: 'flex', alignItems: 'center', gap: '10px',
@@ -407,7 +402,22 @@ export const Login: React.FC = () => {
                 <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#374151', marginBottom: '6px', textTransform: 'uppercase' }}>New Password</label>
                 <div className="login-input-wrap">
                   <Lock size={16} className="login-input-icon" />
-                  <input type="password" minLength={8} className="login-input" required value={changePasswordVal} onChange={e => setChangePasswordVal(e.target.value)} placeholder="Minimum 8 characters" />
+                  <input 
+                    type={showChangePasswordVal ? 'text' : 'password'} 
+                    minLength={8} 
+                    className="login-input" 
+                    required 
+                    value={changePasswordVal} 
+                    onChange={e => setChangePasswordVal(e.target.value)} 
+                    placeholder="Minimum 8 characters" 
+                  />
+                  <button
+                    type="button"
+                    className="login-eye-btn"
+                    onClick={() => setShowChangePasswordVal((v) => !v)}
+                  >
+                    {showChangePasswordVal ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
                 </div>
               </div>
               

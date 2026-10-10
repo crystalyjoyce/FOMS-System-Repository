@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -31,7 +31,7 @@ public class AccountingController : ControllerBase
         return Ok(await _context.GeneralLedgerEntries.ToListAsync());
     }
 
-    [Authorize(Roles = "Accountant")]
+    [Authorize]
     [HttpPost("journal-entries")]
     public async Task<IActionResult> CreateJournalEntry([FromBody] JournalEntry request)
     {

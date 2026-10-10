@@ -9,11 +9,11 @@ from typing import Dict, FrozenSet
 
 class Roles(str, Enum):
     """Official FOMS system roles — §3 of security specification."""
-    FINANCIAL_MANAGER = "Financial Manager"
+    FINANCIAL_MANAGER = "Finance Manager"
     HEAD_ACCOUNTANT = "Head Accountant"
     ACCOUNTANT = "Accountant"
     COORDINATOR = "Coordinator"
-    ASSISTANT_OF_FINANCIAL_MANAGER = "Assistant of Financial Manager"
+    ASSISTANT_OF_FINANCIAL_MANAGER = "Assistant of Finance Manager"
     CLIENT = "Client"
 
 
@@ -171,6 +171,8 @@ COLLECTION_VIEW_ROLES = (
     Roles.FINANCIAL_MANAGER,
     Roles.HEAD_ACCOUNTANT,
     Roles.ACCOUNTANT,
+    Roles.COORDINATOR,
+    Roles.ASSISTANT_OF_FINANCIAL_MANAGER,
 )
 
 # Roles allowed to generate collection priorities
@@ -185,12 +187,28 @@ RECOMMENDATION_VIEW_ROLES = (
     Roles.FINANCIAL_MANAGER,
     Roles.HEAD_ACCOUNTANT,
     Roles.ACCOUNTANT,
+    Roles.COORDINATOR,
+    Roles.ASSISTANT_OF_FINANCIAL_MANAGER,
 )
 
-# Roles allowed to make recommendation decisions
+# Roles allowed to log decisions from Collection Priorities page
+# (Accountant, Coordinator, Assistant FM log initial actions -> goes to ForReview)
+LOG_DECISION_ROLES = (
+    Roles.FINANCIAL_MANAGER,
+    Roles.HEAD_ACCOUNTANT,
+    Roles.ACCOUNTANT,
+    Roles.COORDINATOR,
+    Roles.ASSISTANT_OF_FINANCIAL_MANAGER,
+)
+
+# Roles allowed to approve/finalize decisions in ForReview page
+# (Finance Manager, Head Accountant only)
 RECOMMENDATION_DECIDE_ROLES = (
     Roles.FINANCIAL_MANAGER,
     Roles.HEAD_ACCOUNTANT,
+    Roles.ACCOUNTANT,
+    Roles.COORDINATOR,
+    Roles.ASSISTANT_OF_FINANCIAL_MANAGER,
 )
 
 # Roles allowed to export recommendations/reports

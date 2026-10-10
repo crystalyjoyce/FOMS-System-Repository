@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using FOMS.Application.Interfaces;
@@ -30,7 +30,7 @@ public class DeliveryPaymentValidationsController : ControllerBase
         return item == null ? NotFound() : Ok(item);
     }
 
-    [Authorize(Roles = "Bookkeeper,Accountant")]
+    [Authorize]
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] DeliveryPaymentValidation request)
     {

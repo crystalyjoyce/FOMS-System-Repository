@@ -3,10 +3,12 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.models.database import get_db
+from app.core.config import settings
 import bcrypt
 import base64
 import json
 import time
+import httpx
 
 router = APIRouter()
 
@@ -41,41 +43,55 @@ def create_app_jwt(username: str, role: str, permissions: list, client_id: str, 
 @router.post("/login")
 def login(request: LoginRequest, db: Session = Depends(get_db)):
     try:
+        # Check against database
         result = db.execute(
-            text("SELECT * FROM users WHERE login_id = :login_id OR email = :login_id"), 
+            text("SELECT * FROM users WHERE login_id = :login_id"), 
             {"login_id": request.username}
         ).mappings().first()
-        
+
         if not result:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-        
-        # Check password
-        if not bcrypt.checkpw(request.password.encode('utf-8'), result["password_hash"].encode('utf-8')):
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-            
-        permissions = []
-            
-        client_id = result["login_id"] if result["role_name"] == "Client" else ""
+
+        # Compare passwords gracefully handling non-bcrypt hashes
+        try:
+            if not bcrypt.checkpw(request.password.encode('utf-8'), result["password_hash"].encode('utf-8')):
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+        except ValueError:
+            # Raised by bcrypt if the hash is not in a valid format (e.g., PBKDF2)
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials. Hash format mismatch.")
+
+        if not result.get("is_active", True):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is inactive")
+
+        full_name = result["full_name"]
+        role_name = result["role_name"]
+        client_id = request.username if role_name == "Client" else ""
+        password_version = result.get("password_version", 2)
+        must_change_password = result.get("must_change_password", False)
         
         token = create_app_jwt(
-            username=result["full_name"],
-            role=result["role_name"],
-            permissions=permissions,
+            username=full_name,
+            role=role_name,
+            permissions=[],
             client_id=client_id,
-            password_version=result.get("password_version", 1)
+            password_version=password_version
         )
         
         return {
             "token": token,
             "user": {
-                "username": result["full_name"],
-                "role": result["role_name"],
-                "must_change_password": result.get("must_change_password", False)
+                "username": full_name,
+                "role": role_name,
+                "must_change_password": must_change_password
             }
         }
+    except HTTPException:
+        raise
     except Exception as e:
         import traceback
-        return {"error": str(e), "traceback": traceback.format_exc()}
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
 
 @router.post("/change-password")
 def change_password(request: ChangePasswordRequest, db: Session = Depends(get_db)):

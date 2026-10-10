@@ -34,3 +34,8 @@ mongodata/
 # OS files
 .DS_Store
 Thumbs.db
+ai-service/error.log
+submissions.json
+foms-backend/test_output*
+foms-backend/query
+foms-backend/package-lock.json

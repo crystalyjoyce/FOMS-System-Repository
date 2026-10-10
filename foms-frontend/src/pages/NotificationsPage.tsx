@@ -12,6 +12,7 @@ export const NotificationsPage: React.FC = () => {
   const { notifications, unreadCount, markAllAsRead, clearAll, toggleReadStatus } = useNotifications();
   const [activeTab, setActiveTab] = useState("all");
   const [selectedId, setSelectedId] = useState("");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const selected = useMemo(() => notifications.find((n) => n.id === selectedId) ?? null, [notifications, selectedId]);
@@ -92,9 +93,9 @@ export const NotificationsPage: React.FC = () => {
                 <div key={date}>
                   <div className="notif-date-header">{date}</div>
                   {items.map((n: any) => (
-                    <div 
-                      key={n.id} 
-                      className={`notif-item ${selectedId === n.id ? "selected" : ""} ${!n.read ? "unread" : ""}`} 
+                    <div
+                      key={n.id}
+                      className={`notif-item ${selectedId === n.id ? "selected" : ""} ${!n.read ? "unread" : ""}`}
                       onClick={() => {
                         setSelectedId(n.id);
                         if (!n.read) toggleReadStatus(n.id);
@@ -102,7 +103,16 @@ export const NotificationsPage: React.FC = () => {
                       }}
                       style={{ cursor: n.link ? 'pointer' : 'default' }}
                     >
-                      <input type="checkbox" className="notif-checkbox" checked={n.read} onChange={() => toggleReadStatus(n.id)} onClick={(e) => e.stopPropagation()} />
+                      <input
+                        type="checkbox"
+                        className="notif-checkbox"
+                        checked={selectedIds.includes(n.id)}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          setSelectedIds(prev => prev.includes(n.id) ? prev.filter(id => id !== n.id) : [...prev, n.id]);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      />
                       <div className="notif-item-content">
                         <div className="notif-item-header">
                           <strong style={{ color: !n.read ? '#0F172A' : '#64748B' }}>{n.title}</strong>
@@ -120,7 +130,7 @@ export const NotificationsPage: React.FC = () => {
           </div>
         </div>
       </div>
-      
+
       <ConfirmModal
         isOpen={showClearConfirm}
         title="Clear all notifications?"
