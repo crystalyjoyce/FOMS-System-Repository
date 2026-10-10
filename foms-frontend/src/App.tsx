@@ -15,7 +15,7 @@ import Dashboard from "./pages/Dashboard";
 import ProfilePage from "./pages/ProfilePage";
 import NotificationsPage from "./pages/NotificationsPage";
 
-// ── Coordinator Pages ────────────────────────────────────────────
+// ── Accountant Pages ────────────────────────────────────────────
 import ClientManagement from "./pages/ClientManagement";
 import Waybills from "./pages/Waybills";
 
@@ -24,6 +24,7 @@ import RateConfiguration from "./pages/RateConfiguration";
 import InvoicingDesk from "./pages/InvoicingDesk";
 import InvoiceCreation from "./pages/InvoiceCreation";
 import BillingValidation from "./pages/BillingValidation";
+import RecordSettlement from "./pages/RecordSettlement";
 
 // ── Head Accountant Pages ────────────────────────────────────────
 import InvoiceReview from "./pages/InvoiceReview";
@@ -54,7 +55,6 @@ import UniqueDocuments from "./pages/UniqueDocuments";
 import FlaggedDuplicates from "./pages/FlaggedDuplicates";
 import ReviewHistory from "./pages/ReviewHistory";
 import ForReview from "./pages/ForReview";
-import CollectionPriorities from "./pages/CollectionPriorities";
 
 function App() {
   useEffect(() => {
@@ -120,11 +120,11 @@ function App() {
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/notifications" element={<NotificationsPage />} />
 
-              {/* ── Coordinator & Accountant ────────────────────── */}
+              {/* ── Accountant ────────────────────── */}
               <Route
                 path="/clients"
                 element={
-                  <ProtectedRoute allowedRoles={['Coordinator', 'Accountant']}>
+                  <ProtectedRoute allowedRoles={['Accountant']}>
                     <ClientManagement />
                   </ProtectedRoute>
                 }
@@ -132,7 +132,7 @@ function App() {
               <Route
                 path="/clients/:id"
                 element={
-                  <ProtectedRoute allowedRoles={['Coordinator', 'Accountant']}>
+                  <ProtectedRoute allowedRoles={['Accountant']}>
                     <ClientManagement />
                   </ProtectedRoute>
                 }
@@ -140,7 +140,7 @@ function App() {
               <Route
                 path="/waybills"
                 element={
-                  <ProtectedRoute allowedRoles={['Coordinator', 'Accountant']}>
+                  <ProtectedRoute allowedRoles={['Accountant']}>
                     <Waybills />
                   </ProtectedRoute>
                 }
@@ -148,7 +148,7 @@ function App() {
               <Route
                 path="/waybills/:id"
                 element={
-                  <ProtectedRoute allowedRoles={['Coordinator', 'Accountant']}>
+                  <ProtectedRoute allowedRoles={['Accountant']}>
                     <Waybills />
                   </ProtectedRoute>
                 }
@@ -220,6 +220,14 @@ function App() {
                   </ProtectedRoute>
                 }
               />
+              <Route
+                path="/record-settlement"
+                element={
+                  <ProtectedRoute allowedRoles={['Assistant of Finance Manager', 'Assistant of Financial Manager', 'Head Accountant', 'Finance Manager', 'Financial Manager']}>
+                    <RecordSettlement />
+                  </ProtectedRoute>
+                }
+              />
 
               {/* ── Head Accountant & Financial Manager ───────── */}
               <Route
@@ -243,7 +251,7 @@ function App() {
               <Route
                 path="/accounts-receivable"
                 element={
-                  <ProtectedRoute allowedRoles={['Accountant', 'Head Accountant', 'Finance Manager', 'Financial Manager']}>
+                  <ProtectedRoute allowedRoles={['Accountant', 'Head Accountant', 'Finance Manager', 'Financial Manager', 'Assistant of Finance Manager', 'Assistant of Financial Manager']}>
                     <AccountsReceivable />
                   </ProtectedRoute>
                 }
@@ -251,16 +259,8 @@ function App() {
               <Route
                 path="/adjustments"
                 element={
-                  <ProtectedRoute allowedRoles={['Accountant', 'Head Accountant', 'Finance Manager', 'Financial Manager']}>
+                  <ProtectedRoute allowedRoles={['Accountant', 'Head Accountant', 'Finance Manager', 'Financial Manager', 'Assistant of Finance Manager', 'Assistant of Financial Manager']}>
                     <FinancialAdjustments />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/accounts-receivable/:id"
-                element={
-                  <ProtectedRoute allowedRoles={['Accountant', 'Head Accountant', 'Finance Manager', 'Financial Manager']}>
-                    <AccountsReceivable />
                   </ProtectedRoute>
                 }
               />
@@ -291,7 +291,7 @@ function App() {
               <Route
                 path="/liquidations"
                 element={
-                  <ProtectedRoute allowedRoles={['Assistant of Finance Manager', 'Assistant of Financial Manager']}>
+                  <ProtectedRoute allowedRoles={['Finance Manager', 'Financial Manager', 'Assistant of Finance Manager', 'Assistant of Financial Manager']}>
                     <LiquidationValidation />
                   </ProtectedRoute>
                 }
@@ -299,7 +299,7 @@ function App() {
               <Route
                 path="/liquidations/:id"
                 element={
-                  <ProtectedRoute allowedRoles={['Assistant of Finance Manager', 'Assistant of Financial Manager']}>
+                  <ProtectedRoute allowedRoles={['Finance Manager', 'Financial Manager', 'Assistant of Finance Manager', 'Assistant of Financial Manager']}>
                     <LiquidationValidation />
                   </ProtectedRoute>
                 }
@@ -349,11 +349,11 @@ function App() {
                 </ProtectedRoute>
               } />
 
-              {/* ── Finance Manager, Head Accountant, Coordinator, Accountant, Asst FM: Duplicate Detection ── */}
+              {/* ── Finance Manager, Head Accountant, Accountant, Asst FM: Duplicate Detection ── */}
               <Route
                 path="/duplicate-scan"
                 element={
-                  <ProtectedRoute allowedRoles={['Finance Manager', 'Financial Manager', 'Head Accountant', 'Coordinator', 'Accountant', 'Assistant of Finance Manager', 'Assistant of Financial Manager']}>
+                  <ProtectedRoute allowedRoles={['Finance Manager', 'Financial Manager', 'Head Accountant', 'Accountant', 'Assistant of Finance Manager', 'Assistant of Financial Manager']}>
                     <AIDuplicateScan />
                   </ProtectedRoute>
                 }
@@ -361,7 +361,7 @@ function App() {
               <Route
                 path="/unique-documents"
                 element={
-                  <ProtectedRoute allowedRoles={['Finance Manager', 'Financial Manager', 'Head Accountant', 'Coordinator', 'Accountant', 'Assistant of Finance Manager', 'Assistant of Financial Manager']}>
+                  <ProtectedRoute allowedRoles={['Finance Manager', 'Financial Manager', 'Head Accountant', 'Accountant', 'Assistant of Finance Manager', 'Assistant of Financial Manager']}>
                     <UniqueDocuments />
                   </ProtectedRoute>
                 }
@@ -369,7 +369,7 @@ function App() {
               <Route
                 path="/flagged-duplicates"
                 element={
-                  <ProtectedRoute allowedRoles={['Finance Manager', 'Financial Manager', 'Head Accountant', 'Coordinator', 'Accountant', 'Assistant of Finance Manager', 'Assistant of Financial Manager']}>
+                  <ProtectedRoute allowedRoles={['Finance Manager', 'Financial Manager', 'Head Accountant', 'Accountant', 'Assistant of Finance Manager', 'Assistant of Financial Manager']}>
                     <FlaggedDuplicates />
                   </ProtectedRoute>
                 }
@@ -377,7 +377,7 @@ function App() {
               <Route
                 path="/review-history"
                 element={
-                  <ProtectedRoute allowedRoles={['Finance Manager', 'Financial Manager', 'Head Accountant', 'Coordinator', 'Accountant', 'Assistant of Finance Manager', 'Assistant of Financial Manager']}>
+                  <ProtectedRoute allowedRoles={['Finance Manager', 'Financial Manager', 'Head Accountant', 'Accountant', 'Assistant of Finance Manager', 'Assistant of Financial Manager']}>
                     <ReviewHistory />
                   </ProtectedRoute>
                 }
@@ -387,14 +387,6 @@ function App() {
                 element={
                   <ProtectedRoute allowedRoles={['Finance Manager', 'Financial Manager', 'Head Accountant']}>
                     <ForReview />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/collection-priorities"
-                element={
-                  <ProtectedRoute allowedRoles={['Finance Manager', 'Financial Manager', 'Head Accountant', 'Coordinator', 'Accountant', 'Assistant of Finance Manager', 'Assistant of Financial Manager']}>
-                    <CollectionPriorities />
                   </ProtectedRoute>
                 }
               />

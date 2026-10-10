@@ -12,6 +12,7 @@ import { useAuth } from '../context/AuthContext';
 import { TableContainer } from '../components/TableContainer';
 import { useToast } from '../components/ToastContext';
 import { ClientInfoCard } from '../components/ClientInfoCard';
+import { CalendarPicker } from '../components/FormModals';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
 
@@ -66,6 +67,9 @@ export const InvoicingDesk: React.FC = () => {
 
   const selectedClientId = viewClient ? viewClient.id : null;
 
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
+
   // Enrich invoices with derived payment status
   const enrichedInvoices = useMemo(() => {
     const base = selectedClientId
@@ -73,7 +77,24 @@ export const InvoicingDesk: React.FC = () => {
       : invoices;
 
     // Show only active invoices (in creation/approval phase) for the Invoice List
-    const activeInvoices = base.filter(inv => ['Draft', 'Needs Revision', 'Pending Approval', 'Approved'].includes(inv.status));
+    const activeInvoices = base.filter(inv => {
+      if (!['Draft', 'Needs Revision', 'Pending Approval', 'Approved'].includes(inv.status)) return false;
+      if (filterDateFrom || filterDateTo) {
+        const itemDate = new Date(inv.createdAt);
+        itemDate.setHours(0, 0, 0, 0);
+        if (filterDateFrom) {
+          const fromDate = new Date(filterDateFrom);
+          fromDate.setHours(0, 0, 0, 0);
+          if (itemDate < fromDate) return false;
+        }
+        if (filterDateTo) {
+          const toDate = new Date(filterDateTo);
+          toDate.setHours(23, 59, 59, 999);
+          if (itemDate > toDate) return false;
+        }
+      }
+      return true;
+    });
 
     return activeInvoices.map(inv => {
       const client = clients.find(c => c.id === inv.clientId);
@@ -289,28 +310,30 @@ export const InvoicingDesk: React.FC = () => {
 
     invoiceModal = createPortal(
       <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-        <div style={{ backgroundColor: '#F8FAFC', borderRadius: '12px', padding: '32px', width: '100%', maxWidth: '1000px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', position: 'relative' }}>
-          <button onClick={() => navigate('/invoicing-desk')} style={{ position: 'absolute', top: '16px', right: '16px', background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#64748B' }}>
-            <i className="ti ti-x" />
-          </button>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', marginTop: '16px' }}>
-        <style>{`
-          @media print {
-            .app-layout, .sidebar, .global-header, .main-area,
-            .no-print, [class*="sidebar"], [class*="header"] {
-              display: none !important;
-              visibility: hidden !important;
-            }
-            .printable-section, .printable-section * {
-              visibility: visible !important;
-            }
+        <div style={{ backgroundColor: '#F8FAFC', borderRadius: '12px', width: '100%', maxWidth: '1000px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', position: 'relative', overflow: 'hidden' }}>
+      
+      <style>{`
+        @media print {
+          .app-layout, .sidebar, .global-header, .main-area,
+          .no-print, [class*="sidebar"], [class*="header"] {
+            display: none !important;
+            visibility: hidden !important;
           }
-        `}</style>
+          .printable-section, .printable-section * {
+            visibility: visible !important;
+          }
+        }
+      `}</style>
 
-        {/* Invoice Status Bar */}
-        <Card style={{ padding: '20px 24px' }}>
+      <div style={{ padding: '24px 32px 0 32px', flexShrink: 0, zIndex: 10 }}>
+        {/* Invoice Status Bar (Sticky Header) */}
+        <Card style={{ padding: '20px 24px', margin: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <button onClick={() => navigate('/invoicing-desk')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, marginRight: '8px' }}>
+                <i className="ti ti-arrow-left" style={{ fontSize: '1.5rem', color: '#EF4444' }} />
+              </button>
+              
               <div>
                 <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: 600, color: '#94A3B8', letterSpacing: '0.05em' }}>INVOICE STATUS</p>
                 <div style={{ marginTop: 4 }}><StatusBadge status={viewInvoice.status} /></div>
@@ -366,9 +389,6 @@ export const InvoicingDesk: React.FC = () => {
                   <Button title="Reject" variant="danger" icon="ti-x" onClick={() => handleAction(viewInvoice!.id, 'Reject')} />
                 </>
               )}
-              {viewInvoice.status === 'Approved' && (
-                <Button title="Send to Client" variant="primary" icon="ti-mail" onClick={() => handleAction(viewInvoice!.id, 'Sending')} />
-              )}
               {viewInvoice.status === 'Sent' && derivedPs !== 'Paid' && (
                 <>
                   <Button title="Set Receipt Date" variant="secondary" icon="ti-calendar-event" onClick={() => handleAction(viewInvoice!.id, 'SetReceiptDate')} />
@@ -384,10 +404,10 @@ export const InvoicingDesk: React.FC = () => {
               )}
             </div>
           </div>
-
-
         </Card>
-
+      </div>
+      
+      <div style={{ padding: '24px 32px 32px 32px', overflowY: 'auto', flex: 1 }}>
         <Card>
           <div style={{ padding: '32px' }}>
             <InvoiceDocument invoice={viewInvoice} compact={false} />
@@ -457,6 +477,27 @@ export const InvoicingDesk: React.FC = () => {
               options: filterOptions.map(opt => ({ label: opt, value: opt }))
             }
           ]}
+          customFilters={
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <CalendarPicker
+                label="From:"
+                placeholder="Start date..."
+                value={filterDateFrom}
+                onChange={date => setFilterDateFrom(date)}
+                maxDate={filterDateTo || "2026-12-31"}
+                variant="toolbar"
+              />
+              <CalendarPicker
+                label="To:"
+                placeholder="End date..."
+                value={filterDateTo}
+                onChange={date => setFilterDateTo(date)}
+                minDate={filterDateFrom}
+                maxDate="2026-12-31"
+                variant="toolbar"
+              />
+            </div>
+          }
           columnToggle={true}
           densityToggle={true}
           exportable={false}
